@@ -548,6 +548,14 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let expr = ast::Expression::Parenthesis(Box::new(sub_expr));
                 Ok(Spanned::new(expr, span))
             }
+            Token::LeftSquare => {
+                let values =
+                    self.parse_comma_sep(&Token::RightParenthesis, Parser::parse_expression)?;
+                let end_span = expect!(self.lexer; Token::LeftSquare, "]");
+                let span = Span::merge(span, end_span);
+                let expr = ast::Expression::ArrayLiteral { values };
+                Ok(Spanned::new(expr, span))
+            }
             Token::Identifier(id) => {
                 let name = id.to_string();
                 match self.lexer.peek_token()?.inner {

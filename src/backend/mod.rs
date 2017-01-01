@@ -113,6 +113,7 @@ impl<'s, 't> Backend<'s, 't> {
                 }
                 llvm_struct_ty
             }
+            _ => unimplemented!(),
         };
 
         self.ty_cache.insert(ty, llvm_ty);

@@ -157,6 +157,9 @@ pub enum Expression {
         function: String,
         args: Vec<Spanned<Expression>>,
     },
+    ArrayLiteral {
+        values: Vec<Spanned<Expression>>,
+    },
     StructLiteral {
         struct_name: String,
         fields: Vec<(Spanned<String>, Spanned<Expression>)>,

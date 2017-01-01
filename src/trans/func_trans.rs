@@ -400,6 +400,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                     error!(TranslationError::FunctionUndefined(function), expr_span)
                 }
             }
+            ast::Expression::ArrayLiteral { .. } => unimplemented!(),
             ast::Expression::StructLiteral {
                 struct_name,
                 fields,
