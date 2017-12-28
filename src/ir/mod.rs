@@ -16,59 +16,79 @@ pub struct Function {
     pub body: BlockStatement,
 }
 
+impl Function {
+    pub fn get_type(&self) -> FunctionType {
+        let return_ty = self.return_ty;
+        let parameters_ty = self.parameters.iter().map(|&(a, _)| a).collect();
+        FunctionType {
+            return_ty,
+            parameters_ty
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Statement {
     Block(BlockStatement),
     VarDecl {
         ty: Type,
-        name: VarName,
-        value: Expression,
+        name: String,
+        value: TypedExpression
     },
-    Assign {
-        name: VarName,
-        value: Expression,
-    },
-    Increment(VarName),
-    Decrement(VarName),
     If {
-        condition: VarName,
+        condition: TypedExpression,
         body: BlockStatement,
-        else_clause: BlockStatement,
+        else_clause: BlockStatement
     },
-    Loop {
-        body: BlockStatement,
+    While {
+        condition: TypedExpression,
+        body: BlockStatement
     },
-    Return(Option<VarName>),
+    Return(TypedExpression),
+    Expression(TypedExpression),
     Break,
     Continue
-}
-
-#[derive(Debug, Clone)]
-pub enum VarName {
-    Id(String),
-    Temp(usize)
 }
 
 pub type BlockStatement = Vec<Statement>;
 
 #[derive(Debug, Clone)]
+pub struct TypedExpression {
+    qual_ty: QualifiedType,
+    expr: Expression,
+}
+
+#[derive(Debug, Clone)]
 pub enum Expression {
+    DefaultValue,
     Literal(Literal),
-    Var(VarName),
+    Identifier(String),
+    Assign {
+        lhs: Box<TypedExpression>,
+        rhs: Box<TypedExpression>,
+    },
     BinaryOperator {
         binop: BinaryOperatorKind,
-        lhs: VarName,
-        rhs: VarName,
+        lhs: Box<TypedExpression>,
+        rhs: Box<TypedExpression>,
+    },
+    LazyOperator {
+        lazyop: LazyOperatorKind,
+        lhs: Box<TypedExpression>,
+        rhs: Box<TypedExpression>,
     },
     UnaryOperator {
         unop: UnaryOperatorKind,
-        sub: VarName,
+        sub: Box<TypedExpression>,
     },
+    Increment(Box<TypedExpression>),
+    Decrement(Box<TypedExpression>),
     FunctionCall {
         function: String,
-        args: Vec<VarName>
+        args: Vec<TypedExpression>
     }
 }
+
 
 #[derive(Debug, Clone)]
 pub enum Literal {
@@ -103,6 +123,12 @@ pub enum BinaryOperatorKind {
     DoubleGreater,
     IntGreaterEqual,
     DoubleGreaterEqual,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum LazyOperatorKind {
+    BooleanLogicalAnd,
+    BooleanLogicalOr,
 }
 
 #[derive(Debug, Clone, Copy)]

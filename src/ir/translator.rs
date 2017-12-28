@@ -15,7 +15,8 @@ pub enum TranslationError {
     LazyOpUndefined(ast::LazyOperatorKind, ty::Type, ty::Type),
     UnOpUndefined(ast::UnaryOperatorKind, ty::Type),
     FunctionCallArity(usize, usize),
-    FunctionUndefined(String)
+    FunctionUndefined(String),
+    IncDecNonLValue
 }
 
 pub type TranslationResult<T> = Result<T, TranslationError>;
@@ -88,21 +89,6 @@ fn translate_function(globals: &GlobalsTable, function: ast::Function) -> Transl
     })
 }
 
-fn translate_expression_as_block(st: &mut SymbolTable, expression: ast::Expression, fi: &mut FunctionInfos) -> TranslationResult<(ir::BlockStatement, VarNameTyped)> {
-    st.begin_scope();
-    
-    let res = {
-        let mut builder = BlockBuilder::new(st, fi);
-        
-        let vnt = builder.translate_expression(expression)?;
-        let block = builder.collect();
-        (block, vnt)
-    };
-
-    st.end_scope();
-    Ok(res)
-}
-
 fn translate_block_statement(st: &mut SymbolTable, block: ast::BlockStatement, fi: &mut FunctionInfos) -> TranslationResult<ir::BlockStatement> {
     st.begin_scope();
     
@@ -133,12 +119,6 @@ impl FunctionInfos {
             ret_ty
         }
     }
-
-    fn gensym(&mut self) -> ir::VarName {
-        let t = self.temp_counter;
-        self.temp_counter += 1;
-        ir::VarName::Temp(t)
-    }
 }
 
 #[derive(Debug)]
@@ -161,6 +141,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         self.statements
     }
 
+    fn translate_statement_as_block(&mut self, statement: ast::Statement) -> TranslationResult<ir::BlockStatement> {
+        match statement {
+            ast::Statement::Empty => Ok(ir::BlockStatement::new()),
+            ast::Statement::Block(b) => translate_block_statement(self.symbol_table, b, self.func_infos),
+            other => translate_block_statement(self.symbol_table, vec![other], self.func_infos)
+        }
+    }
+
     fn translate_statement(&mut self, statement: ast::Statement) -> TranslationResult<()> {
         match statement {
             ast::Statement::Empty => {},
@@ -169,121 +157,104 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 self.statements.push(ir::Statement::Block(block));
             },
             ast::Statement::VarDecl { ty, declarations } => {
-                let def_value = match ty {
-                    ty::Type::Int => ir::Expression::Literal(ir::Literal::IntLiteral(0)),
-                    ty::Type::Double => ir::Expression::Literal(ir::Literal::DoubleLiteral(0.0)),
-                    ty::Type::Boolean => ir::Expression::Literal(ir::Literal::BooleanLiteral(false)),
-                    _ => panic!("Unexpected type in vardecl")
-                };
 
                 for (name, value) in declarations {
                     let value = if let Some(value) = value {
-                        let value_name = self.translate_expression(value)?;
-                        if value_name.qual_ty.ty != ty {
-                            return Err(TranslationError::MismatchingTypes(value_name.qual_ty.ty, ty));
+                        let ty_expr = self.translate_expression(value)?;
+                        if ty_expr.qual_ty.ty != ty {
+                            return Err(TranslationError::MismatchingTypes(ty_expr.qual_ty.ty, ty));
                         }
-                        ir::Expression::Var(value_name.varname)
+                        ty_expr
                     } else {
-                        def_value.clone()
+                        ir::TypedExpression {
+                            qual_ty: ty::QualifiedType::new(ty, false),
+                            expr: ir::Expression::DefaultValue
+                        }
                     };
                     
                     if self.symbol_table.register_local(name.clone(), ty) {
                         return Err(TranslationError::LocalAlreadyDefined(name.clone()))
                     }
                     
-                    let var_name = ir::VarName::Id(name.clone());
                     self.statements.push(ir::Statement::VarDecl {
                         ty,
-                        name: var_name.clone(),
+                        name,
                         value
                     });
                 }
             },
             ast::Statement::If { condition, body, else_clause } => {
-                let vnt_condition = self.translate_expression(condition)?;
-                if vnt_condition.qual_ty.ty != ty::Type::Boolean {
-                    return Err(TranslationError::MismatchingTypes(ty::Type::Boolean, vnt_condition.qual_ty.ty))
+                let condition = self.translate_expression(condition)?;
+                if condition.qual_ty.ty != ty::Type::Boolean {
+                    return Err(TranslationError::MismatchingTypes(ty::Type::Boolean, condition.qual_ty.ty))
                 }
 
-                let body = match *body {
-                    ast::Statement::Block(b)
-                        => translate_block_statement(self.symbol_table, b, self.func_infos)?,
-                    other
-                        => translate_block_statement(self.symbol_table, vec![other], self.func_infos)?
-                };
+                let body = self.translate_statement_as_block(*body)?;
 
-                let else_clause = match else_clause.map(|e| *e) {
-                    Some(ast::Statement::Block(b))
-                        => translate_block_statement(self.symbol_table, b, self.func_infos)?,
-                    Some(other)
-                        => translate_block_statement(self.symbol_table, vec![other], self.func_infos)?,
-                    None => ir::BlockStatement::new()
+                let else_clause = if let Some(stmt) = else_clause {
+                    self.translate_statement_as_block(*stmt)?
+                } else {
+                    ir::BlockStatement::new()
                 };
 
                 self.statements.push(ir::Statement::If {
-                    condition: vnt_condition.varname,
+                    condition,
                     body,
                     else_clause
                 })
             },
             ast::Statement::While { condition, body } => {
-                let fake_stmt = vec![
-                    ast::Statement::If {
-                        condition,
-                        body,
-                        else_clause: Some(Box::new(ast::Statement::Break))
-                    }
-                ];
-                let block = translate_block_statement(self.symbol_table, fake_stmt, self.func_infos)?;
-                self.statements.push(ir::Statement::Loop {
-                    body: block
-                });
-            },
-            ast::Statement::Return(maybe_expr) => {
-                let (inner, ty) = if let Some(expr) = maybe_expr {
-                    let vnt = self.translate_expression(expr)?;
-                    
-                    (Some(vnt.varname), vnt.qual_ty.ty)
-                } else {
-                    (None, ty::Type::Void)
-                };
-
-                if ty != self.func_infos.ret_ty {
-                    return Err(TranslationError::MismatchingTypes(ty, self.func_infos.ret_ty))
+                let condition = self.translate_expression(condition)?;
+                if condition.qual_ty.ty != ty::Type::Boolean {
+                    return Err(TranslationError::MismatchingTypes(ty::Type::Boolean, condition.qual_ty.ty))
                 }
 
-                self.statements.push(ir::Statement::Return(inner))
+                let body = self.translate_statement_as_block(*body)?;
+
+                self.statements.push(ir::Statement::While {
+                    condition,
+                    body,
+                })
+            },
+            ast::Statement::Return(maybe_expr) => {
+                let expr = if let Some(expr) = maybe_expr {
+                    let expr = self.translate_expression(expr)?;
+
+                    if expr.qual_ty.ty != self.func_infos.ret_ty {
+                        return Err(TranslationError::MismatchingTypes(expr.qual_ty.ty, self.func_infos.ret_ty))
+                    }
+
+                    expr
+                } else {
+                    if ty::Type::Void != self.func_infos.ret_ty {
+                        return Err(TranslationError::MismatchingTypes(ir::Type::Void, self.func_infos.ret_ty))
+                    }
+                    ir::TypedExpression {
+                        qual_ty: ty::QualifiedType::new(ty::Type::Void, false),
+                        expr: ir::Expression::DefaultValue
+                    }
+                };
+
+                self.statements.push(ir::Statement::Return(expr));
             },
             ast::Statement::Expression(expr) => {
-                self.translate_expression(expr)?;
+                let expr = self.translate_expression(expr)?;
+                self.statements.push(ir::Statement::Expression(expr));
             },
             ast::Statement::Break => {
+                // TODO check in loop
                 self.statements.push(ir::Statement::Break);
             },
             ast::Statement::Continue => {
+                // TODO check in loop
                 self.statements.push(ir::Statement::Continue);
             }
         }
         Ok(())
     }
 
-    fn translate_temp_assign(&mut self, ty: ty::Type, expr: ir::Expression) -> VarNameTyped {
-        let vn = self.func_infos.gensym();
-        self.statements.push(ir::Statement::VarDecl {
-            ty,
-            name: vn.clone(),
-            value: expr
-        });
-        VarNameTyped {
-            varname: vn,
-            qual_ty: ty::QualifiedType::new(ty, false)
-        }
-    }
-
-    
-
-    fn translate_expression(&mut self, expression: ast::Expression) -> TranslationResult<VarNameTyped> {
-        
+    fn translate_expression(&mut self, expression: ast::Expression) -> TranslationResult<ir::TypedExpression> {
+            
         match expression {
             ast::Expression::Literal(lit) => {
                 let (ty, lit) = match lit {
@@ -296,163 +267,163 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     ast::Literal::StringLiteral(s)
                         => (ty::Type::String, ir::Literal::StringLiteral(s))
                 };
-                Ok(self.translate_temp_assign(ty, ir::Expression::Literal(lit)))
+
+                Ok(ir::TypedExpression {
+                    qual_ty: ty::QualifiedType::new(ty, false),
+                    expr: ir::Expression::Literal(lit)
+                })
             },
             ast::Expression::Identifier(id) => {
                 if let Some(&ty) = self.symbol_table.lookup_local(&id) {
-                    let vn = ir::VarName::Id(id);
                     let qual_ty = ty::QualifiedType::new(ty, true);
-                    Ok(VarNameTyped {
-                        varname: vn,
-                        qual_ty
+                    Ok(ir::TypedExpression {
+                        qual_ty,
+                        expr: ir::Expression::Identifier(id)
                     })
                 } else {
                     Err(TranslationError::UndefinedLocal(id))
                 }
             },
             ast::Expression::Assign { lhs, rhs } => {
-                let lhs_vnt = self.translate_expression(*lhs)?;
-                let rhs_vnt = self.translate_expression(*rhs)?;
+                let lhs = self.translate_expression(*lhs)?;
+                let rhs = self.translate_expression(*rhs)?;
 
-                if lhs_vnt.qual_ty.ty != rhs_vnt.qual_ty.ty {
-                    return Err(TranslationError::MismatchingTypes(lhs_vnt.qual_ty.ty, rhs_vnt.qual_ty.ty));
+                if lhs.qual_ty.ty != rhs.qual_ty.ty {
+                    return Err(TranslationError::MismatchingTypes(lhs.qual_ty.ty, rhs.qual_ty.ty));
                 }
 
-                if !lhs_vnt.qual_ty.lvalue {
+                if !lhs.qual_ty.lvalue {
                     return Err(TranslationError::NonLValueAssign);
                 }
 
-                self.statements.push(ir::Statement::Assign {
-                    name: lhs_vnt.varname,
-                    value: ir::Expression::Var(rhs_vnt.varname.clone())
-                });
-                Ok(rhs_vnt)
+                let qual_ty = rhs.qual_ty;
+                let expr = ir::Expression::Assign {
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                };
+
+                Ok(ir::TypedExpression {
+                    qual_ty,
+                    expr
+                })
             },
             ast::Expression::BinaryOperator { binop, lhs, rhs } => {
-                let lhs_vnt = self.translate_expression(*lhs)?;
-                let rhs_vnt = self.translate_expression(*rhs)?;
+                let lhs = self.translate_expression(*lhs)?;
+                let rhs = self.translate_expression(*rhs)?;
 
-                if let Some((ty, op)) = binop_typeck(binop, lhs_vnt.qual_ty.ty, rhs_vnt.qual_ty.ty) {
+                if let Some((ty, op)) = binop_typeck(binop, lhs.qual_ty.ty, rhs.qual_ty.ty) {
                     let expr = ir::Expression::BinaryOperator {
                         binop: op,
-                        lhs: lhs_vnt.varname,
-                        rhs: rhs_vnt.varname
+                        lhs: Box::new(lhs),
+                        rhs: Box::new(rhs),
                     };
-                    Ok(self.translate_temp_assign(ty, expr))
+                    Ok(ir::TypedExpression {
+                        qual_ty: ty::QualifiedType::new(ty, false),
+                        expr,
+                    })
                 } else {
-                    Err(TranslationError::BinOpUndefined(binop, lhs_vnt.qual_ty.ty, rhs_vnt.qual_ty.ty))
+                    Err(TranslationError::BinOpUndefined(binop, lhs.qual_ty.ty, rhs.qual_ty.ty))
                 }
             },
             ast::Expression::LazyOperator { lazyop, lhs, rhs } => {
-                let lhs_vnt = self.translate_expression(*lhs)?;
+                let lhs = self.translate_expression(*lhs)?;
+                let rhs = self.translate_expression(*rhs)?;
 
-                if lhs_vnt.qual_ty.ty != ty::Type::Boolean {
-                    return Err(TranslationError::LazyOpUndefined(lazyop, lhs_vnt.qual_ty.ty, ty::Type::Boolean))
+                if let Some((ty, op)) = lazyop_typeck(lazyop, lhs.qual_ty.ty, rhs.qual_ty.ty) {
+                    let expr = ir::Expression::LazyOperator {
+                        lazyop: op,
+                        lhs: Box::new(lhs),
+                        rhs: Box::new(rhs),
+                    };
+                    Ok(ir::TypedExpression {
+                        qual_ty: ty::QualifiedType::new(ty, false),
+                        expr,
+                    })
+                } else {
+                    Err(TranslationError::LazyOpUndefined(lazyop, lhs.qual_ty.ty, rhs.qual_ty.ty))
                 }
-
-                let res_vnt = self.translate_temp_assign(ty::Type::Boolean, ir::Expression::Var(lhs_vnt.varname));
-
-                let (mut final_block, rhs_vnt) = translate_expression_as_block(self.symbol_table, *rhs, self.func_infos)?;
-                final_block.push(ir::Statement::Assign {
-                    name: res_vnt.varname.clone(),
-                    value: ir::Expression::Var(rhs_vnt.varname)
-                });
-
-                if rhs_vnt.qual_ty.ty != ty::Type::Boolean {
-                    return Err(TranslationError::LazyOpUndefined(lazyop, rhs_vnt.qual_ty.ty, ty::Type::Boolean))
-                }
-                
-                match lazyop {
-                    ast::LazyOperatorKind::LogicalAnd => {
-                        let if_stmt = ir::Statement::If {
-                            condition: res_vnt.varname.clone(),
-                            body: final_block,
-                            else_clause: Vec::new(),
-                        };
-                        self.statements.push(if_stmt);
-                    },
-                    ast::LazyOperatorKind::LogicalOr => {
-                        let if_stmt = ir::Statement::If {
-                            condition: res_vnt.varname.clone(),
-                            body: Vec::new(),
-                            else_clause: final_block
-                        };
-                        self.statements.push(if_stmt);
-                    }
-                }
-
-                Ok(res_vnt)
             },
             ast::Expression::UnaryOperator { unop, sub } => {
-                let sub_vnt = self.translate_expression(*sub)?;
+                let sub = self.translate_expression(*sub)?;
 
-                if let Some((ty, op)) = unop_typeck(unop, sub_vnt.qual_ty.ty) {
+                if let Some((ty, op)) = unop_typeck(unop, sub.qual_ty.ty) {
                     let expr = ir::Expression::UnaryOperator {
                         unop: op,
-                        sub: sub_vnt.varname,
+                        sub: Box::new(sub),
                     };
-                    Ok(self.translate_temp_assign(ty, expr))
+                    Ok(ir::TypedExpression {
+                        qual_ty: ty::QualifiedType::new(ty, false),
+                        expr
+                    })
                 } else {
-                    Err(TranslationError::UnOpUndefined(unop, sub_vnt.qual_ty.ty))
+                    Err(TranslationError::UnOpUndefined(unop, sub.qual_ty.ty))
                 }
             },
             ast::Expression::Increment(sub) => {
-                let sub_vnt = self.translate_expression(*sub)?;
-                if sub_vnt.qual_ty.ty != ty::Type::Int {
-                    return Err(TranslationError::MismatchingTypes(ty::Type::Int, sub_vnt.qual_ty.ty))
+                let sub = self.translate_expression(*sub)?;
+                if sub.qual_ty.ty != ty::Type::Int {
+                    return Err(TranslationError::MismatchingTypes(ty::Type::Int, sub.qual_ty.ty))
                 }
 
-                self.statements.push(ir::Statement::Increment(sub_vnt.varname.clone()));
-                Ok(sub_vnt)
+                if !sub.qual_ty.lvalue {
+                    return Err(TranslationError::IncDecNonLValue)
+                }
+
+                let qual_ty = sub.qual_ty;
+
+                Ok(ir::TypedExpression {
+                    qual_ty,
+                    expr: ir::Expression::Increment(Box::new(sub))
+                })
             },
             ast::Expression::Decrement(sub) => {
-                let sub_vnt = self.translate_expression(*sub)?;
-                if sub_vnt.qual_ty.ty != ty::Type::Int {
-                    return Err(TranslationError::MismatchingTypes(ty::Type::Int, sub_vnt.qual_ty.ty))
+                let sub = self.translate_expression(*sub)?;
+                if sub.qual_ty.ty != ty::Type::Int {
+                    return Err(TranslationError::MismatchingTypes(ty::Type::Int, sub.qual_ty.ty))
                 }
 
-                self.statements.push(ir::Statement::Decrement(sub_vnt.varname.clone()));
-                Ok(sub_vnt)
+                if !sub.qual_ty.lvalue {
+                    return Err(TranslationError::IncDecNonLValue)
+                }
+
+                let qual_ty = sub.qual_ty;
+
+                Ok(ir::TypedExpression {
+                    qual_ty,
+                    expr: ir::Expression::Decrement(Box::new(sub))
+                })
             },
             ast::Expression::FunctionCall { function, args } => {
-                let mut args_vnt = Vec::with_capacity(args.len());
-                for arg in args {
-                    args_vnt.push(self.translate_expression(arg)?);
-                }
+                if let Some(func_ty) = self.symbol_table.lookup_function(&function).cloned() {
 
-                let mut args = Vec::with_capacity(args_vnt.len());
-                let ret_ty = if let Some(func_ty) = self.symbol_table.lookup_function(&function) {
-                    if func_ty.parameters_ty.len() != args_vnt.len() {
-                        return Err(TranslationError::FunctionCallArity(func_ty.parameters_ty.len(), args_vnt.len()))
+                    let mut args_translated = Vec::with_capacity(args.len());
+                    if func_ty.parameters_ty.len() != args.len() {
+                        return Err(TranslationError::FunctionCallArity(func_ty.parameters_ty.len(), args_translated.len()))
                     }
 
-                    for (arg_vnt, &param_ty) in args_vnt.into_iter().zip(func_ty.parameters_ty.iter()) {
-                        if arg_vnt.qual_ty.ty != param_ty {
-                            return Err(TranslationError::MismatchingTypes(arg_vnt.qual_ty.ty, param_ty))
+                    for (arg, &param_ty) in args.into_iter().zip(func_ty.parameters_ty.iter()) {
+                        let arg = self.translate_expression(arg)?;
+                        if arg.qual_ty.ty != param_ty {
+                            return Err(TranslationError::MismatchingTypes(arg.qual_ty.ty, param_ty))
                         }
-                        args.push(arg_vnt.varname);
+                        args_translated.push(arg);
                     }
-                    func_ty.return_ty
+                    let ret_ty = func_ty.return_ty;
+                    Ok(ir::TypedExpression {
+                        qual_ty: ty::QualifiedType::new(ret_ty, false),
+                        expr: ir::Expression::FunctionCall {
+                            function,
+                            args: args_translated
+                        }
+                    })
                 } else {
-                    return Err(TranslationError::FunctionUndefined(function))
-                };
-
-                let expr = ir::Expression::FunctionCall {
-                    function,
-                    args
-                };
-                
-                Ok(self.translate_temp_assign(ret_ty, expr))
+                    Err(TranslationError::FunctionUndefined(function))
+                }
             }
-        }   
+        }
     }
 }
 
-#[derive(Debug, Clone)]
-struct VarNameTyped {
-    varname: ir::VarName,
-    qual_ty: ty::QualifiedType,
-}
 
 fn binop_typeck(binop: ast::BinaryOperatorKind, lhs: ty::Type, rhs: ty::Type) -> Option<(ty::Type, ir::BinaryOperatorKind)> {
     use ast::BinaryOperatorKind::*;
@@ -487,6 +458,16 @@ fn binop_typeck(binop: ast::BinaryOperatorKind, lhs: ty::Type, rhs: ty::Type) ->
         (GreaterEqual, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntGreaterEqual)),
         (GreaterEqual, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleGreaterEqual)),
 
+        _ => None
+    }
+}
+
+fn lazyop_typeck(lazyop: ast::LazyOperatorKind, lhs: ty::Type, rhs: ty::Type) -> Option<(ty::Type, ir::LazyOperatorKind)> {
+    use ast::LazyOperatorKind::*;
+
+    match (lazyop, lhs, rhs) {
+        (LogicalAnd, ty::Type::Boolean, ty::Type::Boolean) => Some((ty::Type::Boolean, ir::LazyOperatorKind::BooleanLogicalAnd)),
+        (LogicalOr, ty::Type::Boolean, ty::Type::Boolean) => Some((ty::Type::Boolean, ir::LazyOperatorKind::BooleanLogicalOr)),
         _ => None
     }
 }
