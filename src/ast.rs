@@ -15,8 +15,8 @@ pub struct Function {
 
 impl Function {
     pub fn get_type(&self) -> FunctionType {
-        let return_ty = self.return_ty;
-        let parameters_ty = self.parameters.iter().map(|&(a, _)| a).collect();
+        let return_ty = self.return_ty.clone();
+        let parameters_ty = self.parameters.iter().map(|&(ref a, _)| a.clone()).collect();
         FunctionType {
             return_ty,
             parameters_ty

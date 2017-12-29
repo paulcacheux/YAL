@@ -16,17 +16,6 @@ pub struct Function {
     pub body: BlockStatement,
 }
 
-impl Function {
-    pub fn get_type(&self) -> FunctionType {
-        let return_ty = self.return_ty;
-        let parameters_ty = self.parameters.iter().map(|&(a, _)| a).collect();
-        FunctionType {
-            return_ty,
-            parameters_ty
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum Statement {
     Block(BlockStatement),
@@ -54,13 +43,14 @@ pub type BlockStatement = Vec<Statement>;
 
 #[derive(Debug, Clone)]
 pub struct TypedExpression {
-    qual_ty: QualifiedType,
+    ty: Type,
     expr: Expression,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expression {
     DefaultValue,
+    LValueToRValue(Box<TypedExpression>),
     Literal(Literal),
     Identifier(String),
     Assign {

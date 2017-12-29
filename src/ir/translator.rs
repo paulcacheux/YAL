@@ -75,7 +75,7 @@ fn translate_function(globals: &GlobalsTable, function: ast::Function) -> Transl
 
     symbol_table.begin_scope();
 
-    let mut func_infos = FunctionInfos::new(function.return_ty);
+    let mut func_infos = FunctionInfos::new(function.return_ty.clone());
     let body = translate_block_statement(&mut symbol_table, function.body, &mut func_infos)?;
 
     symbol_table.end_scope();
@@ -160,24 +160,25 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
                 for (name, value) in declarations {
                     let value = if let Some(value) = value {
-                        let ty_expr = self.translate_expression(value)?;
-                        if ty_expr.qual_ty.ty != ty {
-                            return Err(TranslationError::MismatchingTypes(ty_expr.qual_ty.ty, ty));
+                        let expr = self.translate_expression(value)?;
+                        let expr = lvalue_to_rvalue(expr);
+                        if expr.ty != ty {
+                            return Err(TranslationError::MismatchingTypes(expr.ty.clone(), ty.clone()));
                         }
-                        ty_expr
+                        expr
                     } else {
                         ir::TypedExpression {
-                            qual_ty: ty::QualifiedType::new(ty, false),
+                            ty: ty.clone(),
                             expr: ir::Expression::DefaultValue
                         }
                     };
                     
-                    if self.symbol_table.register_local(name.clone(), ty) {
+                    if self.symbol_table.register_local(name.clone(), ty.clone()) {
                         return Err(TranslationError::LocalAlreadyDefined(name.clone()))
                     }
                     
                     self.statements.push(ir::Statement::VarDecl {
-                        ty,
+                        ty: ty.clone(),
                         name,
                         value
                     });
@@ -185,8 +186,9 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             },
             ast::Statement::If { condition, body, else_clause } => {
                 let condition = self.translate_expression(condition)?;
-                if condition.qual_ty.ty != ty::Type::Boolean {
-                    return Err(TranslationError::MismatchingTypes(ty::Type::Boolean, condition.qual_ty.ty))
+                let condition = lvalue_to_rvalue(condition);
+                if condition.ty != ty::Type::Boolean {
+                    return Err(TranslationError::MismatchingTypes(ty::Type::Boolean, condition.ty))
                 }
 
                 let body = self.translate_statement_as_block(*body)?;
@@ -205,8 +207,9 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             },
             ast::Statement::While { condition, body } => {
                 let condition = self.translate_expression(condition)?;
-                if condition.qual_ty.ty != ty::Type::Boolean {
-                    return Err(TranslationError::MismatchingTypes(ty::Type::Boolean, condition.qual_ty.ty))
+                let condition = lvalue_to_rvalue(condition);
+                if condition.ty != ty::Type::Boolean {
+                    return Err(TranslationError::MismatchingTypes(ty::Type::Boolean, condition.ty))
                 }
 
                 let body = self.translate_statement_as_block(*body)?;
@@ -219,18 +222,19 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Statement::Return(maybe_expr) => {
                 let expr = if let Some(expr) = maybe_expr {
                     let expr = self.translate_expression(expr)?;
+                    let expr = lvalue_to_rvalue(expr);
 
-                    if expr.qual_ty.ty != self.func_infos.ret_ty {
-                        return Err(TranslationError::MismatchingTypes(expr.qual_ty.ty, self.func_infos.ret_ty))
+                    if expr.ty != self.func_infos.ret_ty {
+                        return Err(TranslationError::MismatchingTypes(expr.ty, self.func_infos.ret_ty.clone()))
                     }
 
                     expr
                 } else {
                     if ty::Type::Void != self.func_infos.ret_ty {
-                        return Err(TranslationError::MismatchingTypes(ir::Type::Void, self.func_infos.ret_ty))
+                        return Err(TranslationError::MismatchingTypes(ir::Type::Void, self.func_infos.ret_ty.clone()))
                     }
                     ir::TypedExpression {
-                        qual_ty: ty::QualifiedType::new(ty::Type::Void, false),
+                        ty: ty::Type::Void,
                         expr: ir::Expression::DefaultValue
                     }
                 };
@@ -239,6 +243,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             },
             ast::Statement::Expression(expr) => {
                 let expr = self.translate_expression(expr)?;
+                let expr = lvalue_to_rvalue(expr);
                 self.statements.push(ir::Statement::Expression(expr));
             },
             ast::Statement::Break => {
@@ -252,6 +257,8 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         }
         Ok(())
     }
+
+    
 
     fn translate_expression(&mut self, expression: ast::Expression) -> TranslationResult<ir::TypedExpression> {
             
@@ -269,15 +276,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 };
 
                 Ok(ir::TypedExpression {
-                    qual_ty: ty::QualifiedType::new(ty, false),
+                    ty,
                     expr: ir::Expression::Literal(lit)
                 })
             },
             ast::Expression::Identifier(id) => {
-                if let Some(&ty) = self.symbol_table.lookup_local(&id) {
-                    let qual_ty = ty::QualifiedType::new(ty, true);
+                if let Some(ty) = self.symbol_table.lookup_local(&id).cloned() {
                     Ok(ir::TypedExpression {
-                        qual_ty,
+                        ty: ty::Type::LValue(Box::new(ty)),
                         expr: ir::Expression::Identifier(id)
                     })
                 } else {
@@ -287,109 +293,117 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Expression::Assign { lhs, rhs } => {
                 let lhs = self.translate_expression(*lhs)?;
                 let rhs = self.translate_expression(*rhs)?;
+                let rhs = lvalue_to_rvalue(rhs);
 
-                if lhs.qual_ty.ty != rhs.qual_ty.ty {
-                    return Err(TranslationError::MismatchingTypes(lhs.qual_ty.ty, rhs.qual_ty.ty));
-                }
-
-                if !lhs.qual_ty.lvalue {
+                if let ty::Type::LValue(ref sub) = lhs.ty {
+                    if **sub != rhs.ty {
+                        return Err(TranslationError::MismatchingTypes(lhs.ty.clone(), rhs.ty));
+                    }
+                } else {
                     return Err(TranslationError::NonLValueAssign);
                 }
 
-                let qual_ty = rhs.qual_ty;
+                let ty = rhs.ty.clone();
                 let expr = ir::Expression::Assign {
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 };
 
                 Ok(ir::TypedExpression {
-                    qual_ty,
+                    ty,
                     expr
                 })
             },
             ast::Expression::BinaryOperator { binop, lhs, rhs } => {
                 let lhs = self.translate_expression(*lhs)?;
+                let lhs = lvalue_to_rvalue(lhs);
                 let rhs = self.translate_expression(*rhs)?;
+                let rhs = lvalue_to_rvalue(rhs);
 
-                if let Some((ty, op)) = binop_typeck(binop, lhs.qual_ty.ty, rhs.qual_ty.ty) {
+                if let Some((ty, op)) = binop_typeck(binop, &lhs.ty, &rhs.ty) {
                     let expr = ir::Expression::BinaryOperator {
                         binop: op,
                         lhs: Box::new(lhs),
                         rhs: Box::new(rhs),
                     };
                     Ok(ir::TypedExpression {
-                        qual_ty: ty::QualifiedType::new(ty, false),
+                        ty,
                         expr,
                     })
                 } else {
-                    Err(TranslationError::BinOpUndefined(binop, lhs.qual_ty.ty, rhs.qual_ty.ty))
+                    Err(TranslationError::BinOpUndefined(binop, lhs.ty, rhs.ty))
                 }
             },
             ast::Expression::LazyOperator { lazyop, lhs, rhs } => {
                 let lhs = self.translate_expression(*lhs)?;
+                let lhs = lvalue_to_rvalue(lhs);
                 let rhs = self.translate_expression(*rhs)?;
+                let rhs = lvalue_to_rvalue(rhs);
 
-                if let Some((ty, op)) = lazyop_typeck(lazyop, lhs.qual_ty.ty, rhs.qual_ty.ty) {
+                if let Some((ty, op)) = lazyop_typeck(lazyop, &lhs.ty, &rhs.ty) {
                     let expr = ir::Expression::LazyOperator {
                         lazyop: op,
                         lhs: Box::new(lhs),
                         rhs: Box::new(rhs),
                     };
                     Ok(ir::TypedExpression {
-                        qual_ty: ty::QualifiedType::new(ty, false),
+                        ty,
                         expr,
                     })
                 } else {
-                    Err(TranslationError::LazyOpUndefined(lazyop, lhs.qual_ty.ty, rhs.qual_ty.ty))
+                    Err(TranslationError::LazyOpUndefined(lazyop, lhs.ty, rhs.ty))
                 }
             },
             ast::Expression::UnaryOperator { unop, sub } => {
                 let sub = self.translate_expression(*sub)?;
+                let sub = lvalue_to_rvalue(sub);
 
-                if let Some((ty, op)) = unop_typeck(unop, sub.qual_ty.ty) {
+                if let Some((ty, op)) = unop_typeck(unop, &sub.ty) {
                     let expr = ir::Expression::UnaryOperator {
                         unop: op,
                         sub: Box::new(sub),
                     };
                     Ok(ir::TypedExpression {
-                        qual_ty: ty::QualifiedType::new(ty, false),
+                        ty,
                         expr
                     })
                 } else {
-                    Err(TranslationError::UnOpUndefined(unop, sub.qual_ty.ty))
+                    Err(TranslationError::UnOpUndefined(unop, sub.ty))
                 }
             },
             ast::Expression::Increment(sub) => {
                 let sub = self.translate_expression(*sub)?;
-                if sub.qual_ty.ty != ty::Type::Int {
-                    return Err(TranslationError::MismatchingTypes(ty::Type::Int, sub.qual_ty.ty))
-                }
 
-                if !sub.qual_ty.lvalue {
+                if let ty::Type::LValue(ref sub_ty) = sub.ty {
+                    if **sub_ty != ty::Type::Int {
+                        return Err(TranslationError::MismatchingTypes(ty::Type::Int, *sub_ty.clone()))
+                    }
+                } else {
                     return Err(TranslationError::IncDecNonLValue)
                 }
 
-                let qual_ty = sub.qual_ty;
+                let ty = sub.ty.clone();
 
                 Ok(ir::TypedExpression {
-                    qual_ty,
+                    ty,
                     expr: ir::Expression::Increment(Box::new(sub))
                 })
             },
             ast::Expression::Decrement(sub) => {
                 let sub = self.translate_expression(*sub)?;
-                if sub.qual_ty.ty != ty::Type::Int {
-                    return Err(TranslationError::MismatchingTypes(ty::Type::Int, sub.qual_ty.ty))
-                }
 
-                if !sub.qual_ty.lvalue {
+                if let ty::Type::LValue(ref sub_ty) = sub.ty {
+                    if **sub_ty != ty::Type::Int {
+                        return Err(TranslationError::MismatchingTypes(ty::Type::Int, *sub_ty.clone()))
+                    }
+                } else {
                     return Err(TranslationError::IncDecNonLValue)
                 }
 
-                let qual_ty = sub.qual_ty;
+                let ty = sub.ty.clone();
 
                 Ok(ir::TypedExpression {
-                    qual_ty,
+                    ty,
                     expr: ir::Expression::Decrement(Box::new(sub))
                 })
             },
@@ -401,16 +415,17 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         return Err(TranslationError::FunctionCallArity(func_ty.parameters_ty.len(), args_translated.len()))
                     }
 
-                    for (arg, &param_ty) in args.into_iter().zip(func_ty.parameters_ty.iter()) {
+                    for (arg, param_ty) in args.into_iter().zip(func_ty.parameters_ty.iter()) {
                         let arg = self.translate_expression(arg)?;
-                        if arg.qual_ty.ty != param_ty {
-                            return Err(TranslationError::MismatchingTypes(arg.qual_ty.ty, param_ty))
+                        let arg = lvalue_to_rvalue(arg);
+                        if arg.ty != *param_ty {
+                            return Err(TranslationError::MismatchingTypes(arg.ty, param_ty.clone()))
                         }
                         args_translated.push(arg);
                     }
                     let ret_ty = func_ty.return_ty;
                     Ok(ir::TypedExpression {
-                        qual_ty: ty::QualifiedType::new(ret_ty, false),
+                        ty: ret_ty,
                         expr: ir::Expression::FunctionCall {
                             function,
                             args: args_translated
@@ -424,61 +439,77 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
     }
 }
 
+fn lvalue_to_rvalue(expression: ir::TypedExpression) -> ir::TypedExpression {
+    match expression.ty.clone() {
+        ty::Type::LValue(sub) => {
+            ir::TypedExpression {
+                ty: *sub,
+                expr: ir::Expression::LValueToRValue(Box::new(expression))
+            }
+        },
+        other => {
+            ir::TypedExpression {
+                ty: other,
+                expr: expression.expr
+            }
+        }
+    }
+}
 
-fn binop_typeck(binop: ast::BinaryOperatorKind, lhs: ty::Type, rhs: ty::Type) -> Option<(ty::Type, ir::BinaryOperatorKind)> {
+fn binop_typeck(binop: ast::BinaryOperatorKind, lhs: &ty::Type, rhs: &ty::Type) -> Option<(ty::Type, ir::BinaryOperatorKind)> {
     use ast::BinaryOperatorKind::*;
     match (binop, lhs, rhs) {
-        (Plus, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Int, ir::BinaryOperatorKind::IntPlus)),
-        (Plus, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Double, ir::BinaryOperatorKind::DoublePlus)),
-        (Minus, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Int, ir::BinaryOperatorKind::IntMinus)),
-        (Minus, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Double, ir::BinaryOperatorKind::DoubleMinus)),
-        (Multiply, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Int, ir::BinaryOperatorKind::IntMultiply)),
-        (Multiply, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Double, ir::BinaryOperatorKind::DoubleMultiply)),
-        (Divide, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Int, ir::BinaryOperatorKind::IntDivide)),
-        (Divide, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Double, ir::BinaryOperatorKind::DoubleDivide)),
-        (Modulo, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Int, ir::BinaryOperatorKind::IntModulo)),
+        (Plus, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Int, ir::BinaryOperatorKind::IntPlus)),
+        (Plus, &ty::Type::Double, &ty::Type::Double) => Some((ty::Type::Double, ir::BinaryOperatorKind::DoublePlus)),
+        (Minus, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Int, ir::BinaryOperatorKind::IntMinus)),
+        (Minus, &ty::Type::Double, &ty::Type::Double) => Some((ty::Type::Double, ir::BinaryOperatorKind::DoubleMinus)),
+        (Multiply, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Int, ir::BinaryOperatorKind::IntMultiply)),
+        (Multiply, &ty::Type::Double, &ty::Type::Double) => Some((ty::Type::Double, ir::BinaryOperatorKind::DoubleMultiply)),
+        (Divide, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Int, ir::BinaryOperatorKind::IntDivide)),
+        (Divide, &ty::Type::Double, &ty::Type::Double) => Some((ty::Type::Double, ir::BinaryOperatorKind::DoubleDivide)),
+        (Modulo, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Int, ir::BinaryOperatorKind::IntModulo)),
         
-        (Equal, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntEqual)),
-        (Equal, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleEqual)),
-        (Equal, ty::Type::Boolean, ty::Type::Boolean) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::BooleanEqual)),
+        (Equal, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntEqual)),
+        (Equal, &ty::Type::Double, &ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleEqual)),
+        (Equal, &ty::Type::Boolean, &ty::Type::Boolean) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::BooleanEqual)),
 
-        (NotEqual, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntNotEqual)),
-        (NotEqual, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleNotEqual)),
-        (NotEqual, ty::Type::Boolean, ty::Type::Boolean) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::BooleanNotEqual)),
+        (NotEqual, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntNotEqual)),
+        (NotEqual, &ty::Type::Double, &ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleNotEqual)),
+        (NotEqual, &ty::Type::Boolean, &ty::Type::Boolean) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::BooleanNotEqual)),
 
-        (Less, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntLess)),
-        (Less, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleLess)),
+        (Less, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntLess)),
+        (Less, &ty::Type::Double, &ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleLess)),
     
-        (LessEqual, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntLessEqual)),
-        (LessEqual, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleLessEqual)),
+        (LessEqual, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntLessEqual)),
+        (LessEqual, &ty::Type::Double, &ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleLessEqual)),
 
-        (Greater, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntGreater)),
-        (Greater, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleGreater)),
+        (Greater, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntGreater)),
+        (Greater, &ty::Type::Double, &ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleGreater)),
 
-        (GreaterEqual, ty::Type::Int, ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntGreaterEqual)),
-        (GreaterEqual, ty::Type::Double, ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleGreaterEqual)),
+        (GreaterEqual, &ty::Type::Int, &ty::Type::Int) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntGreaterEqual)),
+        (GreaterEqual, &ty::Type::Double, &ty::Type::Double) => Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleGreaterEqual)),
 
         _ => None
     }
 }
 
-fn lazyop_typeck(lazyop: ast::LazyOperatorKind, lhs: ty::Type, rhs: ty::Type) -> Option<(ty::Type, ir::LazyOperatorKind)> {
+fn lazyop_typeck(lazyop: ast::LazyOperatorKind, lhs: &ty::Type, rhs: &ty::Type) -> Option<(ty::Type, ir::LazyOperatorKind)> {
     use ast::LazyOperatorKind::*;
 
     match (lazyop, lhs, rhs) {
-        (LogicalAnd, ty::Type::Boolean, ty::Type::Boolean) => Some((ty::Type::Boolean, ir::LazyOperatorKind::BooleanLogicalAnd)),
-        (LogicalOr, ty::Type::Boolean, ty::Type::Boolean) => Some((ty::Type::Boolean, ir::LazyOperatorKind::BooleanLogicalOr)),
+        (LogicalAnd, &ty::Type::Boolean, &ty::Type::Boolean) => Some((ty::Type::Boolean, ir::LazyOperatorKind::BooleanLogicalAnd)),
+        (LogicalOr, &ty::Type::Boolean, &ty::Type::Boolean) => Some((ty::Type::Boolean, ir::LazyOperatorKind::BooleanLogicalOr)),
         _ => None
     }
 }
 
-fn unop_typeck(unop: ast::UnaryOperatorKind, sub: ty::Type) -> Option<(ty::Type, ir::UnaryOperatorKind)> {
+fn unop_typeck(unop: ast::UnaryOperatorKind, sub: &ty::Type) -> Option<(ty::Type, ir::UnaryOperatorKind)> {
     use ast::UnaryOperatorKind::*;
 
     match (unop, sub) {
-        (Minus, ty::Type::Int) => Some((ty::Type::Int, ir::UnaryOperatorKind::IntMinus)),
-        (Minus, ty::Type::Double) => Some((ty::Type::Double, ir::UnaryOperatorKind::DoubleMinus)),
-        (LogicalNot, ty::Type::Boolean) => Some((ty::Type::Boolean, ir::UnaryOperatorKind::BooleanNot)),
+        (Minus, &ty::Type::Int) => Some((ty::Type::Int, ir::UnaryOperatorKind::IntMinus)),
+        (Minus, &ty::Type::Double) => Some((ty::Type::Double, ir::UnaryOperatorKind::DoubleMinus)),
+        (LogicalNot, &ty::Type::Boolean) => Some((ty::Type::Boolean, ir::UnaryOperatorKind::BooleanNot)),
         _ => None
     }
 }
