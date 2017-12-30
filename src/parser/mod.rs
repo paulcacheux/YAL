@@ -266,8 +266,10 @@ impl<'input> Parser<'input> {
                 => Ok(ast::Expression::Literal(ast::Literal::DoubleLiteral(d))),
             Token::BooleanLiteral(b)
                 => Ok(ast::Expression::Literal(ast::Literal::BooleanLiteral(b))),
-            Token::StringLiteral(s) // TODO parse string (escape, etc)
-                => Ok(ast::Expression::Literal(ast::Literal::StringLiteral(s.to_string()))),
+            Token::StringLiteral(s) => { // TODO parse string (escape, etc) 
+                    let s = &s[1..s.len()-1];
+                    Ok(ast::Expression::Literal(ast::Literal::StringLiteral(s.to_string())))
+            },
             Token::Minus => {
                 let sub = self.parse_incdec_expression()?;
                 Ok(ast::Expression::UnaryOperator {

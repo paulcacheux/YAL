@@ -124,7 +124,8 @@ pub fn parse_expression_inner<'input>(parser: &mut Parser<'input>, lhs: ast::Exp
                         if (next_infos.precedence > infos.precedence)
                             || (next_infos.right_assoc && next_infos.precedence == infos.precedence);
                         then {
-                            rhs = parse_expression_inner(parser, rhs, next_infos.precedence)?;
+                            // really unsure about infos or next_infos.precedenc
+                            rhs = parse_expression_inner(parser, rhs, infos.precedence)?;
                         } else {
                             break
                         }

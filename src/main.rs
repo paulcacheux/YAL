@@ -13,7 +13,7 @@ mod ast;
 mod parser;
 mod ty;
 mod ir;
-// mod interpreter;
+mod interpreter;
 
 fn slurp_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
     let mut file = File::open(path)?;
@@ -28,6 +28,8 @@ fn main() {
     let lexer = lexer::Lexer::new(&input);
     let mut parser = parser::Parser::new(lexer);
     let program = parser.parse_program().unwrap();
-    let ir = ir::translator::translate_program(program);
-    println!("{:#?}", ir);
+    // println!("{:#?}", program);
+    let ir_prog = ir::translator::translate_program(program).unwrap();
+    // println!("{:#?}", ir_prog);
+    interpreter::interpret_program(&ir_prog);
 }

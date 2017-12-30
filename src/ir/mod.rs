@@ -43,8 +43,8 @@ pub type BlockStatement = Vec<Statement>;
 
 #[derive(Debug, Clone)]
 pub struct TypedExpression {
-    ty: Type,
-    expr: Expression,
+    pub ty: Type,
+    pub expr: Expression,
 }
 
 #[derive(Debug, Clone)]

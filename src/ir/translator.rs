@@ -16,7 +16,8 @@ pub enum TranslationError {
     UnOpUndefined(ast::UnaryOperatorKind, ty::Type),
     FunctionCallArity(usize, usize),
     FunctionUndefined(String),
-    IncDecNonLValue
+    IncDecNonLValue,
+    BreakContinueOutOfLoop
 }
 
 pub type TranslationResult<T> = Result<T, TranslationError>;
@@ -108,15 +109,15 @@ fn translate_block_statement(st: &mut SymbolTable, block: ast::BlockStatement, f
 
 #[derive(Debug)]
 struct FunctionInfos {
-    temp_counter: usize,
     ret_ty: ty::Type,
+    in_loop: bool,
 }
 
 impl FunctionInfos {
     fn new(ret_ty: ty::Type) -> Self {
         FunctionInfos {
-            temp_counter: 0,
-            ret_ty
+            ret_ty,
+            in_loop: false
         }
     }
 }
@@ -212,7 +213,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     return Err(TranslationError::MismatchingTypes(ty::Type::Boolean, condition.ty))
                 }
 
+                let old_in_loop = self.func_infos.in_loop;
+                self.func_infos.in_loop = true;
                 let body = self.translate_statement_as_block(*body)?;
+                self.func_infos.in_loop = old_in_loop;
 
                 self.statements.push(ir::Statement::While {
                     condition,
@@ -247,12 +251,18 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 self.statements.push(ir::Statement::Expression(expr));
             },
             ast::Statement::Break => {
-                // TODO check in loop
-                self.statements.push(ir::Statement::Break);
+                if self.func_infos.in_loop {
+                    self.statements.push(ir::Statement::Break);
+                } else {
+                    return Err(TranslationError::BreakContinueOutOfLoop)
+                }
             },
             ast::Statement::Continue => {
-                // TODO check in loop
-                self.statements.push(ir::Statement::Continue);
+                if self.func_infos.in_loop {
+                    self.statements.push(ir::Statement::Continue);
+                } else {
+                    return Err(TranslationError::BreakContinueOutOfLoop)
+                }
             }
         }
         Ok(())
