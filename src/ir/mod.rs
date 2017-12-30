@@ -1,4 +1,5 @@
 use ty::*;
+use string_interner::StringId;
 
 mod symbol_table;
 pub mod translator;
@@ -80,12 +81,12 @@ pub enum Expression {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Literal {
     IntLiteral(i64),
     DoubleLiteral(f64),
     BooleanLiteral(bool),
-    StringLiteral(String), // TODO intern
+    StringLiteral(StringId),
 }
 
 #[derive(Debug, Clone, Copy)]

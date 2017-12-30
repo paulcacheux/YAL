@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use ir;
 use ty;
+use string_interner::{StringId, StringInterner};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -9,20 +10,21 @@ pub enum Value {
     Int(i64),
     Double(f64),
     Boolean(bool),
-    String(String),
+    String(StringId),
     LValue(usize)
 }
 
-pub fn interpret_program(program: &ir::Program) {
-    let mut interpreter = Interpreter::new(program);
+pub fn interpret_program(program: &ir::Program, strings: &StringInterner) {
+    let mut interpreter = Interpreter::new(program, strings);
 
     interpreter.interpret_function_by_name("main", vec![]);
     // TODO maybe return int
 }
 
-struct Interpreter<'p> {
+struct Interpreter<'p, 'si> {
     program: &'p ir::Program,
-    memory: Memory
+    memory: Memory,
+    strings: &'si StringInterner,
 }
 
 macro_rules! propagate {
@@ -50,22 +52,23 @@ macro_rules! extract_pattern {
     }
 }
 
-impl<'p> Interpreter<'p> {
+impl<'p, 'si> Interpreter<'p, 'si> {
 
-    fn new(program: &'p ir::Program) -> Self {
+    fn new(program: &'p ir::Program, strings: &'si StringInterner) -> Self {
         Interpreter {
             program,
-            memory: Memory::new()
+            memory: Memory::new(),
+            strings,
         }
     }
 
     fn interpret_function_by_name(&mut self, name: &str, args: Vec<Value>) -> Value {
         match name {
-            "printInt" => builtins::print_int(args),
-            "printDouble" => builtins::print_double(args),
-            "printString" => builtins::print_string(args),
-            "readInt" => builtins::read_int(args),
-            "readDouble" => builtins::read_double(args),
+            "printInt" => builtins::print_int(self, args),
+            "printDouble" => builtins::print_double(self, args),
+            "printString" => builtins::print_string(self, args),
+            "readInt" => builtins::read_int(self, args),
+            "readDouble" => builtins::read_double(self, args),
             name => {
                 for function in &self.program.declarations {
                     if function.name == name {
@@ -162,9 +165,8 @@ impl<'p> Interpreter<'p> {
                     ty::Type::Int => Value::Int(0),
                     ty::Type::Double => Value::Double(0.0),
                     ty::Type::Boolean => Value::Boolean(false),
-                    ty::Type::String => Value::String(String::new()),
                     ty::Type::Void => Value::Void,
-                    _ => unreachable!()
+                    _ => unreachable!() // string doesn't have a default value
                 }
             },
             Expression::LValueToRValue(ref sub) => {
@@ -328,35 +330,35 @@ impl Memory {
 }
 
 mod builtins {
-    use super::Value;
+    use super::{Interpreter, Value};
     use std::io;
 
-    pub fn print_int(args: Vec<Value>) -> Value {
+    pub(super) fn print_int(_: &Interpreter, args: Vec<Value>) -> Value {
         let i = extract_pattern!(&args[0]; &Value::Int(i) => i);
         println!("{}", i);
         Value::Void
     }
 
-    pub fn print_double(args: Vec<Value>) -> Value {
-        let d = extract_pattern!(&args[0].clone(); &Value::Double(d) => d);
+    pub(super) fn print_double(_: &Interpreter, args: Vec<Value>) -> Value {
+        let d = extract_pattern!(&args[0]; &Value::Double(d) => d);
         println!("{:.1}", d);
         Value::Void
     }
 
-    pub fn print_string(args: Vec<Value>) -> Value {
-        let s = extract_pattern!(&args[0]; &Value::String(ref s) => s.clone());
-        println!("{}", s);
+    pub(super) fn print_string(interpreter: &Interpreter, args: Vec<Value>) -> Value {
+        let sid = extract_pattern!(&args[0]; &Value::String(sid) => sid);
+        println!("{}", interpreter.strings.get_str(sid));
         Value::Void
     }
 
-    pub fn read_int(_: Vec<Value>) -> Value {
+    pub(super) fn read_int(_: &Interpreter, _: Vec<Value>) -> Value {
         let mut input = String::new();
         io::stdin().read_line(&mut input).expect("STDIN error");
         let trimmed = input.trim();
         Value::Int(trimmed.parse().unwrap())
     }
 
-    pub fn read_double(_: Vec<Value>) -> Value {
+    pub(super) fn read_double(_: &Interpreter, _: Vec<Value>) -> Value {
         let mut input = String::new();
         io::stdin().read_line(&mut input).expect("STDIN error");
         let trimmed = input.trim();

@@ -17,7 +17,9 @@ pub enum TranslationError {
     FunctionCallArity(usize, usize),
     FunctionUndefined(String),
     IncDecNonLValue,
-    BreakContinueOutOfLoop
+    BreakContinueOutOfLoop,
+    MainWrongType,
+    NoMain,
 }
 
 pub type TranslationResult<T> = Result<T, TranslationError>;
@@ -48,10 +50,23 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
     });
 
 
+    let mut is_main_present = false;
     for func in &program.declarations {
         if globals_table.register_function(func.name.clone(), func.get_type()) {
             return Err(TranslationError::FunctionAlreadyDefined(func.name.clone()))
         }
+
+        if func.name == "main" {
+            if func.parameters.is_empty() {
+                is_main_present = true;
+            } else {
+                return Err(TranslationError::MainWrongType)
+            }
+        }
+    }
+
+    if !is_main_present {
+        return Err(TranslationError::NoMain)
     }
 
     let mut declarations = Vec::with_capacity(program.declarations.len());

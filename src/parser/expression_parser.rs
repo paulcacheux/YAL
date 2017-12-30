@@ -107,7 +107,7 @@ fn apply<'input>(binop: Token<'input>, lhs: ast::Expression, rhs: ast::Expressio
     }
 }
 
-pub fn parse_expression_inner<'input>(parser: &mut Parser<'input>, lhs: ast::Expression, min_prec: usize) -> ParsingResult<ast::Expression> {
+pub fn parse_expression_inner<'si, 'input>(parser: &mut Parser<'si, 'input>, lhs: ast::Expression, min_prec: usize) -> ParsingResult<ast::Expression> {
     let mut lhs = lhs;
     loop {
         if_chain! {

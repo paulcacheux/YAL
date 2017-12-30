@@ -1,4 +1,5 @@
 use ty::*;
+use string_interner::StringId;
 
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -79,12 +80,12 @@ pub enum Expression {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Literal {
     IntLiteral(i64),
     DoubleLiteral(f64),
     BooleanLiteral(bool),
-    StringLiteral(String),
+    StringLiteral(StringId),
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -1,6 +1,7 @@
 use lexer::{Token, Lexer};
 use ast;
 use ty;
+use string_interner::StringInterner;
 
 mod parsing_error;
 mod expression_parser;
@@ -8,8 +9,9 @@ mod expression_parser;
 pub use self::parsing_error::ParsingError;
 use self::expression_parser::*;
 
-pub struct Parser<'input> {
-    pub lexer: Lexer<'input>
+pub struct Parser<'si, 'input> {
+    pub lexer: Lexer<'input>,
+    pub string_interner: &'si mut StringInterner,
 }
 
 macro_rules! accept {
@@ -36,10 +38,11 @@ macro_rules! return_unexpected {
 
 pub type ParsingResult<T> = Result<T, ParsingError>;
 
-impl<'input> Parser<'input> {
-    pub fn new(lexer: Lexer<'input>) -> Parser {
+impl<'si, 'input> Parser<'si, 'input> {
+    pub fn new(lexer: Lexer<'input>, string_interner: &'si mut StringInterner) -> Self {
         Parser {
-            lexer
+            lexer,
+            string_interner
         }
     }
 
@@ -268,7 +271,8 @@ impl<'input> Parser<'input> {
                 => Ok(ast::Expression::Literal(ast::Literal::BooleanLiteral(b))),
             Token::StringLiteral(s) => { // TODO parse string (escape, etc) 
                     let s = &s[1..s.len()-1];
-                    Ok(ast::Expression::Literal(ast::Literal::StringLiteral(s.to_string())))
+                    let sid = self.string_interner.intern(s.to_string());
+                    Ok(ast::Expression::Literal(ast::Literal::StringLiteral(sid)))
             },
             Token::Minus => {
                 let sub = self.parse_incdec_expression()?;
