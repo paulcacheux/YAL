@@ -7,3 +7,4 @@ authors = ["Paul CACHEUX <paulcacheux@gmail.com>"]
 lazy_static = "1.0.0"
 regex = "0.2.3"
 if_chain = "0.1.2"
+clap = "2.29"

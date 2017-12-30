@@ -22,7 +22,7 @@ lazy_static! {
 pub struct Lexer<'input> {
     input: &'input str,
     pos: usize,
-    buffer: Option<Token<'input>>
+    buffer: Option<Token<'input>>,
 }
 
 impl<'input> Lexer<'input> {
@@ -30,7 +30,7 @@ impl<'input> Lexer<'input> {
         Lexer {
             input,
             pos: 0,
-            buffer: None
+            buffer: None,
         }
     }
 
@@ -39,10 +39,10 @@ impl<'input> Lexer<'input> {
             for regex in SKIPABLE.iter() {
                 if let Some(m) = regex.find(&self.input[self.pos..]) {
                     self.pos += m.end();
-                    continue 'main_loop
-                } 
+                    continue 'main_loop;
+                }
             }
-            break
+            break;
         }
     }
 
@@ -78,13 +78,13 @@ impl<'input> Lexer<'input> {
         }
 
         if let Some(token) = self.buffer.take() {
-            return Ok(token)
+            return Ok(token);
         }
 
         self.skip_whitespaces();
 
         if self.pos >= self.input.len() {
-            return Ok(Token::EOF)
+            return Ok(Token::EOF);
         }
 
         match_literal!(self; "(" => Token::LeftParenthesis);
@@ -127,21 +127,21 @@ impl<'input> Lexer<'input> {
                 "void" => Ok(Token::VoidKeyword),
                 "continue" => Ok(Token::ContinueKeyword),
                 "break" => Ok(Token::BreakKeyword),
-                s => Ok(Token::Identifier(s))
-            }
+                s => Ok(Token::Identifier(s)),
+            };
         }
         if let Some(s) = self.match_regex(&DOUBLE_REGEX) {
-            return Ok(Token::DoubleLiteral(s.parse().unwrap()))
+            return Ok(Token::DoubleLiteral(s.parse().unwrap()));
         }
         if let Some(s) = self.match_regex(&INTEGER_REGEX) {
-            return Ok(Token::IntegerLiteral(s.parse().unwrap()))
+            return Ok(Token::IntegerLiteral(s.parse().unwrap()));
         }
         if let Some(s) = self.match_regex(&STRING_REGEX) {
-            return Ok(Token::StringLiteral(s))
+            return Ok(Token::StringLiteral(s));
         }
 
-        return Err(ParsingError::UnknownChar(
-                (&self.input[self.pos..]).chars().next().unwrap())
-        )
+        Err(ParsingError::UnknownChar(
+            (&self.input[self.pos..]).chars().next().unwrap(),
+        ))
     }
 }

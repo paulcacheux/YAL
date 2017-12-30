@@ -1,12 +1,15 @@
 #[macro_use]
+extern crate if_chain;
+#[macro_use]
 extern crate lazy_static;
 extern crate regex;
-#[macro_use]
-extern crate if_chain;
+extern crate clap;
 
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
+
+use clap::{Arg, App};
 
 mod string_interner;
 mod lexer;
@@ -23,8 +26,28 @@ fn slurp_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
     Ok(buffer)
 }
 
+fn continue_or_exit<T, E: std::fmt::Debug>(input: Result<T, E>) -> T {
+    match input {
+        Ok(v) => return v,
+        Err(e) => {
+            eprintln!("{:?}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
 fn main() {
-    let path = std::env::args().nth(1).unwrap();
+    let matches = App::new("Javalette interpreter")
+        .version("0.1")
+        .author("Paul CACHEUX <paulcacheux@gmail.com>")
+        .arg(Arg::with_name("INPUT")
+            .help("Sets the input file.")
+            .required(true)
+            .index(1))
+        .get_matches();
+
+
+    let path = matches.value_of("INPUT").unwrap();
     let input = slurp_file(path).unwrap();
 
     let mut string_interner = string_interner::StringInterner::new();
@@ -32,10 +55,10 @@ fn main() {
     let lexer = lexer::Lexer::new(&input);
     let program = {
         let mut parser = parser::Parser::new(lexer, &mut string_interner);
-        parser.parse_program().unwrap()
+        continue_or_exit(parser.parse_program())
     };
     // println!("{:#?}", program);
-    let ir_prog = ir::translator::translate_program(program).unwrap();
+    let ir_prog = continue_or_exit(ir::translator::translate_program(program));
     // println!("{:#?}", ir_prog);
-    interpreter::interpret_program(&ir_prog, &string_interner);
+    continue_or_exit(interpreter::interpret_program(&ir_prog, &string_interner));
 }

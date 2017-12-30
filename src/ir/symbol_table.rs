@@ -14,7 +14,7 @@ impl GlobalsTable {
         self.0.insert(name, ty).is_some()
     }
 
-    pub fn lookup_function(&self, name: &String) -> Option<&ty::FunctionType> {
+    pub fn lookup_function(&self, name: &str) -> Option<&ty::FunctionType> {
         self.0.get(name)
     }
 }
@@ -33,7 +33,7 @@ impl<'g> SymbolTable<'g> {
         }
     }
 
-    pub fn lookup_function(&self, name: &String) -> Option<&ty::FunctionType> {
+    pub fn lookup_function(&self, name: &str) -> Option<&ty::FunctionType> {
         self.globals.lookup_function(name)
     }
 
@@ -50,10 +50,10 @@ impl<'g> SymbolTable<'g> {
         self.scopes.last_mut().unwrap().insert(name, ty).is_some()
     }
 
-    pub fn lookup_local(&self, name: &String) -> Option<&ty::Type> {
+    pub fn lookup_local(&self, name: &str) -> Option<&ty::Type> {
         for scope in self.scopes.iter().rev() {
             if let Some(t) = scope.get(name) {
-                return Some(t)
+                return Some(t);
             }
         }
         None

@@ -17,10 +17,13 @@ pub struct Function {
 impl Function {
     pub fn get_type(&self) -> FunctionType {
         let return_ty = self.return_ty.clone();
-        let parameters_ty = self.parameters.iter().map(|&(ref a, _)| a.clone()).collect();
+        let parameters_ty = self.parameters
+            .iter()
+            .map(|&(ref a, _)| a.clone())
+            .collect();
         FunctionType {
             return_ty,
-            parameters_ty
+            parameters_ty,
         }
     }
 }
@@ -29,26 +32,35 @@ impl Function {
 pub enum Statement {
     Empty,
     Block(BlockStatement),
-    VarDecl {
-        ty: Type,
-        declarations: Vec<(String, Option<Expression>)>
-    },
-    If {
-        condition: Expression,
-        body: Box<Statement>,
-        else_clause: Option<Box<Statement>>,
-    },
-    While {
-        condition: Expression,
-        body: Box<Statement>,
-    },
+    VarDecl(VarDeclarations),
+    If(IfStatement),
+    While(WhileStatement),
     Return(Option<Expression>),
     Expression(Expression),
     Break,
-    Continue
+    Continue,
 }
 
 pub type BlockStatement = Vec<Statement>;
+
+#[derive(Debug, Clone)]
+pub struct VarDeclarations {
+    pub ty: Type,
+    pub declarations: Vec<(String, Option<Expression>)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct IfStatement {
+    pub condition: Expression,
+    pub body: Box<Statement>,
+    pub else_clause: Option<Box<Statement>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileStatement {
+    pub condition: Expression,
+    pub body: Box<Statement>,
+}
 
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -76,8 +88,8 @@ pub enum Expression {
     Decrement(Box<Expression>),
     FunctionCall {
         function: String,
-        args: Vec<Expression>
-    }
+        args: Vec<Expression>,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]

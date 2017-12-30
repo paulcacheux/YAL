@@ -39,7 +39,6 @@ pub enum Token<'input> {
     BooleanKeyword,
     VoidKeyword,
 
-
     Identifier(&'input str),
     IntegerLiteral(i64),
     DoubleLiteral(f64),
