@@ -135,7 +135,7 @@ fn translate_block_statement(
     let block = {
         let mut builder = BlockBuilder::new(st, fi);
 
-        for stmt in block {
+        for stmt in block.statements {
             builder.translate_statement(stmt)?;
         }
 
@@ -190,7 +190,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Statement::Block(b) => {
                 translate_block_statement(self.symbol_table, b, self.func_infos)
             }
-            other => translate_block_statement(self.symbol_table, vec![other], self.func_infos),
+            other => translate_block_statement(self.symbol_table, ast::BlockStatement::from_vec(vec![other]), self.func_infos),
         }
     }
 

@@ -2,7 +2,7 @@ use regex::Regex;
 use parser::ParsingError;
 
 mod token;
-pub use self::token::Token;
+pub use self::token::{Token, TokenAndSpan};
 
 lazy_static! {
     static ref WHITESPACES: Regex = Regex::new(r"^\s+").unwrap();
@@ -22,7 +22,7 @@ lazy_static! {
 pub struct Lexer<'input> {
     input: &'input str,
     pos: usize,
-    buffer: Option<Token<'input>>,
+    buffer: Option<TokenAndSpan<'input>>,
 }
 
 impl<'input> Lexer<'input> {
@@ -55,7 +55,7 @@ impl<'input> Lexer<'input> {
         })
     }
 
-    pub fn peek_token(&mut self) -> Result<&Token<'input>, ParsingError> {
+    pub fn peek_token(&mut self) -> Result<&TokenAndSpan<'input>, ParsingError> {
         if self.buffer.is_none() {
             self.buffer = Some(self.next_token()?);
         }
@@ -67,12 +67,14 @@ impl<'input> Lexer<'input> {
         }
     }
 
-    pub fn next_token(&mut self) -> Result<Token<'input>, ParsingError> {
+    pub fn next_token(&mut self) -> Result<TokenAndSpan<'input>, ParsingError> {
         macro_rules! match_literal {
             ($lexer:expr; $literal:tt => $ret_expr:expr) => {
                 if (&$lexer.input[$lexer.pos..]).starts_with($literal) {
-                    $lexer.pos += $literal.len();
-                    return Ok($ret_expr)
+                    let len = $literal.len();
+                    let start = $lexer.pos;
+                    $lexer.pos += len;
+                    return Ok(TokenAndSpan::new_with_len($ret_expr, start, len))
                 }
             }
         }
@@ -84,7 +86,7 @@ impl<'input> Lexer<'input> {
         self.skip_whitespaces();
 
         if self.pos >= self.input.len() {
-            return Ok(Token::EOF);
+            return Ok(TokenAndSpan::new_with_len(Token::EOF, self.input.len(), 1));
         }
 
         match_literal!(self; "(" => Token::LeftParenthesis);
@@ -113,31 +115,40 @@ impl<'input> Lexer<'input> {
         match_literal!(self; ">" => Token::Greater);
         match_literal!(self; "!" => Token::Bang);
 
+        let start_pos = self.pos;
         if let Some(s) = self.match_regex(&IDENTIFIER_REGEX) {
-            return match s {
-                "while" => Ok(Token::WhileKeyword),
-                "if" => Ok(Token::IfKeyword),
-                "else" => Ok(Token::ElseKeyword),
-                "return" => Ok(Token::ReturnKeyword),
-                "true" => Ok(Token::BooleanLiteral(true)),
-                "false" => Ok(Token::BooleanLiteral(false)),
-                "int" => Ok(Token::IntKeyword),
-                "double" => Ok(Token::DoubleKeyword),
-                "boolean" => Ok(Token::BooleanKeyword),
-                "void" => Ok(Token::VoidKeyword),
-                "continue" => Ok(Token::ContinueKeyword),
-                "break" => Ok(Token::BreakKeyword),
-                s => Ok(Token::Identifier(s)),
+            let len = s.len();
+            let token = match s {
+                "while" => Token::WhileKeyword,
+                "if" => Token::IfKeyword,
+                "else" => Token::ElseKeyword,
+                "return" => Token::ReturnKeyword,
+                "true" => Token::BooleanLiteral(true),
+                "false" => Token::BooleanLiteral(false),
+                "int" => Token::IntKeyword,
+                "double" => Token::DoubleKeyword,
+                "boolean" => Token::BooleanKeyword,
+                "void" => Token::VoidKeyword,
+                "continue" => Token::ContinueKeyword,
+                "break" => Token::BreakKeyword,
+                s => Token::Identifier(s),
             };
+            return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
         }
         if let Some(s) = self.match_regex(&DOUBLE_REGEX) {
-            return Ok(Token::DoubleLiteral(s.parse().unwrap()));
+            let len = s.len();
+            let token = Token::DoubleLiteral(s.parse().unwrap());
+            return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
         }
         if let Some(s) = self.match_regex(&INTEGER_REGEX) {
-            return Ok(Token::IntegerLiteral(s.parse().unwrap()));
+            let len = s.len();
+            let token = Token::IntegerLiteral(s.parse().unwrap());
+            return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
         }
         if let Some(s) = self.match_regex(&STRING_REGEX) {
-            return Ok(Token::StringLiteral(s));
+            let len = s.len();
+            let token = Token::StringLiteral(s);
+            return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
         }
 
         Err(ParsingError::UnknownChar(

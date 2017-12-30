@@ -1,3 +1,5 @@
+use span::Span;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'input> {
     EOF,
@@ -44,4 +46,22 @@ pub enum Token<'input> {
     DoubleLiteral(f64),
     BooleanLiteral(bool),
     StringLiteral(&'input str),
+}
+
+pub struct TokenAndSpan<'input> {
+    pub token: Token<'input>,
+    pub span: Span
+}
+
+impl<'input> TokenAndSpan<'input> {
+    pub fn new(token: Token<'input>, span: Span) -> Self {
+        TokenAndSpan {
+            token,
+            span
+        }
+    }
+
+    pub fn new_with_len(token: Token<'input>, start: usize, len: usize) -> Self {
+        TokenAndSpan::new(token, Span::new_with_len(start, len))
+    }
 }

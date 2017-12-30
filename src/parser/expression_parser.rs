@@ -137,16 +137,16 @@ pub fn parse_expression_inner<'si, 'input>(
     let mut lhs = lhs;
     loop {
         if_chain! {
-            if let Some(infos) = info_of(parser.lexer.peek_token()?);
+            if let Some(infos) = info_of(&parser.lexer.peek_token()?.token);
             if (infos.precedence > min_prec)
                 || (!infos.relational && infos.precedence == min_prec);
             then {
-                let op = parser.lexer.next_token()?;
+                let op = parser.lexer.next_token()?.token;
                 let mut rhs = parser.parse_incdec_expression()?;
 
                 loop {
                     if_chain! {
-                        if let Some(next_infos) = info_of(parser.lexer.peek_token()?);
+                        if let Some(next_infos) = info_of(&parser.lexer.peek_token()?.token);
                         if (next_infos.precedence > infos.precedence)
                             || (next_infos.right_assoc
                                 && next_infos.precedence == infos.precedence);

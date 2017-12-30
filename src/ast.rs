@@ -1,5 +1,6 @@
 use ty::*;
 use string_interner::StringId;
+use span::Span;
 
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -12,6 +13,7 @@ pub struct Function {
     pub name: String,
     pub parameters: Vec<(Type, String)>,
     pub body: BlockStatement,
+    // pub span: Span,
 }
 
 impl Function {
@@ -41,7 +43,22 @@ pub enum Statement {
     Continue,
 }
 
-pub type BlockStatement = Vec<Statement>;
+#[derive(Debug, Clone)]
+pub struct BlockStatement {
+    pub statements: Vec<Statement>,
+}
+
+impl BlockStatement {
+    pub fn new() -> Self {
+        BlockStatement::from_vec(vec![])
+    }
+
+    pub fn from_vec(statements: Vec<Statement>) -> Self {
+        BlockStatement {
+            statements
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct VarDeclarations {

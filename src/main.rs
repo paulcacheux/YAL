@@ -12,6 +12,7 @@ use std::path::Path;
 use clap::{Arg, App};
 
 mod string_interner;
+mod span;
 mod lexer;
 mod ast;
 mod parser;
