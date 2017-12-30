@@ -172,7 +172,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let block = translate_block_statement(self.symbol_table, block, self.func_infos)?;
                 self.statements.push(ir::Statement::Block(block));
             },
-            ast::Statement::VarDecl { ty, declarations } => {
+            ast::Statement::VarDecl(ast::VarDeclarations { ty, declarations }) => {
 
                 for (name, value) in declarations {
                     let value = if let Some(value) = value {
@@ -200,7 +200,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     });
                 }
             },
-            ast::Statement::If { condition, body, else_clause } => {
+            ast::Statement::If(ast::IfStatement { condition, body, else_clause }) => {
                 let condition = self.translate_expression(condition)?;
                 let condition = lvalue_to_rvalue(condition);
                 if condition.ty != ty::Type::Boolean {
@@ -221,7 +221,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     else_clause
                 })
             },
-            ast::Statement::While { condition, body } => {
+            ast::Statement::While(ast::WhileStatement { condition, body }) => {
                 let condition = self.translate_expression(condition)?;
                 let condition = lvalue_to_rvalue(condition);
                 if condition.ty != ty::Type::Boolean {

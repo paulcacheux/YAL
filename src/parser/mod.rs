@@ -178,11 +178,11 @@ impl<'si, 'input> Parser<'si, 'input> {
             None
         };
 
-        Ok(ast::Statement::If {
+        Ok(ast::Statement::If(ast::IfStatement {
             condition,
             body,
             else_clause
-        })
+        }))
     }
 
     pub fn parse_while_statement(&mut self) -> ParsingResult<ast::Statement> {
@@ -192,10 +192,10 @@ impl<'si, 'input> Parser<'si, 'input> {
         expect!(self.lexer; Token::RightParenthesis, ")");
         let body = Box::new(self.parse_statement()?);
 
-        Ok(ast::Statement::While {
+        Ok(ast::Statement::While(ast::WhileStatement {
             condition,
             body,
-        })
+        }))
     }
 
     pub fn parse_return_statement(&mut self) -> ParsingResult<ast::Statement> {
@@ -230,10 +230,10 @@ impl<'si, 'input> Parser<'si, 'input> {
             declarations.push(self.parse_identifier_and_maybe_value()?);
         }
         expect!(self.lexer; Token::SemiColon, ";");
-        Ok(ast::Statement::VarDecl {
+        Ok(ast::Statement::VarDecl(ast::VarDeclarations {
             ty,
             declarations
-        })
+        }))
     }
 
     pub fn parse_expression(&mut self) -> ParsingResult<ast::Expression> {

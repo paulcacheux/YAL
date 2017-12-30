@@ -29,19 +29,9 @@ impl Function {
 pub enum Statement {
     Empty,
     Block(BlockStatement),
-    VarDecl {
-        ty: Type,
-        declarations: Vec<(String, Option<Expression>)>
-    },
-    If {
-        condition: Expression,
-        body: Box<Statement>,
-        else_clause: Option<Box<Statement>>,
-    },
-    While {
-        condition: Expression,
-        body: Box<Statement>,
-    },
+    VarDecl(VarDeclarations),
+    If(IfStatement),
+    While(WhileStatement),
     Return(Option<Expression>),
     Expression(Expression),
     Break,
@@ -49,6 +39,25 @@ pub enum Statement {
 }
 
 pub type BlockStatement = Vec<Statement>;
+
+#[derive(Debug, Clone)]
+pub struct VarDeclarations {
+    pub ty: Type,
+    pub declarations: Vec<(String, Option<Expression>)>,
+}
+
+#[derive(Debug, Clone)]
+pub struct IfStatement {
+    pub condition: Expression,
+    pub body: Box<Statement>,
+    pub else_clause: Option<Box<Statement>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileStatement {
+    pub condition: Expression,
+    pub body: Box<Statement>,
+}
 
 #[derive(Debug, Clone)]
 pub enum Expression {
