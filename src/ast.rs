@@ -1,6 +1,6 @@
 use ty::*;
 use string_interner::StringId;
-use span::Span;
+use span::{Span, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -13,7 +13,7 @@ pub struct Function {
     pub name: String,
     pub parameters: Vec<(Type, String)>,
     pub body: BlockStatement,
-    // pub span: Span,
+    pub span: Span,
 }
 
 impl Function {
@@ -45,7 +45,7 @@ pub enum Statement {
 
 #[derive(Debug, Clone)]
 pub struct BlockStatement {
-    pub statements: Vec<Statement>,
+    pub statements: Vec<Spanned<Statement>>,
 }
 
 impl BlockStatement {
@@ -53,7 +53,7 @@ impl BlockStatement {
         BlockStatement::from_vec(vec![])
     }
 
-    pub fn from_vec(statements: Vec<Statement>) -> Self {
+    pub fn from_vec(statements: Vec<Spanned<Statement>>) -> Self {
         BlockStatement {
             statements
         }
@@ -69,14 +69,14 @@ pub struct VarDeclarations {
 #[derive(Debug, Clone)]
 pub struct IfStatement {
     pub condition: Expression,
-    pub body: Box<Statement>,
-    pub else_clause: Option<Box<Statement>>,
+    pub body: Box<Spanned<Statement>>,
+    pub else_clause: Option<Box<Spanned<Statement>>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct WhileStatement {
     pub condition: Expression,
-    pub body: Box<Statement>,
+    pub body: Box<Spanned<Statement>>,
 }
 
 #[derive(Debug, Clone)]

@@ -24,3 +24,18 @@ impl Span {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct Spanned<T> {
+    pub inner: T,
+    pub span: Span
+}
+
+impl<T> Spanned<T> {
+    pub fn new(inner: T, span: Span) -> Self {
+        Spanned {
+            inner,
+            span
+        }
+    }
+}

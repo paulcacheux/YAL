@@ -2,6 +2,7 @@ use ast;
 use ty;
 use ir;
 use ir::symbol_table::{GlobalsTable, SymbolTable};
+use span::*;
 
 #[derive(Debug, Clone)]
 pub enum TranslationError {
@@ -183,19 +184,19 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
     fn translate_statement_as_block(
         &mut self,
-        statement: ast::Statement,
+        statement: Spanned<ast::Statement>,
     ) -> TranslationResult<ir::BlockStatement> {
-        match statement {
+        match statement.inner {
             ast::Statement::Empty => Ok(ir::BlockStatement::new()),
             ast::Statement::Block(b) => {
                 translate_block_statement(self.symbol_table, b, self.func_infos)
             }
-            other => translate_block_statement(self.symbol_table, ast::BlockStatement::from_vec(vec![other]), self.func_infos),
+            other => translate_block_statement(self.symbol_table, ast::BlockStatement::from_vec(vec![Spanned::new(other, statement.span)]), self.func_infos),
         }
     }
 
-    fn translate_statement(&mut self, statement: ast::Statement) -> TranslationResult<()> {
-        match statement {
+    fn translate_statement(&mut self, statement: Spanned<ast::Statement>) -> TranslationResult<()> {
+        match statement.inner {
             ast::Statement::Empty => {}
             ast::Statement::Block(block) => {
                 let block = translate_block_statement(self.symbol_table, block, self.func_infos)?;
