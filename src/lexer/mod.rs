@@ -140,8 +140,8 @@ impl<'input> Lexer<'input> {
             return Ok(Token::StringLiteral(s));
         }
 
-        return Err(ParsingError::UnknownChar(
+        Err(ParsingError::UnknownChar(
             (&self.input[self.pos..]).chars().next().unwrap(),
-        ));
+        ))
     }
 }

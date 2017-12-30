@@ -50,15 +50,15 @@ fn info_of<'input>(binop: &Token<'input>) -> Option<Infos> {
     }
 }
 
-fn apply<'input>(
-    binop: Token<'input>,
+fn apply(
+    binop: &Token,
     lhs: ast::Expression,
     rhs: ast::Expression,
 ) -> ast::Expression {
     let lhs = Box::new(lhs);
     let rhs = Box::new(rhs);
 
-    match binop {
+    match *binop {
         Token::Equal => ast::Expression::Assign { lhs, rhs },
         Token::PipePipe => ast::Expression::LazyOperator {
             lazyop: ast::LazyOperatorKind::LogicalOr,
@@ -159,7 +159,7 @@ pub fn parse_expression_inner<'si, 'input>(
                     }
                 }
 
-                lhs = apply(op, lhs, rhs);
+                lhs = apply(&op, lhs, rhs);
             } else {
                 break
             }

@@ -4,7 +4,7 @@ use ir;
 use ty;
 use string_interner::{StringId, StringInterner};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Value {
     Void,
     Int(i64),
@@ -17,7 +17,7 @@ pub enum Value {
 pub fn interpret_program(program: &ir::Program, strings: &StringInterner) {
     let mut interpreter = Interpreter::new(program, strings);
 
-    interpreter.interpret_function_by_name("main", vec![]);
+    interpreter.interpret_function_by_name("main", &[]);
     // TODO maybe return int
 }
 
@@ -61,7 +61,7 @@ impl<'p, 'si> Interpreter<'p, 'si> {
         }
     }
 
-    fn interpret_function_by_name(&mut self, name: &str, args: Vec<Value>) -> Value {
+    fn interpret_function_by_name(&mut self, name: &str, args: &[Value]) -> Value {
         match name {
             "printInt" => builtins::print_int(self, args),
             "printDouble" => builtins::print_double(self, args),
@@ -79,10 +79,10 @@ impl<'p, 'si> Interpreter<'p, 'si> {
         }
     }
 
-    fn interpret_function(&mut self, function: &ir::Function, args: Vec<Value>) -> Value {
+    fn interpret_function(&mut self, function: &ir::Function, args: &[Value]) -> Value {
         self.memory.begin_scope();
         for (index, &(_, ref param)) in function.parameters.iter().enumerate() {
-            self.memory.set_new(param.clone(), args[index].clone());
+            self.memory.set_new(param.clone(), args[index]);
         }
 
         if let StatementResult::Return(ret) = self.interpret_block(&function.body) {
@@ -184,18 +184,18 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                 let index = extract_pattern!(sub; Value::LValue(v) => v);
                 self.memory.value_from_index(index)
             }
-            Expression::Literal(ref lit) => match *lit {
+            Expression::Literal(lit) => match lit {
                 ir::Literal::IntLiteral(i) => Value::Int(i),
                 ir::Literal::DoubleLiteral(d) => Value::Double(d),
                 ir::Literal::BooleanLiteral(b) => Value::Boolean(b),
-                ir::Literal::StringLiteral(ref s) => Value::String(s.clone()),
+                ir::Literal::StringLiteral(s) => Value::String(s),
             },
             Expression::Identifier(ref id) => Value::LValue(self.memory.index_from_name(id)),
             Expression::Assign { ref lhs, ref rhs } => {
                 let lhs = self.interpret_expression(lhs);
                 let rhs = self.interpret_expression(rhs);
                 let index = extract_pattern!(lhs; Value::LValue(v) => v);
-                self.memory.set_from_index(index, rhs.clone());
+                self.memory.set_from_index(index, rhs);
                 rhs
             }
             Expression::BinaryOperator {
@@ -322,7 +322,7 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                 let index = extract_pattern!(sub; Value::LValue(i) => i);
                 let value = self.memory.value_from_index(index);
                 let value = extract_pattern!(value; Value::Int(i) => Value::Int(i + 1));
-                self.memory.set_from_index(index, value.clone());
+                self.memory.set_from_index(index, value);
                 sub
             }
             Expression::Decrement(ref sub) => {
@@ -330,17 +330,17 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                 let index = extract_pattern!(sub; Value::LValue(i) => i);
                 let value = self.memory.value_from_index(index);
                 let value = extract_pattern!(value; Value::Int(i) => Value::Int(i - 1));
-                self.memory.set_from_index(index, value.clone());
+                self.memory.set_from_index(index, value);
                 sub
             }
             Expression::FunctionCall {
                 ref function,
                 ref args,
             } => {
-                let args = args.into_iter()
+                let args: Vec<_> = args.into_iter()
                     .map(|arg| self.interpret_expression(arg))
                     .collect();
-                self.interpret_function_by_name(function, args)
+                self.interpret_function_by_name(function, &args)
             }
         }
     }
@@ -385,17 +385,17 @@ impl Memory {
         self.memory[index] = value;
     }
 
-    fn index_from_name(&self, name: &String) -> usize {
+    fn index_from_name(&self, name: &str) -> usize {
         for scope in self.scopes.iter().rev() {
-            if let Some(value) = scope.get(name) {
-                return value.clone();
+            if let Some(&value) = scope.get(name) {
+                return value;
             }
         }
         unreachable!()
     }
 
     fn value_from_index(&self, index: usize) -> Value {
-        self.memory[index].clone()
+        self.memory[index]
     }
 }
 
@@ -403,32 +403,32 @@ mod builtins {
     use super::{Interpreter, Value};
     use std::io;
 
-    pub(super) fn print_int(_: &Interpreter, args: Vec<Value>) -> Value {
-        let i = extract_pattern!(&args[0]; &Value::Int(i) => i);
+    pub(super) fn print_int(_: &Interpreter, args: &[Value]) -> Value {
+        let i = extract_pattern!(args[0]; Value::Int(i) => i);
         println!("{}", i);
         Value::Void
     }
 
-    pub(super) fn print_double(_: &Interpreter, args: Vec<Value>) -> Value {
-        let d = extract_pattern!(&args[0]; &Value::Double(d) => d);
+    pub(super) fn print_double(_: &Interpreter, args: &[Value]) -> Value {
+        let d = extract_pattern!(args[0]; Value::Double(d) => d);
         println!("{:.1}", d);
         Value::Void
     }
 
-    pub(super) fn print_string(interpreter: &Interpreter, args: Vec<Value>) -> Value {
-        let sid = extract_pattern!(&args[0]; &Value::String(sid) => sid);
+    pub(super) fn print_string(interpreter: &Interpreter, args: &[Value]) -> Value {
+        let sid = extract_pattern!(args[0]; Value::String(sid) => sid);
         println!("{}", interpreter.strings.get_str(sid));
         Value::Void
     }
 
-    pub(super) fn read_int(_: &Interpreter, _: Vec<Value>) -> Value {
+    pub(super) fn read_int(_: &Interpreter, _: &[Value]) -> Value {
         let mut input = String::new();
         io::stdin().read_line(&mut input).expect("STDIN error");
         let trimmed = input.trim();
         Value::Int(trimmed.parse().unwrap())
     }
 
-    pub(super) fn read_double(_: &Interpreter, _: Vec<Value>) -> Value {
+    pub(super) fn read_double(_: &Interpreter, _: &[Value]) -> Value {
         let mut input = String::new();
         io::stdin().read_line(&mut input).expect("STDIN error");
         let trimmed = input.trim();

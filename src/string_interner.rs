@@ -27,7 +27,7 @@ impl StringInterner {
         &self.strs[index][..]
     }
 
-    pub fn get_string(&self, StringId(index): StringId) -> String {
+    /*pub fn get_string(&self, StringId(index): StringId) -> String {
         self.strs[index].clone()
-    }
+    }*/
 }
