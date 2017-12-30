@@ -23,21 +23,21 @@ pub enum Statement {
     VarDecl {
         ty: Type,
         name: String,
-        value: TypedExpression
+        value: TypedExpression,
     },
     If {
         condition: TypedExpression,
         body: BlockStatement,
-        else_clause: BlockStatement
+        else_clause: BlockStatement,
     },
     While {
         condition: TypedExpression,
-        body: BlockStatement
+        body: BlockStatement,
     },
     Return(TypedExpression),
     Expression(TypedExpression),
     Break,
-    Continue
+    Continue,
 }
 
 pub type BlockStatement = Vec<Statement>;
@@ -76,10 +76,9 @@ pub enum Expression {
     Decrement(Box<TypedExpression>),
     FunctionCall {
         function: String,
-        args: Vec<TypedExpression>
-    }
+        args: Vec<TypedExpression>,
+    },
 }
-
 
 #[derive(Debug, Clone, Copy)]
 pub enum Literal {

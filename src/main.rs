@@ -1,8 +1,8 @@
 #[macro_use]
+extern crate if_chain;
+#[macro_use]
 extern crate lazy_static;
 extern crate regex;
-#[macro_use]
-extern crate if_chain;
 
 use std::fs::File;
 use std::io::{self, Read};

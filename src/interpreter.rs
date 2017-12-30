@@ -11,7 +11,7 @@ pub enum Value {
     Double(f64),
     Boolean(bool),
     String(StringId),
-    LValue(usize)
+    LValue(usize),
 }
 
 pub fn interpret_program(program: &ir::Program, strings: &StringInterner) {
@@ -53,7 +53,6 @@ macro_rules! extract_pattern {
 }
 
 impl<'p, 'si> Interpreter<'p, 'si> {
-
     fn new(program: &'p ir::Program, strings: &'si StringInterner) -> Self {
         Interpreter {
             program,
@@ -79,7 +78,7 @@ impl<'p, 'si> Interpreter<'p, 'si> {
             }
         }
     }
-        
+
     fn interpret_function(&mut self, function: &ir::Function, args: Vec<Value>) -> Value {
         self.memory.begin_scope();
         for (index, &(_, ref param)) in function.parameters.iter().enumerate() {
@@ -88,9 +87,9 @@ impl<'p, 'si> Interpreter<'p, 'si> {
 
         if let StatementResult::Return(ret) = self.interpret_block(&function.body) {
             self.memory.end_scope();
-            return ret
+            return ret;
         } else if function.return_ty == ty::Type::Void {
-            return Value::Void
+            return Value::Void;
         } else {
             unreachable!()
         }
@@ -109,12 +108,20 @@ impl<'p, 'si> Interpreter<'p, 'si> {
         use ir::Statement;
         match *stmt {
             Statement::Block(ref b) => self.interpret_block(b),
-            Statement::VarDecl { ref name, ref value, .. } => {
+            Statement::VarDecl {
+                ref name,
+                ref value,
+                ..
+            } => {
                 let value = self.interpret_expression(value);
                 self.memory.set_new(name.clone(), value);
                 StatementResult::Nothing
-            },
-            Statement::If { ref condition, ref body, ref else_clause } => {
+            }
+            Statement::If {
+                ref condition,
+                ref body,
+                ref else_clause,
+            } => {
                 let condition = self.interpret_expression(condition);
                 let condition = extract_pattern!(condition; Value::Boolean(b) => b);
                 if condition {
@@ -123,34 +130,37 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                     propagate!(self.interpret_block(else_clause));
                 }
                 StatementResult::Nothing
-            },
-            Statement::While { ref condition, ref body } => {
+            }
+            Statement::While {
+                ref condition,
+                ref body,
+            } => {
                 loop {
                     let condition = self.interpret_expression(condition);
                     let condition = extract_pattern!(condition; Value::Boolean(b) => b);
 
                     if !condition {
-                        break
+                        break;
                     }
 
                     match self.interpret_block(body) {
-                        StatementResult::Nothing | StatementResult::Continue => {},
+                        StatementResult::Nothing | StatementResult::Continue => {}
                         StatementResult::Break => break,
-                        r @ StatementResult::Return(_) => return r
+                        r @ StatementResult::Return(_) => return r,
                     }
                 }
                 StatementResult::Nothing
-            },
+            }
             Statement::Return(ref expr) => {
                 let expr = self.interpret_expression(expr);
                 StatementResult::Return(expr)
-            },
+            }
             Statement::Expression(ref expr) => {
                 self.interpret_expression(expr);
                 StatementResult::Nothing
-            },
+            }
             Statement::Break => StatementResult::Break,
-            Statement::Continue => StatementResult::Continue
+            Statement::Continue => StatementResult::Continue,
         }
     }
 
@@ -166,62 +176,117 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                     ty::Type::Double => Value::Double(0.0),
                     ty::Type::Boolean => Value::Boolean(false),
                     ty::Type::Void => Value::Void,
-                    _ => unreachable!() // string doesn't have a default value
+                    _ => unreachable!(), // string doesn't have a default value
                 }
-            },
+            }
             Expression::LValueToRValue(ref sub) => {
                 let sub = self.interpret_expression(sub);
                 let index = extract_pattern!(sub; Value::LValue(v) => v);
                 self.memory.value_from_index(index)
             }
-            Expression::Literal(ref lit) => {
-                match *lit {
-                    ir::Literal::IntLiteral(i) => Value::Int(i),
-                    ir::Literal::DoubleLiteral(d) => Value::Double(d),
-                    ir::Literal::BooleanLiteral(b) => Value::Boolean(b),
-                    ir::Literal::StringLiteral(ref s) => Value::String(s.clone()),
-                }
+            Expression::Literal(ref lit) => match *lit {
+                ir::Literal::IntLiteral(i) => Value::Int(i),
+                ir::Literal::DoubleLiteral(d) => Value::Double(d),
+                ir::Literal::BooleanLiteral(b) => Value::Boolean(b),
+                ir::Literal::StringLiteral(ref s) => Value::String(s.clone()),
             },
-            Expression::Identifier(ref id) => {
-                Value::LValue(self.memory.index_from_name(id))
-            },
+            Expression::Identifier(ref id) => Value::LValue(self.memory.index_from_name(id)),
             Expression::Assign { ref lhs, ref rhs } => {
                 let lhs = self.interpret_expression(lhs);
                 let rhs = self.interpret_expression(rhs);
                 let index = extract_pattern!(lhs; Value::LValue(v) => v);
                 self.memory.set_from_index(index, rhs.clone());
                 rhs
-            },
-            Expression::BinaryOperator { binop, ref lhs, ref rhs } => {
+            }
+            Expression::BinaryOperator {
+                binop,
+                ref lhs,
+                ref rhs,
+            } => {
                 let lhs = self.interpret_expression(lhs);
                 let rhs = self.interpret_expression(rhs);
 
                 use ir::BinaryOperatorKind::*;
                 match binop {
-                    IntPlus => extract_pattern!((lhs, rhs); (Value::Int(a), Value::Int(b)) => Value::Int(a + b)),
-                    DoublePlus => extract_pattern!((lhs, rhs); (Value::Double(a), Value::Double(b)) => Value::Double(a + b)),
-                    IntMinus => extract_pattern!((lhs, rhs); (Value::Int(a), Value::Int(b)) => Value::Int(a - b)),
-                    DoubleMinus => extract_pattern!((lhs, rhs); (Value::Double(a), Value::Double(b)) => Value::Double(a - b)),
-                    IntMultiply => extract_pattern!((lhs, rhs); (Value::Int(a), Value::Int(b)) => Value::Int(a * b)),
-                    DoubleMultiply => extract_pattern!((lhs, rhs); (Value::Double(a), Value::Double(b)) => Value::Double(a * b)),
-                    IntDivide => extract_pattern!((lhs, rhs); (Value::Int(a), Value::Int(b)) => Value::Int(a / b)),
-                    DoubleDivide => extract_pattern!((lhs, rhs); (Value::Double(a), Value::Double(b)) => Value::Double(a / b)),
-                    IntModulo => extract_pattern!((lhs, rhs); (Value::Int(a), Value::Int(b)) => Value::Int(a % b)),
+                    IntPlus => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Int(a), Value::Int(b)) => Value::Int(a + b)
+                    ),
+                    DoublePlus => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Double(a), Value::Double(b)) => Value::Double(a + b)
+                    ),
+                    IntMinus => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Int(a), Value::Int(b)) => Value::Int(a - b)
+                    ),
+                    DoubleMinus => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Double(a), Value::Double(b)) => Value::Double(a - b)
+                    ),
+                    IntMultiply => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Int(a), Value::Int(b)) => Value::Int(a * b)
+                    ),
+                    DoubleMultiply => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Double(a), Value::Double(b)) => Value::Double(a * b)
+                    ),
+                    IntDivide => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Int(a), Value::Int(b)) => Value::Int(a / b)
+                    ),
+                    DoubleDivide => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Double(a), Value::Double(b)) => Value::Double(a / b)
+                    ),
+                    IntModulo => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Int(a), Value::Int(b)) => Value::Int(a % b)
+                    ),
 
                     IntEqual | DoubleEqual | BooleanEqual => Value::Boolean(lhs == rhs),
                     IntNotEqual | DoubleNotEqual | BooleanNotEqual => Value::Boolean(lhs != rhs),
-                    IntLess => extract_pattern!((lhs, rhs); (Value::Int(a), Value::Int(b)) => Value::Boolean(a < b)),
-                    DoubleLess => extract_pattern!((lhs, rhs); (Value::Double(a), Value::Double(b)) => Value::Boolean(a < b)),
-                    IntLessEqual => extract_pattern!((lhs, rhs); (Value::Int(a), Value::Int(b)) => Value::Boolean(a <= b)),
-                    DoubleLessEqual => extract_pattern!((lhs, rhs); (Value::Double(a), Value::Double(b)) => Value::Boolean(a <= b)),
-                    
-                    IntGreater => extract_pattern!((lhs, rhs); (Value::Int(a), Value::Int(b)) => Value::Boolean(a > b)),
-                    DoubleGreater => extract_pattern!((lhs, rhs); (Value::Double(a), Value::Double(b)) => Value::Boolean(a > b)),
-                    IntGreaterEqual => extract_pattern!((lhs, rhs); (Value::Int(a), Value::Int(b)) => Value::Boolean(a >= b)),
-                    DoubleGreaterEqual => extract_pattern!((lhs, rhs); (Value::Double(a), Value::Double(b)) => Value::Boolean(a >= b)),
+                    IntLess => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Int(a), Value::Int(b)) => Value::Boolean(a < b)
+                    ),
+                    DoubleLess => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Double(a), Value::Double(b)) => Value::Boolean(a < b)
+                    ),
+                    IntLessEqual => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Int(a), Value::Int(b)) => Value::Boolean(a <= b)
+                    ),
+                    DoubleLessEqual => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Double(a), Value::Double(b)) => Value::Boolean(a <= b)
+                    ),
+
+                    IntGreater => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Int(a), Value::Int(b)) => Value::Boolean(a > b)
+                    ),
+                    DoubleGreater => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Double(a), Value::Double(b)) => Value::Boolean(a > b)
+                    ),
+                    IntGreaterEqual => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Int(a), Value::Int(b)) => Value::Boolean(a >= b)
+                    ),
+                    DoubleGreaterEqual => extract_pattern!(
+                        (lhs, rhs);
+                        (Value::Double(a), Value::Double(b)) => Value::Boolean(a >= b)
+                    ),
                 }
-            },
-            Expression::LazyOperator { lazyop, ref lhs, ref rhs } => {
+            }
+            Expression::LazyOperator {
+                lazyop,
+                ref lhs,
+                ref rhs,
+            } => {
                 let lhs = self.interpret_expression(lhs);
 
                 use ir::LazyOperatorKind::*;
@@ -232,7 +297,7 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                         } else {
                             self.interpret_expression(rhs)
                         }
-                    },
+                    }
                     BooleanLogicalOr => {
                         if extract_pattern!(lhs; Value::Boolean(b) => b) {
                             Value::Boolean(true)
@@ -241,7 +306,7 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                         }
                     }
                 }
-            },
+            }
             Expression::UnaryOperator { unop, ref sub } => {
                 let sub = self.interpret_expression(sub);
 
@@ -249,9 +314,9 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                 match unop {
                     IntMinus => extract_pattern!(sub; Value::Int(i) => Value::Int(-i)),
                     DoubleMinus => extract_pattern!(sub; Value::Double(d) => Value::Double(-d)),
-                    BooleanNot => extract_pattern!(sub; Value::Boolean(b) => Value::Boolean(!b)),    
+                    BooleanNot => extract_pattern!(sub; Value::Boolean(b) => Value::Boolean(!b)),
                 }
-            },
+            }
             Expression::Increment(ref sub) => {
                 let sub = self.interpret_expression(sub);
                 let index = extract_pattern!(sub; Value::LValue(i) => i);
@@ -259,7 +324,7 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                 let value = extract_pattern!(value; Value::Int(i) => Value::Int(i + 1));
                 self.memory.set_from_index(index, value.clone());
                 sub
-            },
+            }
             Expression::Decrement(ref sub) => {
                 let sub = self.interpret_expression(sub);
                 let index = extract_pattern!(sub; Value::LValue(i) => i);
@@ -267,9 +332,14 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                 let value = extract_pattern!(value; Value::Int(i) => Value::Int(i - 1));
                 self.memory.set_from_index(index, value.clone());
                 sub
-            },
-            Expression::FunctionCall { ref function, ref args } => {
-                let args = args.into_iter().map(|arg| self.interpret_expression(arg)).collect();
+            }
+            Expression::FunctionCall {
+                ref function,
+                ref args,
+            } => {
+                let args = args.into_iter()
+                    .map(|arg| self.interpret_expression(arg))
+                    .collect();
                 self.interpret_function_by_name(function, args)
             }
         }
@@ -281,19 +351,19 @@ enum StatementResult {
     Nothing,
     Break,
     Continue,
-    Return(Value)
+    Return(Value),
 }
 
 struct Memory {
     memory: Vec<Value>, // TODO we don't currently clean the memory
-    scopes: Vec<HashMap<String, usize>>
+    scopes: Vec<HashMap<String, usize>>,
 }
 
 impl Memory {
     fn new() -> Self {
         Memory {
             memory: Vec::new(),
-            scopes: Vec::new()
+            scopes: Vec::new(),
         }
     }
 

@@ -1,4 +1,4 @@
-use lexer::{Token, Lexer};
+use lexer::{Lexer, Token};
 use ast;
 use ty;
 use string_interner::StringInterner;
@@ -42,7 +42,7 @@ impl<'si, 'input> Parser<'si, 'input> {
     pub fn new(lexer: Lexer<'input>, string_interner: &'si mut StringInterner) -> Self {
         Parser {
             lexer,
-            string_interner
+            string_interner,
         }
     }
 
@@ -51,14 +51,12 @@ impl<'si, 'input> Parser<'si, 'input> {
 
         loop {
             if let Token::EOF = *self.lexer.peek_token()? {
-                break
+                break;
             }
 
             declarations.push(self.parse_function_declaration()?);
         }
-        Ok(ast::Program {
-            declarations
-        })
+        Ok(ast::Program { declarations })
     }
 
     pub fn parse_type(&mut self) -> ParsingResult<ty::Type> {
@@ -67,7 +65,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             Token::DoubleKeyword => Ok(ty::Type::Double),
             Token::BooleanKeyword => Ok(ty::Type::Boolean),
             Token::VoidKeyword => Ok(ty::Type::Void),
-            _ => return_unexpected!("int", "boolean", "double", "void")
+            _ => return_unexpected!("int", "boolean", "double", "void"),
         }
     }
 
@@ -76,7 +74,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             Token::IntKeyword => Ok(ty::Type::Int),
             Token::DoubleKeyword => Ok(ty::Type::Double),
             Token::BooleanKeyword => Ok(ty::Type::Boolean),
-            _ => return_unexpected!("int", "boolean", "double")
+            _ => return_unexpected!("int", "boolean", "double"),
         }
     }
 
@@ -92,7 +90,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             return_ty,
             name,
             parameters,
-            body
+            body,
         })
     }
 
@@ -100,7 +98,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         let mut result = Vec::new();
 
         if let Token::RightParenthesis = *self.lexer.peek_token()? {
-            return Ok(result)
+            return Ok(result);
         }
 
         result.push(self.parse_parameter()?);
@@ -128,7 +126,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         expect!(self.lexer; Token::LeftBracket, "{");
         loop {
             if let Token::RightBracket = *self.lexer.peek_token()? {
-                break
+                break;
             }
 
             block.push(self.parse_statement()?);
@@ -143,18 +141,16 @@ impl<'si, 'input> Parser<'si, 'input> {
             Token::SemiColon => {
                 self.lexer.next_token()?;
                 Ok(ast::Statement::Empty)
-            },
+            }
             Token::IfKeyword => self.parse_if_statement(),
             Token::WhileKeyword => self.parse_while_statement(),
             Token::ReturnKeyword => self.parse_return_statement(),
-            Token::LeftBracket => {
-                Ok(ast::Statement::Block(self.parse_block_statement()?))
-            },
+            Token::LeftBracket => Ok(ast::Statement::Block(self.parse_block_statement()?)),
             Token::BreakKeyword => Ok(ast::Statement::Break),
             Token::ContinueKeyword => Ok(ast::Statement::Continue),
-            Token::IntKeyword |
-            Token::DoubleKeyword |
-            Token::BooleanKeyword => self.parse_var_declaration(),
+            Token::IntKeyword | Token::DoubleKeyword | Token::BooleanKeyword => {
+                self.parse_var_declaration()
+            }
             _ => {
                 let expr = ast::Statement::Expression(self.parse_expression()?);
                 expect!(self.lexer; Token::SemiColon, ";");
@@ -181,7 +177,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         Ok(ast::Statement::If(ast::IfStatement {
             condition,
             body,
-            else_clause
+            else_clause,
         }))
     }
 
@@ -209,7 +205,9 @@ impl<'si, 'input> Parser<'si, 'input> {
         Ok(ast::Statement::Return(expr))
     }
 
-    pub fn parse_identifier_and_maybe_value(&mut self) -> ParsingResult<(String, Option<ast::Expression>)> {
+    pub fn parse_identifier_and_maybe_value(
+        &mut self,
+    ) -> ParsingResult<(String, Option<ast::Expression>)> {
         let name = self.parse_identifier()?;
         let expr = if let Token::Equal = *self.lexer.peek_token()? {
             self.lexer.next_token()?;
@@ -232,7 +230,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         expect!(self.lexer; Token::SemiColon, ";");
         Ok(ast::Statement::VarDecl(ast::VarDeclarations {
             ty,
-            declarations
+            declarations,
         }))
     }
 
@@ -248,14 +246,14 @@ impl<'si, 'input> Parser<'si, 'input> {
                 Token::PlusPlus => {
                     self.lexer.next_token()?;
                     sub = ast::Expression::Increment(Box::new(sub));
-                    continue
-                },
+                    continue;
+                }
                 Token::MinusMinus => {
                     self.lexer.next_token()?;
                     sub = ast::Expression::Decrement(Box::new(sub));
-                    continue
-                },
-                _ => break
+                    continue;
+                }
+                _ => break,
             }
         }
         Ok(sub)
@@ -263,36 +261,36 @@ impl<'si, 'input> Parser<'si, 'input> {
 
     pub fn parse_leaf_expression(&mut self) -> ParsingResult<ast::Expression> {
         match self.lexer.next_token()? {
-            Token::IntegerLiteral(i)
-                => Ok(ast::Expression::Literal(ast::Literal::IntLiteral(i))),
-            Token::DoubleLiteral(d)
-                => Ok(ast::Expression::Literal(ast::Literal::DoubleLiteral(d))),
-            Token::BooleanLiteral(b)
-                => Ok(ast::Expression::Literal(ast::Literal::BooleanLiteral(b))),
-            Token::StringLiteral(s) => { // TODO parse string (escape, etc) 
-                    let s = &s[1..s.len()-1];
-                    let sid = self.string_interner.intern(s.to_string());
-                    Ok(ast::Expression::Literal(ast::Literal::StringLiteral(sid)))
-            },
+            Token::IntegerLiteral(i) => Ok(ast::Expression::Literal(ast::Literal::IntLiteral(i))),
+            Token::DoubleLiteral(d) => Ok(ast::Expression::Literal(ast::Literal::DoubleLiteral(d))),
+            Token::BooleanLiteral(b) => {
+                Ok(ast::Expression::Literal(ast::Literal::BooleanLiteral(b)))
+            }
+            Token::StringLiteral(s) => {
+                // TODO parse string (escape, etc)
+                let s = &s[1..s.len() - 1];
+                let sid = self.string_interner.intern(s.to_string());
+                Ok(ast::Expression::Literal(ast::Literal::StringLiteral(sid)))
+            }
             Token::Minus => {
                 let sub = self.parse_incdec_expression()?;
                 Ok(ast::Expression::UnaryOperator {
                     unop: ast::UnaryOperatorKind::Minus,
-                    sub: Box::new(sub)
+                    sub: Box::new(sub),
                 })
-            },
+            }
             Token::Bang => {
                 let sub = self.parse_incdec_expression()?;
                 Ok(ast::Expression::UnaryOperator {
                     unop: ast::UnaryOperatorKind::LogicalNot,
-                    sub: Box::new(sub)
+                    sub: Box::new(sub),
                 })
-            },
+            }
             Token::LeftParenthesis => {
                 let expr = self.parse_expression()?;
                 expect!(self.lexer; Token::RightParenthesis, ")");
                 Ok(expr)
-            },
+            }
             Token::Identifier(id) => {
                 let name = id.to_string();
                 if let Token::LeftParenthesis = *self.lexer.peek_token()? {
@@ -301,12 +299,12 @@ impl<'si, 'input> Parser<'si, 'input> {
                     expect!(self.lexer; Token::RightParenthesis, ")");
                     Ok(ast::Expression::FunctionCall {
                         function: name,
-                        args
+                        args,
                     })
                 } else {
                     Ok(ast::Expression::Identifier(name))
                 }
-            },
+            }
             _ => {
                 return_unexpected!("literal", "(", "-", "!", "identifier");
             }
@@ -317,7 +315,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         let mut result = Vec::new();
 
         if let Token::RightParenthesis = *self.lexer.peek_token()? {
-            return Ok(result)
+            return Ok(result);
         }
 
         result.push(self.parse_expression()?);

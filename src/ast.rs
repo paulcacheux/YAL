@@ -17,10 +17,13 @@ pub struct Function {
 impl Function {
     pub fn get_type(&self) -> FunctionType {
         let return_ty = self.return_ty.clone();
-        let parameters_ty = self.parameters.iter().map(|&(ref a, _)| a.clone()).collect();
+        let parameters_ty = self.parameters
+            .iter()
+            .map(|&(ref a, _)| a.clone())
+            .collect();
         FunctionType {
             return_ty,
-            parameters_ty
+            parameters_ty,
         }
     }
 }
@@ -35,7 +38,7 @@ pub enum Statement {
     Return(Option<Expression>),
     Expression(Expression),
     Break,
-    Continue
+    Continue,
 }
 
 pub type BlockStatement = Vec<Statement>;
@@ -85,8 +88,8 @@ pub enum Expression {
     Decrement(Box<Expression>),
     FunctionCall {
         function: String,
-        args: Vec<Expression>
-    }
+        args: Vec<Expression>,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]

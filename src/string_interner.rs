@@ -8,15 +8,13 @@ pub struct StringInterner {
 
 impl StringInterner {
     pub fn new() -> StringInterner {
-        StringInterner {
-            strs: Vec::new(),
-        }
+        StringInterner { strs: Vec::new() }
     }
 
     pub fn intern(&mut self, s: String) -> StringId {
         for (index, curr_s) in self.strs.iter().enumerate() {
             if &s == curr_s {
-                return StringId(index)
+                return StringId(index);
             }
         }
 

@@ -53,7 +53,7 @@ impl<'g> SymbolTable<'g> {
     pub fn lookup_local(&self, name: &String) -> Option<&ty::Type> {
         for scope in self.scopes.iter().rev() {
             if let Some(t) = scope.get(name) {
-                return Some(t)
+                return Some(t);
             }
         }
         None
