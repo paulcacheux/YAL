@@ -80,7 +80,7 @@ pub enum Expression {
     },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Literal {
     IntLiteral(i64),
     DoubleLiteral(f64),
