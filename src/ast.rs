@@ -4,7 +4,27 @@ use span::{Span, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub declarations: Vec<Function>,
+    pub declarations: Vec<Declaration>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Declaration {
+    Typedef(Typedef),
+    Struct(Struct),
+    Function(Function)
+}
+
+#[derive(Debug, Clone)]
+pub struct Typedef {
+    pub struct_name: String,
+    pub ptr_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct Struct {
+    pub name: String,
+    pub fields: Vec<(Type, String)>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

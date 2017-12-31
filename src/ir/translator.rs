@@ -76,19 +76,27 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
         },
     );
 
+    // pre translation
     let mut is_main_present = false;
-    for func in &program.declarations {
-        if globals_table.register_function(func.name.clone(), func.get_type()) {
-            return error!(TranslationError::FunctionAlreadyDefined(func.name.clone()), func.span);
-        }
+    for decl in &program.declarations {
+        match *decl {
+            ast::Declaration::Typedef(_) => unimplemented!(),
+            ast::Declaration::Struct(_) => unimplemented!(),
+            ast::Declaration::Function(ref func) => {
+                if globals_table.register_function(func.name.clone(), func.get_type()) {
+                    return error!(TranslationError::FunctionAlreadyDefined(func.name.clone()), func.span);
+                }
 
-        if func.name == "main" {
-            if func.parameters.is_empty() {
-                is_main_present = true;
-            } else {
-                return error!(TranslationError::MainWrongType, func.span);
+                if func.name == "main" {
+                    if func.parameters.is_empty() {
+                        is_main_present = true;
+                    } else {
+                        return error!(TranslationError::MainWrongType, func.span);
+                    }
+                }
             }
         }
+        
     }
 
     if !is_main_present {
@@ -97,7 +105,13 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
 
     let mut declarations = Vec::with_capacity(program.declarations.len());
     for decl in program.declarations {
-        declarations.push(translate_function(&globals_table, decl)?);
+        match decl {
+            ast::Declaration::Typedef(_) => unimplemented!(),
+            ast::Declaration::Struct(_) => unimplemented!(),
+            ast::Declaration::Function(func) => {
+                declarations.push(translate_function(&globals_table, func)?)
+            }
+        }
     }
 
     Ok(ir::Program { declarations })
@@ -567,7 +581,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         return error!(
                             TranslationError::FunctionCallArity(
                                 func_ty.parameters_ty.len(),
-                                args_translated.len(),
+                                args.len(),
                             ),
                             expr_span
                         );

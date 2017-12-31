@@ -20,6 +20,12 @@ lazy_static! {
     static ref STRING_REGEX: Regex = Regex::new(r##"^"(([^"]|\\")*[^\\])?""##).unwrap();
 }
 
+#[derive(Debug, Clone)]
+pub struct LexerState<'input> {
+    pos: usize,
+    buffer: Option<TokenAndSpan<'input>>
+}
+
 pub struct Lexer<'input> {
     input: &'input str,
     pos: usize,
@@ -34,6 +40,18 @@ impl<'input> Lexer<'input> {
             buffer: None,
         }
     }
+
+    pub fn save_state(&self) -> LexerState<'input> {
+        LexerState {
+            pos: self.pos,
+            buffer: self.buffer.clone()
+        }
+    }
+
+    pub fn load_state(&mut self, state: LexerState<'input>) {
+        self.pos = state.pos;
+        self.buffer = state.buffer;
+    } 
 
     pub fn skip_whitespaces(&mut self) {
         'main_loop: loop {
@@ -138,6 +156,8 @@ impl<'input> Lexer<'input> {
                 "continue" => Token::ContinueKeyword,
                 "break" => Token::BreakKeyword,
                 "new" => Token::NewKeyword,
+                "struct" => Token::StructKeyword,
+                "typedef" => Token::TypedefKeyword,
                 s => Token::Identifier(s),
             };
             return Ok(TokenAndSpan::new_with_len(token, start_pos, len))

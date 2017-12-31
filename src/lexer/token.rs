@@ -33,6 +33,8 @@ pub enum Token<'input> {
     AmpAmp,
     Bang,
     //keywords
+    StructKeyword,
+    TypedefKeyword,
     WhileKeyword,
     ForKeyword,
     IfKeyword,
@@ -54,6 +56,7 @@ pub enum Token<'input> {
     StringLiteral(&'input str),
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct TokenAndSpan<'input> {
     pub token: Token<'input>,
     pub span: Span

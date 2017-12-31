@@ -5,6 +5,7 @@ pub enum Type {
     Boolean,
     String,
     Void,
+    StructPointer(String),
     LValue(Box<Type>),
     Array(Box<Type>)
 }
