@@ -171,6 +171,33 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                 }
                 Ok(StatementResult::Nothing)
             }
+            Statement::For { ref name, ref array, ref body } => {
+                let array = self.interpret_expression(array)?;
+                let array_index = extract_pattern!(array; Value::Array(ArrayId(id)) => id);
+                let array = self.arrays[array_index].clone();
+
+                for value in array {
+                    let value_index = extract_pattern!(value; Value::LValue(id) => id);
+                    let value = self.memory.value_from_index(value_index);
+                    self.memory.begin_scope();
+                    self.memory.set_new(name.clone(), value);
+
+                    match self.interpret_block(body)? {
+                        StatementResult::Nothing | StatementResult::Continue => {}
+                        StatementResult::Break => {
+                            self.memory.end_scope();
+                            break;
+                        }
+                        r @ StatementResult::Return(_) => {
+                            self.memory.end_scope();
+                            return Ok(r);
+                        }
+                    }
+
+                    self.memory.end_scope();
+                }
+                Ok(StatementResult::Nothing)
+            }
             Statement::Return(ref expr) => {
                 let expr = self.interpret_expression(expr)?;
                 Ok(StatementResult::Return(expr))
@@ -382,18 +409,18 @@ impl<'p, 'si> Interpreter<'p, 'si> {
     }
     
     fn create_array(&mut self, base_ty: &ty::Type, sizes: &[usize]) -> Value {
-        let value = if !sizes.is_empty() {
-            let size = *sizes.last().unwrap();
+        if !sizes.is_empty() {
+            let size = *sizes.first().unwrap();
             let mut values = Vec::with_capacity(size);
             for _ in 0..size {
-                values.push(self.create_array(base_ty, &sizes[0..sizes.len()-1]));
+                let expr = self.create_array(base_ty, &sizes[1..]);
+                values.push(Value::LValue(self.memory.set_new_unnamed(expr)));
             }
             let id = self.new_array(values);
             Value::Array(id)
         } else {
             default_value(base_ty)
-        };
-        Value::LValue(self.memory.set_new_unnamed(value))
+        }
     }
 }
 

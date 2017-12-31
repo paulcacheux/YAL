@@ -37,6 +37,7 @@ pub enum Statement {
     VarDecl(VarDeclarations),
     If(IfStatement),
     While(WhileStatement),
+    For(ForStatement),
     Return(Option<Spanned<Expression>>),
     Expression(Spanned<Expression>),
     Break,
@@ -73,6 +74,14 @@ pub struct IfStatement {
 pub struct WhileStatement {
     pub condition: Spanned<Expression>,
     pub body: Box<Spanned<Statement>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ForStatement {
+    pub ty: Type,
+    pub name: String,
+    pub array: Spanned<Expression>,
+    pub body: Box<Spanned<Statement>>
 }
 
 #[derive(Debug, Clone)]

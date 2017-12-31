@@ -302,6 +302,26 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 self.statements
                     .push(ir::Statement::While { condition, body })
             }
+            ast::Statement::For(ast::ForStatement { ty, name, array, body }) => {
+                let array_span = array.span;
+                let array = self.translate_expression(array)?;
+                let array = lvalue_to_rvalue(array);
+
+                if let ty::Type::Array(sub_ty) = array.ty.clone() {
+                    if *sub_ty != ty {
+                        return error!(TranslationError::MismatchingTypes(*sub_ty, ty), array_span)
+                    }
+                } else {
+                    return error!(TranslationError::SubscriptNotArray(array.ty), array_span)
+                }
+
+                self.symbol_table.begin_scope();
+                self.symbol_table.register_local(name.clone(), ty);
+                let body = self.translate_statement_as_block(*body)?;
+                self.symbol_table.end_scope();
+
+                self.statements.push(ir::Statement::For { name, array, body });
+            }
             ast::Statement::Return(maybe_expr) => {
                 let expr = if let Some(expr) = maybe_expr {
                     let expr_span = expr.span;

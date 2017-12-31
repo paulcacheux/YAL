@@ -13,6 +13,7 @@ pub enum Token<'input> {
     Dot,
     SemiColon,
     Comma,
+    Colon,
     // operators
     Equal,
     Plus,
@@ -33,6 +34,7 @@ pub enum Token<'input> {
     Bang,
     //keywords
     WhileKeyword,
+    ForKeyword,
     IfKeyword,
     ElseKeyword,
     ReturnKeyword,

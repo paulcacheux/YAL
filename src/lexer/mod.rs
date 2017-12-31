@@ -97,6 +97,7 @@ impl<'input> Lexer<'input> {
         match_literal!(self; "[" => Token::LeftSquare);
         match_literal!(self; "]" => Token::RightSquare);
         match_literal!(self; ";" => Token::SemiColon);
+        match_literal!(self; ":" => Token::Colon);
         match_literal!(self; "," => Token::Comma);
         match_literal!(self; "." => Token::Dot);
 
@@ -124,6 +125,7 @@ impl<'input> Lexer<'input> {
             let len = s.len();
             let token = match s {
                 "while" => Token::WhileKeyword,
+                "for" => Token::ForKeyword,
                 "if" => Token::IfKeyword,
                 "else" => Token::ElseKeyword,
                 "return" => Token::ReturnKeyword,

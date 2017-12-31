@@ -168,6 +168,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             },
             Token::IfKeyword => self.parse_if_statement(),
             Token::WhileKeyword => self.parse_while_statement(),
+            Token::ForKeyword => self.parse_for_statement(),
             Token::ReturnKeyword => self.parse_return_statement(),
             Token::LeftBracket => {
                 let Spanned { inner: block, span } = self.parse_block_statement()?;
@@ -235,6 +236,26 @@ impl<'si, 'input> Parser<'si, 'input> {
         Ok(Spanned::new(ast::Statement::While(ast::WhileStatement {
             condition,
             body,
+        }), span))
+    }
+
+    pub fn parse_for_statement(&mut self) -> ParsingResult<Spanned<ast::Statement>> {
+        let begin_span = expect!(self.lexer; Token::ForKeyword, "for");
+        expect!(self.lexer; Token::LeftParenthesis, "(");
+        let ty = self.parse_type(false)?.inner;
+        let name = self.parse_identifier()?;
+        expect!(self.lexer; Token::Colon, ":");
+        let array = self.parse_expression()?;
+        expect!(self.lexer; Token::RightParenthesis, ")");
+        let body = Box::new(self.parse_statement()?);
+
+        let span = Span::merge(begin_span, body.span);
+
+        Ok(Spanned::new(ast::Statement::For(ast::ForStatement {
+            ty,
+            name,
+            array,
+            body
         }), span))
     }
 

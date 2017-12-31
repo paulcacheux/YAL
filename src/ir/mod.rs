@@ -36,6 +36,11 @@ pub enum Statement {
         condition: TypedExpression,
         body: BlockStatement,
     },
+    For {
+        name: String,
+        array: TypedExpression,
+        body: BlockStatement
+    },
     Return(TypedExpression),
     Expression(TypedExpression),
     Break,
