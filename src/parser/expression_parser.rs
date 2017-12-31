@@ -1,6 +1,7 @@
 use lexer::Token;
 use parser::*;
 use ast;
+use span::{Span, Spanned};
 
 #[derive(Debug, Clone, Copy)]
 struct Infos {
@@ -52,8 +53,8 @@ fn info_of<'input>(binop: &Token<'input>) -> Option<Infos> {
 
 fn apply(
     binop: &Token,
-    lhs: ast::Expression,
-    rhs: ast::Expression,
+    lhs: Spanned<ast::Expression>,
+    rhs: Spanned<ast::Expression>,
 ) -> ast::Expression {
     let lhs = Box::new(lhs);
     let rhs = Box::new(rhs);
@@ -131,9 +132,9 @@ fn apply(
 
 pub fn parse_expression_inner<'si, 'input>(
     parser: &mut Parser<'si, 'input>,
-    lhs: ast::Expression,
+    lhs: Spanned<ast::Expression>,
     min_prec: usize,
-) -> ParsingResult<ast::Expression> {
+) -> ParsingResult<Spanned<ast::Expression>> {
     let mut lhs = lhs;
     loop {
         if_chain! {
@@ -159,7 +160,8 @@ pub fn parse_expression_inner<'si, 'input>(
                     }
                 }
 
-                lhs = apply(&op, lhs, rhs);
+                let span = Span::merge(lhs.span, rhs.span);
+                lhs = Spanned::new(apply(&op, lhs, rhs), span);
             } else {
                 break
             }

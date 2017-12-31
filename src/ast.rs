@@ -37,8 +37,8 @@ pub enum Statement {
     VarDecl(VarDeclarations),
     If(IfStatement),
     While(WhileStatement),
-    Return(Option<Expression>),
-    Expression(Expression),
+    Return(Option<Spanned<Expression>>),
+    Expression(Spanned<Expression>),
     Break,
     Continue,
 }
@@ -63,19 +63,19 @@ impl BlockStatement {
 #[derive(Debug, Clone)]
 pub struct VarDeclarations {
     pub ty: Type,
-    pub declarations: Vec<(String, Option<Expression>)>,
+    pub declarations: Vec<(String, Option<Spanned<Expression>>)>,
 }
 
 #[derive(Debug, Clone)]
 pub struct IfStatement {
-    pub condition: Expression,
+    pub condition: Spanned<Expression>,
     pub body: Box<Spanned<Statement>>,
     pub else_clause: Option<Box<Spanned<Statement>>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct WhileStatement {
-    pub condition: Expression,
+    pub condition: Spanned<Expression>,
     pub body: Box<Spanned<Statement>>,
 }
 
@@ -84,28 +84,28 @@ pub enum Expression {
     Literal(Literal),
     Identifier(String),
     Assign {
-        lhs: Box<Expression>,
-        rhs: Box<Expression>,
+        lhs: Box<Spanned<Expression>>,
+        rhs: Box<Spanned<Expression>>,
     },
     BinaryOperator {
         binop: BinaryOperatorKind,
-        lhs: Box<Expression>,
-        rhs: Box<Expression>,
+        lhs: Box<Spanned<Expression>>,
+        rhs: Box<Spanned<Expression>>,
     },
     LazyOperator {
         lazyop: LazyOperatorKind,
-        lhs: Box<Expression>,
-        rhs: Box<Expression>,
+        lhs: Box<Spanned<Expression>>,
+        rhs: Box<Spanned<Expression>>,
     },
     UnaryOperator {
         unop: UnaryOperatorKind,
-        sub: Box<Expression>,
+        sub: Box<Spanned<Expression>>,
     },
-    Increment(Box<Expression>),
-    Decrement(Box<Expression>),
+    Increment(Box<Spanned<Expression>>),
+    Decrement(Box<Spanned<Expression>>),
     FunctionCall {
         function: String,
-        args: Vec<Expression>,
+        args: Vec<Spanned<Expression>>,
     },
 }
 

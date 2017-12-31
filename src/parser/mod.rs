@@ -244,7 +244,7 @@ impl<'si, 'input> Parser<'si, 'input> {
 
     pub fn parse_identifier_and_maybe_value(
         &mut self,
-    ) -> ParsingResult<(String, Option<ast::Expression>)> {
+    ) -> ParsingResult<(String, Option<Spanned<ast::Expression>>)> {
         let name = self.parse_identifier()?;
         let expr = if let Token::Equal = self.lexer.peek_token()?.token {
             self.lexer.next_token()?;
@@ -274,23 +274,27 @@ impl<'si, 'input> Parser<'si, 'input> {
         }), span))
     }
 
-    pub fn parse_expression(&mut self) -> ParsingResult<ast::Expression> {
+    pub fn parse_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
         let lhs = self.parse_incdec_expression()?;
         parse_expression_inner(self, lhs, 0)
     }
 
-    pub fn parse_incdec_expression(&mut self) -> ParsingResult<ast::Expression> {
+    pub fn parse_incdec_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
         let mut sub = self.parse_leaf_expression()?;
         loop {
             match self.lexer.peek_token()?.token {
                 Token::PlusPlus => {
-                    self.lexer.next_token()?;
-                    sub = ast::Expression::Increment(Box::new(sub));
+                    let end_span = self.lexer.next_token()?.span;
+                    let span = Span::merge(sub.span, end_span);
+                    let expr = ast::Expression::Increment(Box::new(sub));
+                    sub = Spanned::new(expr, span);
                     continue;
                 }
                 Token::MinusMinus => {
-                    self.lexer.next_token()?;
-                    sub = ast::Expression::Decrement(Box::new(sub));
+                    let end_span = self.lexer.next_token()?.span;
+                    let span = Span::merge(sub.span, end_span);
+                    let expr = ast::Expression::Decrement(Box::new(sub));
+                    sub = Spanned::new(expr, span);
                     continue;
                 }
                 _ => break,
@@ -299,33 +303,45 @@ impl<'si, 'input> Parser<'si, 'input> {
         Ok(sub)
     }
 
-    pub fn parse_leaf_expression(&mut self) -> ParsingResult<ast::Expression> {
+    pub fn parse_leaf_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
         let TokenAndSpan { token, span } = self.lexer.next_token()?;
         match token {
-            Token::IntegerLiteral(i) => Ok(ast::Expression::Literal(ast::Literal::IntLiteral(i))),
-            Token::DoubleLiteral(d) => Ok(ast::Expression::Literal(ast::Literal::DoubleLiteral(d))),
+            Token::IntegerLiteral(i) => {
+                let expr = ast::Expression::Literal(ast::Literal::IntLiteral(i));
+                Ok(Spanned::new(expr, span))
+            },
+            Token::DoubleLiteral(d) => {
+                let expr = ast::Expression::Literal(ast::Literal::DoubleLiteral(d));
+                Ok(Spanned::new(expr, span))
+            } 
             Token::BooleanLiteral(b) => {
-                Ok(ast::Expression::Literal(ast::Literal::BooleanLiteral(b)))
+                let expr = ast::Expression::Literal(ast::Literal::BooleanLiteral(b));
+                Ok(Spanned::new(expr, span))
             }
             Token::StringLiteral(s) => {
                 // TODO parse string (escape, etc)
                 let s = &s[1..s.len() - 1];
                 let sid = self.string_interner.intern(s.to_string());
-                Ok(ast::Expression::Literal(ast::Literal::StringLiteral(sid)))
+                let expr = ast::Expression::Literal(ast::Literal::StringLiteral(sid));
+                Ok(Spanned::new(expr, span))
             }
             Token::Minus => {
                 let sub = self.parse_incdec_expression()?;
-                Ok(ast::Expression::UnaryOperator {
+                let span = Span::merge(span, sub.span);
+                let expr = ast::Expression::UnaryOperator {
                     unop: ast::UnaryOperatorKind::Minus,
                     sub: Box::new(sub),
-                })
+                };
+                Ok(Spanned::new(expr, span))
             }
             Token::Bang => {
                 let sub = self.parse_incdec_expression()?;
-                Ok(ast::Expression::UnaryOperator {
+                let span = Span::merge(span, sub.span);
+                let expr = ast::Expression::UnaryOperator {
                     unop: ast::UnaryOperatorKind::LogicalNot,
                     sub: Box::new(sub),
-                })
+                };
+                Ok(Spanned::new(expr, span))
             }
             Token::LeftParenthesis => {
                 let expr = self.parse_expression()?;
@@ -337,13 +353,16 @@ impl<'si, 'input> Parser<'si, 'input> {
                 if let Token::LeftParenthesis = self.lexer.peek_token()?.token {
                     self.lexer.next_token()?;
                     let args = self.parse_expression_list()?;
-                    expect!(self.lexer; Token::RightParenthesis, ")");
-                    Ok(ast::Expression::FunctionCall {
+                    let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
+                    let span = Span::merge(span, end_span);
+                    let expr = ast::Expression::FunctionCall {
                         function: name,
                         args,
-                    })
+                    };
+                    Ok(Spanned::new(expr, span))
                 } else {
-                    Ok(ast::Expression::Identifier(name))
+                    let expr = ast::Expression::Identifier(name);
+                    Ok(Spanned::new(expr, span))
                 }
             }
             _ => {
@@ -352,7 +371,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         }
     }
 
-    pub fn parse_expression_list(&mut self) -> ParsingResult<Vec<ast::Expression>> {
+    pub fn parse_expression_list(&mut self) -> ParsingResult<Vec<Spanned<ast::Expression>>> {
         let mut result = Vec::new();
 
         if let Token::RightParenthesis = self.lexer.peek_token()?.token {

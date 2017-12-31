@@ -196,7 +196,8 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
     }
 
     fn translate_statement(&mut self, statement: Spanned<ast::Statement>) -> TranslationResult<()> {
-        match statement.inner {
+        let Spanned { inner: statement, .. } = statement;
+        match statement {
             ast::Statement::Empty => {}
             ast::Statement::Block(block) => {
                 let block = translate_block_statement(self.symbol_table, block, self.func_infos)?;
@@ -331,8 +332,11 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
     fn translate_expression(
         &mut self,
-        expression: ast::Expression,
+        expression: Spanned<ast::Expression>,
     ) -> TranslationResult<ir::TypedExpression> {
+        
+        let Spanned { inner: expression, .. } = expression;
+
         match expression {
             ast::Expression::Literal(lit) => {
                 let (ty, lit) = match lit {
