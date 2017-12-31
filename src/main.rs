@@ -31,13 +31,27 @@ fn slurp_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
 }
 
 fn print_error_line(input: &str, span: Span) {
-    let mut counter = 0;
-    for line in input.lines() {
-        if counter < span.end && (counter + line.len()) >= span.start {
-            eprintln!("{}: {}", counter, line);
-        }
+    let mut arrow = String::with_capacity(input.len());
 
-        counter += line.len();
+    for (i, c) in input.chars().enumerate() {
+        arrow.push(match c {
+                       '\n' => '\n',
+                       '\t' => '\t',
+                       '\r' => '\r',
+                       _ if span.start <= i && i < span.end => '^',
+                       _ => ' ',
+                   });
+    }
+
+    let iter = input
+        .lines()
+        .map(String::from)
+        .zip(arrow.lines().map(String::from))
+        .enumerate()
+        .filter(|&(_, (_, ref arrow))| arrow.contains('^'));
+
+    for (n, (line, arrow)) in iter {
+        eprintln!("{:04}| {}\n    |{}", n, line, arrow);
     }
 }
 
@@ -73,7 +87,7 @@ fn main() {
         let mut parser = parser::Parser::new(lexer, &mut string_interner);
         continue_or_exit(&path, &input, parser.parse_program())
     };
-    // println!("{:#?}", program);
+    println!("{:#?}", program);
     let ir_prog = continue_or_exit(&path, &input, ir::translator::translate_program(program));
     // println!("{:#?}", ir_prog);
     interpreter::interpret_program(&ir_prog, &string_interner).expect("Interpreter error");
