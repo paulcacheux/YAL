@@ -367,6 +367,11 @@ impl<'p, 'si> Interpreter<'p, 'si> {
             Expression::NewArray { ref base_ty, ref sizes } => {
                 Ok(self.create_array(base_ty, &sizes))
             }
+            Expression::ArrayLength(ref array) => {
+                let array = self.interpret_expression(array)?;
+                let array_index = extract_pattern!(array; Value::Array(ArrayId(id)) => id);
+                Ok(Value::Int(self.arrays[array_index].len() as _))
+            }
         }
     }
     

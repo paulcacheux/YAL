@@ -110,6 +110,10 @@ pub enum Expression {
     NewArray {
         ty: Type,
         sizes: Vec<usize>,
+    },
+    MemberAccess {
+        expr: Box<Spanned<Expression>>,
+        member: String
     }
 }
 

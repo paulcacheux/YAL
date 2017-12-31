@@ -319,6 +319,17 @@ impl<'si, 'input> Parser<'si, 'input> {
                     sub = Spanned::new(expr, span);
                     continue;
                 }
+                Token::Dot => {
+                    self.lexer.next_token()?;
+                    let (member, end_span) = accept!(self.lexer; Token::Identifier(id) => id.to_string(), "identifier");
+                    let span = Span::merge(sub.span, end_span);
+                    let expr = ast::Expression::MemberAccess {
+                        expr: Box::new(sub),
+                        member
+                    };
+                    sub = Spanned::new(expr, span);
+                    continue
+                }
                 _ => break,
             }
         }

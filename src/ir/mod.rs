@@ -87,7 +87,8 @@ pub enum Expression {
     NewArray {
         base_ty: Type,
         sizes: Vec<usize>
-    }
+    },
+    ArrayLength(Box<TypedExpression>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

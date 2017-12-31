@@ -22,7 +22,9 @@ pub enum TranslationError {
     MainWrongType,
     NoMain,
     NotAllPathsReturn,
-    SubscriptNotArray(ty::Type)
+    SubscriptNotArray(ty::Type),
+    LengthOnNonArray(ty::Type),
+    MemberUndefined
 }
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
@@ -591,6 +593,25 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         sizes
                     }
                 })
+            },
+            ast::Expression::MemberAccess { expr, member } => {
+                // TODO change this. It currently only works for .length on arrays
+                let expr = self.translate_expression(*expr)?;
+                let expr = lvalue_to_rvalue(expr);
+
+                if member != "length" {
+                    return error!(TranslationError::MemberUndefined, expr_span);
+                }
+
+                if let ty::Type::Array(_) = expr.ty {
+                    Ok(ir::TypedExpression {
+                        ty: ty::Type::Int,
+                        expr: ir::Expression::ArrayLength(Box::new(expr))
+                    })
+                } else {
+                    // TODO change the error
+                    error!(TranslationError::LengthOnNonArray(expr.ty), expr_span)
+                }
             }
         }
     }

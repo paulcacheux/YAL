@@ -34,6 +34,8 @@ impl fmt::Display for TranslationError {
             TranslationError::NoMain => write!(f, "A main function must be defined"),
             TranslationError::NotAllPathsReturn => write!(f, "A path in this function doesn't return"),
             TranslationError::SubscriptNotArray(ref ty) => write!(f, "Type '{:?}' can't be subscripted", ty),
+            TranslationError::LengthOnNonArray(ref ty) => write!(f, "Type '{:?}' doesn't have a length property", ty),
+            TranslationError::MemberUndefined => write!(f, "Undefined member"),
         }
     }
 }
