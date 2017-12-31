@@ -21,7 +21,8 @@ pub enum TranslationError {
     BreakContinueOutOfLoop,
     MainWrongType,
     NoMain,
-    NotAllPathsReturn
+    NotAllPathsReturn,
+    SubscriptNotArray(ty::Type)
 }
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
@@ -514,6 +515,29 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     expr: ir::Expression::Decrement(Box::new(sub)),
                 })
             }
+            ast::Expression::Subscript { array, index } => {
+                let index_span = index.span;
+                let array = self.translate_expression(*array)?;
+                let array = lvalue_to_rvalue(array);
+                let index = self.translate_expression(*index)?;
+                let index = lvalue_to_rvalue(index);
+
+                if let ty::Type::Array(sub_ty) = array.ty.clone() {
+                    if ty::Type::Int == index.ty {
+                        Ok(ir::TypedExpression {
+                            ty: ty::Type::LValue(sub_ty),
+                            expr: ir::Expression::Subscript {
+                                array: Box::new(array),
+                                index: Box::new(index)
+                            }
+                        })
+                    } else {
+                        error!(TranslationError::MismatchingTypes(ty::Type::Int, index.ty), index_span)
+                    }
+                } else {
+                    error!(TranslationError::SubscriptNotArray(array.ty), expr_span)
+                }
+            }
             ast::Expression::FunctionCall { function, args } => {
                 if let Some(func_ty) = self.symbol_table.lookup_function(&function).cloned() {
                     let mut args_translated = Vec::with_capacity(args.len());
@@ -553,6 +577,20 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 } else {
                     error!(TranslationError::FunctionUndefined(function), expr_span)
                 }
+            },
+            ast::Expression::NewArray { ty, sizes } => {
+                let mut array_ty = ty.clone();
+                for _ in 0..sizes.len() {
+                    array_ty = ty::Type::Array(Box::new(array_ty));
+                }
+
+                Ok(ir::TypedExpression {
+                    ty: array_ty,
+                    expr: ir::Expression::NewArray {
+                        base_ty: ty,
+                        sizes
+                    }
+                })
             }
         }
     }

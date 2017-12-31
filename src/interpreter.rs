@@ -13,6 +13,7 @@ pub enum Value {
     Boolean(bool),
     String(StringId),
     LValue(usize),
+    Array(ArrayId)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -29,10 +30,14 @@ pub fn interpret_program(program: &ir::Program, strings: &StringInterner) -> Int
     interpreter.interpret_function_by_name("main", &[]).map(|_| ())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArrayId(usize);
+
 struct Interpreter<'p, 'si> {
     program: &'p ir::Program,
     memory: Memory,
     strings: &'si StringInterner,
+    arrays: Vec<Vec<Value>>,
 }
 
 macro_rules! propagate {
@@ -66,7 +71,14 @@ impl<'p, 'si> Interpreter<'p, 'si> {
             program,
             memory: Memory::new(),
             strings,
+            arrays: Vec::new()
         }
+    }
+
+    fn new_array(&mut self, values: Vec<Value>) -> ArrayId {
+        let index = self.arrays.len();
+        self.arrays.push(values);
+        ArrayId(index)
     }
 
     fn interpret_function_by_name(&mut self, name: &str, args: &[Value]) -> InterpreterResult<Value> {
@@ -179,13 +191,7 @@ impl<'p, 'si> Interpreter<'p, 'si> {
 
         match *expr {
             Expression::DefaultValue => {
-                Ok(match *ty {
-                    ty::Type::Int => Value::Int(0),
-                    ty::Type::Double => Value::Double(0.0),
-                    ty::Type::Boolean => Value::Boolean(false),
-                    ty::Type::Void => Value::Void,
-                    _ => unreachable!(), // string doesn't have a default value
-                })
+                Ok(default_value(ty))
             }
             Expression::LValueToRValue(ref sub) => {
                 let sub = self.interpret_expression(sub)?;
@@ -341,6 +347,14 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                 self.memory.set_from_index(index, value);
                 Ok(sub)
             }
+            Expression::Subscript { ref array, ref index } => {
+                let array = self.interpret_expression(array)?;
+                let index = self.interpret_expression(index)?;
+
+                let array_index = extract_pattern!(array; Value::Array(ArrayId(id)) => id);
+                let real_index = extract_pattern!(index; Value::Int(i) => i as usize);
+                Ok(self.arrays[array_index][real_index])
+            }
             Expression::FunctionCall {
                 ref function,
                 ref args,
@@ -350,7 +364,35 @@ impl<'p, 'si> Interpreter<'p, 'si> {
                     .collect();
                 self.interpret_function_by_name(function, &(args?))
             }
+            Expression::NewArray { ref base_ty, ref sizes } => {
+                Ok(self.create_array(base_ty, &sizes))
+            }
         }
+    }
+    
+    fn create_array(&mut self, base_ty: &ty::Type, sizes: &[usize]) -> Value {
+        let value = if !sizes.is_empty() {
+            let size = *sizes.last().unwrap();
+            let mut values = Vec::with_capacity(size);
+            for _ in 0..size {
+                values.push(self.create_array(base_ty, &sizes[0..sizes.len()-1]));
+            }
+            let id = self.new_array(values);
+            Value::Array(id)
+        } else {
+            default_value(base_ty)
+        };
+        Value::LValue(self.memory.set_new_unnamed(value))
+    }
+}
+
+fn default_value(ty: &ty::Type) -> Value {
+    match *ty {
+        ty::Type::Int => Value::Int(0),
+        ty::Type::Double => Value::Double(0.0),
+        ty::Type::Boolean => Value::Boolean(false),
+        ty::Type::Void => Value::Void,
+        _ => unreachable!(), // string doesn't have a default value
     }
 }
 
@@ -383,9 +425,14 @@ impl Memory {
         self.scopes.pop();
     }
 
-    fn set_new(&mut self, name: String, value: Value) {
+    fn set_new_unnamed(&mut self, value: Value) -> usize {
         let index = self.memory.len();
         self.memory.push(value);
+        index
+    }
+
+    fn set_new(&mut self, name: String, value: Value) {
+        let index = self.set_new_unnamed(value);
         self.scopes.last_mut().unwrap().insert(name, index);
     }
 

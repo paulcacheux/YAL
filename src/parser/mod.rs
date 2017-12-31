@@ -64,31 +64,40 @@ impl<'si, 'input> Parser<'si, 'input> {
         Ok(ast::Program { declarations })
     }
 
-    pub fn parse_type(&mut self) -> ParsingResult<Spanned<ty::Type>> {
+    pub fn parse_builtin_type(&mut self, void: bool) -> ParsingResult<Spanned<ty::Type>> {
         let TokenAndSpan { token, span } = self.lexer.next_token()?;
         let ty = match token {
             Token::IntKeyword => ty::Type::Int,
             Token::DoubleKeyword => ty::Type::Double,
             Token::BooleanKeyword => ty::Type::Boolean,
-            Token::VoidKeyword => ty::Type::Void,
-            _ => return_unexpected!(span, "int", "boolean", "double", "void"),
+            Token::VoidKeyword if void => ty::Type::Void,
+            _ => {
+                if void {
+                    return_unexpected!(span, "int", "boolean", "double", "void")
+                } else {
+                    return_unexpected!(span, "int", "boolean", "double", "void")
+                }
+            }
         };
+
         Ok(Spanned::new(ty, span))
     }
 
-    pub fn parse_type_non_void(&mut self) -> ParsingResult<Spanned<ty::Type>> {
-        let TokenAndSpan { token, span } = self.lexer.next_token()?;
-        let ty = match token {
-            Token::IntKeyword => ty::Type::Int,
-            Token::DoubleKeyword => ty::Type::Double,
-            Token::BooleanKeyword => ty::Type::Boolean,
-            _ => return_unexpected!(span, "int", "boolean", "double"),
-        };
+    pub fn parse_type(&mut self, void: bool) -> ParsingResult<Spanned<ty::Type>> {
+        let Spanned { inner: mut ty, mut span } = self.parse_builtin_type(void)?;
+
+        while let Token::LeftSquare = self.lexer.peek_token()?.token {
+            self.lexer.next_token()?;
+            let end_span = expect!(self.lexer; Token::RightSquare, "]");
+            span = Span::merge(span, end_span);
+            ty = ty::Type::Array(Box::new(ty));
+        }
+
         Ok(Spanned::new(ty, span))
     }
 
     pub fn parse_function_declaration(&mut self) -> ParsingResult<ast::Function> {
-        let Spanned { inner: return_ty, span: ty_span } = self.parse_type()?;
+        let Spanned { inner: return_ty, span: ty_span } = self.parse_type(true)?;
         let name = self.parse_identifier()?;
         expect!(self.lexer; Token::LeftParenthesis, "(");
         let parameters = self.parse_parameter_list()?;
@@ -124,7 +133,7 @@ impl<'si, 'input> Parser<'si, 'input> {
     }
 
     pub fn parse_parameter(&mut self) -> ParsingResult<(ty::Type, String)> {
-        let ty = self.parse_type_non_void()?.inner;
+        let ty = self.parse_type(false)?.inner;
         let name = self.parse_identifier()?;
         Ok((ty, name))
     }
@@ -257,7 +266,7 @@ impl<'si, 'input> Parser<'si, 'input> {
     }
 
     pub fn parse_var_declaration(&mut self) -> ParsingResult<Spanned<ast::Statement>> {
-        let Spanned { inner: ty, span: ty_span } = self.parse_type_non_void()?;
+        let Spanned { inner: ty, span: ty_span } = self.parse_type(false)?;
         let mut declarations = Vec::new();
 
         declarations.push(self.parse_identifier_and_maybe_value()?);
@@ -276,11 +285,11 @@ impl<'si, 'input> Parser<'si, 'input> {
     }
 
     pub fn parse_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
-        let lhs = self.parse_incdec_expression()?;
+        let lhs = self.parse_mid_expression()?;
         parse_expression_inner(self, lhs, 0)
     }
 
-    pub fn parse_incdec_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
+    pub fn parse_mid_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
         let mut sub = self.parse_leaf_expression()?;
         loop {
             match self.lexer.peek_token()?.token {
@@ -295,6 +304,18 @@ impl<'si, 'input> Parser<'si, 'input> {
                     let end_span = self.lexer.next_token()?.span;
                     let span = Span::merge(sub.span, end_span);
                     let expr = ast::Expression::Decrement(Box::new(sub));
+                    sub = Spanned::new(expr, span);
+                    continue;
+                }
+                Token::LeftSquare => {
+                    self.lexer.next_token()?;
+                    let index_expr = self.parse_expression()?;
+                    let end_span = expect!(self.lexer; Token::RightSquare, "]");
+                    let span = Span::merge(sub.span, end_span);
+                    let expr = ast::Expression::Subscript {
+                        array: Box::new(sub),
+                        index: Box::new(index_expr),
+                    };
                     sub = Spanned::new(expr, span);
                     continue;
                 }
@@ -326,8 +347,32 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let expr = ast::Expression::Literal(ast::Literal::StringLiteral(sid));
                 Ok(Spanned::new(expr, span))
             }
+            Token::NewKeyword => {
+                let Spanned { inner: bty, mut span } = self.parse_builtin_type(false)?;
+                let mut sizes = Vec::new();
+                loop {
+                    expect!(self.lexer; Token::LeftSquare, "[");
+                    let size = accept!(self.lexer; Token::IntegerLiteral(i) => i as usize, "integer").0;
+                    sizes.push(size);
+                    span = Span::merge(span, expect!(self.lexer; Token::RightSquare, "]"));
+
+                    if let Token::LeftSquare = self.lexer.peek_token()?.token {
+                        continue
+                    } else {
+                        break
+                    }
+                }
+                
+                Ok(Spanned::new(
+                    ast::Expression::NewArray {
+                        ty: bty,
+                        sizes
+                    },
+                    span
+                ))
+            }
             Token::Minus => {
-                let sub = self.parse_incdec_expression()?;
+                let sub = self.parse_mid_expression()?;
                 let span = Span::merge(span, sub.span);
                 let expr = ast::Expression::UnaryOperator {
                     unop: ast::UnaryOperatorKind::Minus,
@@ -336,7 +381,7 @@ impl<'si, 'input> Parser<'si, 'input> {
                 Ok(Spanned::new(expr, span))
             }
             Token::Bang => {
-                let sub = self.parse_incdec_expression()?;
+                let sub = self.parse_mid_expression()?;
                 let span = Span::merge(span, sub.span);
                 let expr = ast::Expression::UnaryOperator {
                     unop: ast::UnaryOperatorKind::LogicalNot,

@@ -49,10 +49,6 @@ pub struct BlockStatement {
 }
 
 impl BlockStatement {
-    pub fn new() -> Self {
-        BlockStatement::from_vec(vec![])
-    }
-
     pub fn from_vec(statements: Vec<Spanned<Statement>>) -> Self {
         BlockStatement {
             statements
@@ -103,10 +99,18 @@ pub enum Expression {
     },
     Increment(Box<Spanned<Expression>>),
     Decrement(Box<Spanned<Expression>>),
+    Subscript {
+        array: Box<Spanned<Expression>>,
+        index: Box<Spanned<Expression>>,
+    },
     FunctionCall {
         function: String,
         args: Vec<Spanned<Expression>>,
     },
+    NewArray {
+        ty: Type,
+        sizes: Vec<usize>,
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

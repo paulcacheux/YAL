@@ -6,6 +6,7 @@ pub enum Type {
     String,
     Void,
     LValue(Box<Type>),
+    Array(Box<Type>)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -143,7 +143,7 @@ pub fn parse_expression_inner<'si, 'input>(
                 || (!infos.relational && infos.precedence == min_prec);
             then {
                 let op = parser.lexer.next_token()?.token;
-                let mut rhs = parser.parse_incdec_expression()?;
+                let mut rhs = parser.parse_mid_expression()?;
 
                 loop {
                     if_chain! {

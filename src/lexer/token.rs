@@ -8,6 +8,9 @@ pub enum Token<'input> {
     RightParenthesis,
     LeftBracket,
     RightBracket,
+    LeftSquare,
+    RightSquare,
+    Dot,
     SemiColon,
     Comma,
     // operators
@@ -35,6 +38,7 @@ pub enum Token<'input> {
     ReturnKeyword,
     BreakKeyword,
     ContinueKeyword,
+    NewKeyword,
 
     IntKeyword,
     DoubleKeyword,

@@ -76,10 +76,18 @@ pub enum Expression {
     },
     Increment(Box<TypedExpression>),
     Decrement(Box<TypedExpression>),
+    Subscript {
+        array: Box<TypedExpression>,
+        index: Box<TypedExpression>,
+    },
     FunctionCall {
         function: String,
         args: Vec<TypedExpression>,
     },
+    NewArray {
+        base_ty: Type,
+        sizes: Vec<usize>
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

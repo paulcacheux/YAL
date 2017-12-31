@@ -94,8 +94,11 @@ impl<'input> Lexer<'input> {
         match_literal!(self; ")" => Token::RightParenthesis);
         match_literal!(self; "{" => Token::LeftBracket);
         match_literal!(self; "}" => Token::RightBracket);
+        match_literal!(self; "[" => Token::LeftSquare);
+        match_literal!(self; "]" => Token::RightSquare);
         match_literal!(self; ";" => Token::SemiColon);
         match_literal!(self; "," => Token::Comma);
+        match_literal!(self; "." => Token::Dot);
 
         match_literal!(self; "==" => Token::EqualEqual);
         match_literal!(self; "!=" => Token::BangEqual);
@@ -132,6 +135,7 @@ impl<'input> Lexer<'input> {
                 "void" => Token::VoidKeyword,
                 "continue" => Token::ContinueKeyword,
                 "break" => Token::BreakKeyword,
+                "new" => Token::NewKeyword,
                 s => Token::Identifier(s),
             };
             return Ok(TokenAndSpan::new_with_len(token, start_pos, len))

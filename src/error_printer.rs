@@ -32,7 +32,8 @@ impl fmt::Display for TranslationError {
             TranslationError::BreakContinueOutOfLoop => write!(f, "Break or continue outside a loop"),
             TranslationError::MainWrongType => write!(f, "Main must be of type void(void)"),
             TranslationError::NoMain => write!(f, "A main function must be defined"),
-            TranslationError::NotAllPathsReturn => write!(f, "A path in this function doesn't return")
+            TranslationError::NotAllPathsReturn => write!(f, "A path in this function doesn't return"),
+            TranslationError::SubscriptNotArray(ref ty) => write!(f, "Type '{:?}' can't be subscripted", ty),
         }
     }
 }
