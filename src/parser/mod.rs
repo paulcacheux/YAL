@@ -363,7 +363,7 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let mut sizes = Vec::new();
                 loop {
                     expect!(self.lexer; Token::LeftSquare, "[");
-                    let size = accept!(self.lexer; Token::IntegerLiteral(i) => i as usize, "integer").0;
+                    let size = self.parse_expression()?;
                     sizes.push(size);
                     span = Span::merge(span, expect!(self.lexer; Token::RightSquare, "]"));
 

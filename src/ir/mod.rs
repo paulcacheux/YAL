@@ -86,7 +86,7 @@ pub enum Expression {
     },
     NewArray {
         base_ty: Type,
-        sizes: Vec<usize>
+        sizes: Vec<TypedExpression>
     },
     ArrayLength(Box<TypedExpression>),
 }

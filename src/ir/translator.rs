@@ -585,12 +585,25 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 for _ in 0..sizes.len() {
                     array_ty = ty::Type::Array(Box::new(array_ty));
                 }
+                
+                let mut new_sizes = Vec::with_capacity(sizes.len());
+                for size in sizes {
+                    let size_span = size.span;
+                    let size = self.translate_expression(size)?;
+                    let size = lvalue_to_rvalue(size);
+
+                    if ty::Type::Int != size.ty {
+                        return error!(TranslationError::MismatchingTypes(ty::Type::Int, size.ty), size_span);
+                    }
+                    new_sizes.push(size);
+                }
+
 
                 Ok(ir::TypedExpression {
                     ty: array_ty,
                     expr: ir::Expression::NewArray {
                         base_ty: ty,
-                        sizes
+                        sizes: new_sizes
                     }
                 })
             },
