@@ -1,5 +1,6 @@
 use regex::Regex;
-use parser::ParsingError;
+use parser::{ParsingResult, ParsingError};
+use span::{Spanned, Span};
 
 mod token;
 pub use self::token::{Token, TokenAndSpan};
@@ -55,7 +56,7 @@ impl<'input> Lexer<'input> {
         })
     }
 
-    pub fn peek_token(&mut self) -> Result<&TokenAndSpan<'input>, ParsingError> {
+    pub fn peek_token(&mut self) -> ParsingResult<&TokenAndSpan<'input>> {
         if self.buffer.is_none() {
             self.buffer = Some(self.next_token()?);
         }
@@ -67,7 +68,7 @@ impl<'input> Lexer<'input> {
         }
     }
 
-    pub fn next_token(&mut self) -> Result<TokenAndSpan<'input>, ParsingError> {
+    pub fn next_token(&mut self) -> ParsingResult<TokenAndSpan<'input>> {
         macro_rules! match_literal {
             ($lexer:expr; $literal:tt => $ret_expr:expr) => {
                 if (&$lexer.input[$lexer.pos..]).starts_with($literal) {
@@ -151,8 +152,9 @@ impl<'input> Lexer<'input> {
             return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
         }
 
-        Err(ParsingError::UnknownChar(
-            (&self.input[self.pos..]).chars().next().unwrap(),
+        Err(Spanned::new(
+            ParsingError::UnknownChar((&self.input[self.pos..]).chars().next().unwrap()),
+            Span::new_one(self.pos)
         ))
     }
 }

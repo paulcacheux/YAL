@@ -7,7 +7,7 @@ use span::{Span, Spanned};
 mod parsing_error;
 mod expression_parser;
 
-pub use self::parsing_error::ParsingError;
+pub use self::parsing_error::{ParsingResult, ParsingError};
 use self::expression_parser::*;
 
 pub struct Parser<'si, 'input> {
@@ -22,7 +22,7 @@ macro_rules! accept {
             if let $expect = token {
                 ($ret, span)
             } else {
-                return_unexpected!($($expected),*);
+                return_unexpected!(span, $($expected),*);
             }
         }
     }
@@ -35,12 +35,13 @@ macro_rules! expect {
 }
 
 macro_rules! return_unexpected {
-    ($($expected:expr),*) => {
-        return Err(ParsingError::Unexpected(vec![$($expected.into()),*]));
+    ($span:expr, $($expected:expr),*) => {
+        return Err(Spanned::new(
+            ParsingError::Unexpected(vec![$($expected.into()),*]),
+            $span
+        ));
     }
 }
-
-pub type ParsingResult<T> = Result<T, ParsingError>;
 
 impl<'si, 'input> Parser<'si, 'input> {
     pub fn new(lexer: Lexer<'input>, string_interner: &'si mut StringInterner) -> Self {
@@ -70,7 +71,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             Token::DoubleKeyword => ty::Type::Double,
             Token::BooleanKeyword => ty::Type::Boolean,
             Token::VoidKeyword => ty::Type::Void,
-            _ => return_unexpected!("int", "boolean", "double", "void"),
+            _ => return_unexpected!(span, "int", "boolean", "double", "void"),
         };
         Ok(Spanned::new(ty, span))
     }
@@ -81,7 +82,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             Token::IntKeyword => ty::Type::Int,
             Token::DoubleKeyword => ty::Type::Double,
             Token::BooleanKeyword => ty::Type::Boolean,
-            _ => return_unexpected!("int", "boolean", "double"),
+            _ => return_unexpected!(span, "int", "boolean", "double"),
         };
         Ok(Spanned::new(ty, span))
     }
@@ -366,7 +367,7 @@ impl<'si, 'input> Parser<'si, 'input> {
                 }
             }
             _ => {
-                return_unexpected!("literal", "(", "-", "!", "identifier");
+                return_unexpected!(span, "literal", "(", "-", "!", "identifier");
             }
         }
     }

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use ir;
 use ty;
 use string_interner::{StringId, StringInterner};
+use span::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Value {
@@ -16,7 +17,7 @@ pub enum Value {
 
 #[derive(Debug, Clone, Copy)]
 pub enum InterpreterError {
-    PathWithoutReturn
+    PathWithoutReturn(Span)
 }
 
 pub type InterpreterResult<T> = Result<T, InterpreterError>;
@@ -98,7 +99,7 @@ impl<'p, 'si> Interpreter<'p, 'si> {
         } else if function.return_ty == ty::Type::Void {
             Ok(Value::Void)
         } else {
-            Err(InterpreterError::PathWithoutReturn)
+            Err(InterpreterError::PathWithoutReturn(function.span))
         }
     }
 

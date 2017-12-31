@@ -19,6 +19,9 @@ mod parser;
 mod ty;
 mod ir;
 mod interpreter;
+mod error_printer;
+
+use span::Spanned;
 
 fn slurp_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
     let mut file = File::open(path)?;
@@ -27,11 +30,11 @@ fn slurp_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
     Ok(buffer)
 }
 
-fn continue_or_exit<T, E: std::fmt::Debug>(input: Result<T, E>) -> T {
+fn continue_or_exit<T, E: std::fmt::Display>(path: &str, input: Result<T, Spanned<E>>) -> T {
     match input {
         Ok(v) => return v,
-        Err(e) => {
-            eprintln!("{:?}", e);
+        Err(Spanned { inner: error, span }) => {
+            eprintln!("{}:{}:{}: {}", path, span.start, span.end, error);
             std::process::exit(1);
         }
     }
@@ -49,17 +52,17 @@ fn main() {
 
 
     let path = matches.value_of("INPUT").unwrap();
-    let input = slurp_file(path).unwrap();
+    let input = slurp_file(&path).unwrap();
 
     let mut string_interner = string_interner::StringInterner::new();
 
     let lexer = lexer::Lexer::new(&input);
     let program = {
         let mut parser = parser::Parser::new(lexer, &mut string_interner);
-        continue_or_exit(parser.parse_program())
+        continue_or_exit(&path, parser.parse_program())
     };
     // println!("{:#?}", program);
-    let ir_prog = continue_or_exit(ir::translator::translate_program(program));
+    let ir_prog = continue_or_exit(&path, ir::translator::translate_program(program));
     // println!("{:#?}", ir_prog);
-    continue_or_exit(interpreter::interpret_program(&ir_prog, &string_interner));
+    interpreter::interpret_program(&ir_prog, &string_interner).expect("Interpreter error");
 }

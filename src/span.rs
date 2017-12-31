@@ -1,10 +1,14 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
-    start: usize,
-    end: usize,
+    pub start: usize,
+    pub end: usize,
 }
 
 impl Span {
+    pub fn dummy() -> Self {
+        Span::new(0, usize::max_value())
+    }
+
     pub fn new(start: usize, end: usize) -> Self {
         Span { start, end }
     }

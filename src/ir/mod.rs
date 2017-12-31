@@ -1,5 +1,6 @@
 use ty::*;
 use string_interner::StringId;
+use span::Span;
 
 mod symbol_table;
 pub mod translator;
@@ -15,6 +16,7 @@ pub struct Function {
     pub name: String,
     pub parameters: Vec<(Type, String)>,
     pub body: BlockStatement,
+    pub span: Span
 }
 
 #[derive(Debug, Clone)]
