@@ -36,6 +36,7 @@ impl fmt::Display for TranslationError {
             TranslationError::SubscriptNotArray(ref ty) => write!(f, "Type '{:?}' can't be subscripted", ty),
             TranslationError::LengthOnNonArray(ref ty) => write!(f, "Type '{:?}' doesn't have a length property", ty),
             TranslationError::MemberUndefined => write!(f, "Undefined member"),
+            TranslationError::NoDefaultValue => write!(f, "No default value provided")
         }
     }
 }

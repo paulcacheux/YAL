@@ -87,7 +87,7 @@ fn main() {
         let mut parser = parser::Parser::new(lexer, &mut string_interner);
         continue_or_exit(&path, &input, parser.parse_program())
     };
-    println!("{:#?}", program);
+    // println!("{:#?}", program);
     let ir_prog = continue_or_exit(&path, &input, ir::translator::translate_program(program));
     // println!("{:#?}", ir_prog);
     interpreter::interpret_program(&ir_prog, &string_interner).expect("Interpreter error");

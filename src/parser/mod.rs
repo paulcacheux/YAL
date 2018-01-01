@@ -76,7 +76,7 @@ impl<'si, 'input> Parser<'si, 'input> {
                 if void {
                     return_unexpected!(span, "int", "boolean", "double", "void")
                 } else {
-                    return_unexpected!(span, "int", "boolean", "double", "void")
+                    return_unexpected!(span, "int", "boolean", "double")
                 }
             }
         };

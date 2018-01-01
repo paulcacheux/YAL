@@ -24,11 +24,11 @@ pub enum TranslationError {
     NotAllPathsReturn,
     SubscriptNotArray(ty::Type),
     LengthOnNonArray(ty::Type),
-    MemberUndefined
+    MemberUndefined,
+    NoDefaultValue
 }
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
-
 
 macro_rules! error {
     ($err:expr, $span:expr) => {
@@ -234,14 +234,17 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         let value_span = value.span;
                         let expr = self.translate_expression(value)?;
                         let expr = lvalue_to_rvalue(expr);
-                        if expr.ty != ty {
-                            return error!(TranslationError::MismatchingTypes(
-                                expr.ty.clone(),
-                                ty.clone(),
-                            ), value_span);
-                        }
+                        check_eq_types(&expr.ty, &ty, value_span)?;
                         expr
                     } else {
+                        if ty != ty::Type::Int && ty != ty::Type::Boolean && ty != ty::Type::Double {
+                            return error!(
+                                TranslationError::NoDefaultValue,
+                                stmt_span
+                            );
+                        }
+
+
                         ir::TypedExpression {
                             ty: ty.clone(),
                             expr: ir::Expression::DefaultValue,
@@ -270,15 +273,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let condition_span = condition.span;
                 let condition = self.translate_expression(condition)?;
                 let condition = lvalue_to_rvalue(condition);
-                if condition.ty != ty::Type::Boolean {
-                    return error!(
-                        TranslationError::MismatchingTypes(
-                            ty::Type::Boolean,
-                            condition.ty,
-                        ),
-                        condition_span
-                    );
-                }
+                check_eq_types(&condition.ty, &ty::Type::Boolean, condition_span)?;
 
                 let body = self.translate_statement_as_block(*body)?;
 
@@ -298,15 +293,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let condition_span = condition.span;
                 let condition = self.translate_expression(condition)?;
                 let condition = lvalue_to_rvalue(condition);
-                if condition.ty != ty::Type::Boolean {
-                    return error!(
-                        TranslationError::MismatchingTypes(
-                            ty::Type::Boolean,
-                            condition.ty,
-                        ),
-                        condition_span
-                    );
-                }
+                check_eq_types(&condition.ty, &ty::Type::Boolean, condition_span)?;
 
                 let old_in_loop = self.func_infos.in_loop;
                 self.func_infos.in_loop = true;
@@ -322,16 +309,17 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let array = lvalue_to_rvalue(array);
 
                 if let ty::Type::Array(sub_ty) = array.ty.clone() {
-                    if *sub_ty != ty {
-                        return error!(TranslationError::MismatchingTypes(*sub_ty, ty), array_span)
-                    }
+                    check_eq_types(&sub_ty, &ty, array_span)?;
                 } else {
                     return error!(TranslationError::SubscriptNotArray(array.ty), array_span)
                 }
 
                 self.symbol_table.begin_scope();
                 self.symbol_table.register_local(name.clone(), ty);
+                let old_in_loop = self.func_infos.in_loop;
+                self.func_infos.in_loop = true;
                 let body = self.translate_statement_as_block(*body)?;
+                self.func_infos.in_loop = old_in_loop;
                 self.symbol_table.end_scope();
 
                 self.statements.push(ir::Statement::For { name, array, body });
@@ -341,28 +329,12 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     let expr_span = expr.span;
                     let expr = self.translate_expression(expr)?;
                     let expr = lvalue_to_rvalue(expr);
-
-                    if expr.ty != self.func_infos.ret_ty {
-                        return error!(
-                            TranslationError::MismatchingTypes(
-                                expr.ty,
-                                self.func_infos.ret_ty.clone(),
-                            ),
-                            expr_span
-                        );
-                    }
+                    check_eq_types(&expr.ty, &self.func_infos.ret_ty, expr_span)?;
 
                     expr
                 } else {
-                    if ty::Type::Void != self.func_infos.ret_ty {
-                        return error!(
-                            TranslationError::MismatchingTypes(
-                                ir::Type::Void,
-                                self.func_infos.ret_ty.clone(),
-                            ),
-                            stmt_span
-                        );
-                    }
+                    check_eq_types(&ty::Type::Void, &self.func_infos.ret_ty, stmt_span)?;
+
                     ir::TypedExpression {
                         ty: ty::Type::Void,
                         expr: ir::Expression::DefaultValue,
@@ -438,9 +410,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let rhs = lvalue_to_rvalue(rhs);
 
                 if let ty::Type::LValue(ref sub) = lhs.ty {
-                    if **sub != rhs.ty {
-                        return error!(TranslationError::MismatchingTypes(lhs.ty.clone(), rhs.ty), expr_span);
-                    }
+                    check_eq_types(sub, &rhs.ty, expr_span)?;
                 } else {
                     return error!(TranslationError::NonLValueAssign, lhs_span);
                 }
@@ -506,15 +476,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let sub = self.translate_expression(*sub)?;
 
                 if let ty::Type::LValue(ref sub_ty) = sub.ty {
-                    if **sub_ty != ty::Type::Int {
-                        return error!(
-                            TranslationError::MismatchingTypes(
-                                ty::Type::Int,
-                                *sub_ty.clone(),
-                            ),
-                            sub_span
-                        );
-                    }
+                    check_eq_types(sub_ty, &ty::Type::Int, sub_span)?;
                 } else {
                     return error!(TranslationError::IncDecNonLValue, sub_span);
                 }
@@ -531,15 +493,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let sub = self.translate_expression(*sub)?;
 
                 if let ty::Type::LValue(ref sub_ty) = sub.ty {
-                    if **sub_ty != ty::Type::Int {
-                        return error!(
-                            TranslationError::MismatchingTypes(
-                                ty::Type::Int,
-                                *sub_ty.clone(),
-                            ),
-                            sub_span
-                        );
-                    }
+                    check_eq_types(sub_ty, &ty::Type::Int, sub_span)?;
                 } else {
                     return error!(TranslationError::IncDecNonLValue, sub_span);
                 }
@@ -559,17 +513,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let index = lvalue_to_rvalue(index);
 
                 if let ty::Type::Array(sub_ty) = array.ty.clone() {
-                    if ty::Type::Int == index.ty {
-                        Ok(ir::TypedExpression {
-                            ty: ty::Type::LValue(sub_ty),
-                            expr: ir::Expression::Subscript {
-                                array: Box::new(array),
-                                index: Box::new(index)
-                            }
-                        })
-                    } else {
-                        error!(TranslationError::MismatchingTypes(ty::Type::Int, index.ty), index_span)
-                    }
+                    check_eq_types(&index.ty, &ty::Type::Int, index_span)?;
+                    Ok(ir::TypedExpression {
+                        ty: ty::Type::LValue(sub_ty),
+                        expr: ir::Expression::Subscript {
+                            array: Box::new(array),
+                            index: Box::new(index)
+                        }
+                    })
                 } else {
                     error!(TranslationError::SubscriptNotArray(array.ty), expr_span)
                 }
@@ -591,15 +542,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         let arg_span = arg.span;
                         let arg = self.translate_expression(arg)?;
                         let arg = lvalue_to_rvalue(arg);
-                        if arg.ty != *param_ty {
-                            return error!(
-                                TranslationError::MismatchingTypes(
-                                    arg.ty,
-                                    param_ty.clone(),
-                                ),
-                                arg_span
-                            );
-                        }
+                        check_eq_types(&arg.ty, &param_ty, arg_span)?;
                         args_translated.push(arg);
                     }
                     let ret_ty = func_ty.return_ty;
@@ -626,9 +569,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     let size = self.translate_expression(size)?;
                     let size = lvalue_to_rvalue(size);
 
-                    if ty::Type::Int != size.ty {
-                        return error!(TranslationError::MismatchingTypes(ty::Type::Int, size.ty), size_span);
-                    }
+                    check_eq_types(&ty::Type::Int, &size.ty, size_span)?;
                     new_sizes.push(size);
                 }
 
@@ -826,5 +767,16 @@ fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
         },
         ir::Statement::Return(_) => true,
         _ => false,
+    }
+}
+
+fn check_eq_types(a: &ty::Type, b: &ty::Type, error_span: Span) -> TranslationResult<()> {
+    if a != b {
+        error!(TranslationError::MismatchingTypes(
+            a.clone(),
+            b.clone(),
+        ), error_span)
+    } else {
+        Ok(())
     }
 }
