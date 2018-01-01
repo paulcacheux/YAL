@@ -6,6 +6,7 @@ use ir::translator::TranslationError;
 impl fmt::Display for ParsingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            ParsingError::ReservedIdentifier(ref id) => write!(f, "'{}' is a reserved identifier", id),
             ParsingError::UnknownChar(c) => write!(f, "Unknown char  '{}'", c),
             ParsingError::Unexpected(ref expected) => {
                 write!(f, "Unexpected token, expected one of {}", expected.join(", "))

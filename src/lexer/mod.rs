@@ -158,7 +158,15 @@ impl<'input> Lexer<'input> {
                 "new" => Token::NewKeyword,
                 "struct" => Token::StructKeyword,
                 "typedef" => Token::TypedefKeyword,
-                s => Token::Identifier(s),
+                s => {
+                    if s.starts_with("___") {
+                        return Err(Spanned::new(
+                            ParsingError::ReservedIdentifier(s.to_string()),
+                            Span::new_with_len(self.pos, s.len())
+                        ));
+                    }
+                    Token::Identifier(s)
+                }
             };
             return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
         }

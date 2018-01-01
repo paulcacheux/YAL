@@ -2,6 +2,7 @@ use span::Spanned;
 
 #[derive(Debug, Clone)]
 pub enum ParsingError {
+    ReservedIdentifier(String),
     UnknownChar(char),
     Unexpected(Vec<String>),
 }
