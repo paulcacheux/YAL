@@ -1,6 +1,5 @@
 use regex::Regex;
-use errors::ParsingError;
-use parser::ParsingResult;
+use errors::LexingError;
 use span::{Spanned, Span};
 
 mod token;
@@ -32,6 +31,8 @@ pub struct Lexer<'input> {
     pos: usize,
     buffer: Option<TokenAndSpan<'input>>,
 }
+
+pub type LexingResult<T> = Result<T, Spanned<LexingError>>;
 
 impl<'input> Lexer<'input> {
     pub fn new(input: &'input str) -> Self {
@@ -75,7 +76,7 @@ impl<'input> Lexer<'input> {
         })
     }
 
-    pub fn peek_token(&mut self) -> ParsingResult<&TokenAndSpan<'input>> {
+    pub fn peek_token(&mut self) -> LexingResult<&TokenAndSpan<'input>> {
         if self.buffer.is_none() {
             self.buffer = Some(self.next_token()?);
         }
@@ -87,7 +88,7 @@ impl<'input> Lexer<'input> {
         }
     }
 
-    pub fn next_token(&mut self) -> ParsingResult<TokenAndSpan<'input>> {
+    pub fn next_token(&mut self) -> LexingResult<TokenAndSpan<'input>> {
         macro_rules! match_literal {
             ($lexer:expr; $literal:tt => $ret_expr:expr) => {
                 if (&$lexer.input[$lexer.pos..]).starts_with($literal) {
@@ -162,7 +163,7 @@ impl<'input> Lexer<'input> {
                 s => {
                     if s.starts_with("___") {
                         return Err(Spanned::new(
-                            ParsingError::ReservedIdentifier(s.to_string()),
+                            LexingError::ReservedIdentifier(s.to_string()),
                             Span::new_with_len(self.pos, s.len())
                         ));
                     }
@@ -188,7 +189,7 @@ impl<'input> Lexer<'input> {
         }
 
         Err(Spanned::new(
-            ParsingError::UnknownChar((&self.input[self.pos..]).chars().next().unwrap()),
+            LexingError::UnknownChar((&self.input[self.pos..]).chars().next().unwrap()),
             Span::new_one(self.pos)
         ))
     }
