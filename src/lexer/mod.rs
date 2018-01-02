@@ -1,5 +1,6 @@
 use regex::Regex;
-use parser::{ParsingResult, ParsingError};
+use errors::ParsingError;
+use parser::ParsingResult;
 use span::{Spanned, Span};
 
 mod token;

@@ -11,6 +11,7 @@ use std::path::Path;
 
 use clap::{Arg, App};
 
+mod errors;
 mod string_interner;
 mod span;
 mod lexer;
@@ -19,7 +20,6 @@ mod parser;
 mod ty;
 mod ir;
 mod interpreter;
-mod error_printer;
 
 use span::{Span, Spanned};
 

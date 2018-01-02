@@ -3,12 +3,13 @@ use ast;
 use ty;
 use string_interner::StringInterner;
 use span::{Span, Spanned};
+use errors::ParsingError;
 
-mod parsing_error;
 mod expression_parser;
 
-pub use self::parsing_error::{ParsingResult, ParsingError};
 use self::expression_parser::*;
+
+pub type ParsingResult<T> = Result<T, Spanned<ParsingError>>;
 
 pub struct Parser<'si, 'input> {
     pub lexer: Lexer<'input>,

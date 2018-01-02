@@ -3,30 +3,7 @@ use ty;
 use ir;
 use ir::symbol_table::{GlobalsTable, SymbolTable};
 use span::*;
-
-#[derive(Debug, Clone)]
-pub enum TranslationError {
-    FunctionAlreadyDefined(String),
-    ParameterAlreadyDefined(String),
-    LocalAlreadyDefined(String),
-    MismatchingTypes(ty::Type, ty::Type),
-    UndefinedLocal(String),
-    NonLValueAssign,
-    BinOpUndefined(ast::BinaryOperatorKind, ty::Type, ty::Type),
-    LazyOpUndefined(ast::LazyOperatorKind, ty::Type, ty::Type),
-    UnOpUndefined(ast::UnaryOperatorKind, ty::Type),
-    FunctionCallArity(usize, usize),
-    FunctionUndefined(String),
-    IncDecNonLValue,
-    BreakContinueOutOfLoop,
-    MainWrongType,
-    NoMain,
-    NotAllPathsReturn,
-    SubscriptNotArray(ty::Type),
-    LengthOnNonArray(ty::Type),
-    MemberUndefined,
-    NoDefaultValue
-}
+use errors::TranslationError;
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
 
