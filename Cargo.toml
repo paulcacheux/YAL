@@ -3,6 +3,15 @@ name = "javalette"
 version = "0.1.0"
 authors = ["Paul CACHEUX <paulcacheux@gmail.com>"]
 
+[lib]
+name = "javalette"
+path = "src/lib.rs"
+
+[[bin]]
+name = "jlc"
+path = "src/driver.rs"
+
+
 [dependencies]
 lazy_static = "1.0.0"
 regex = "0.2.3"

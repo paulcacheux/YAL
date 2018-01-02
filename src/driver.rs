@@ -1,9 +1,5 @@
-#[macro_use]
-extern crate if_chain;
-#[macro_use]
-extern crate lazy_static;
-extern crate regex;
 extern crate clap;
+extern crate javalette;
 
 use std::fs::File;
 use std::io::{self, Read};
@@ -11,16 +7,7 @@ use std::path::Path;
 
 use clap::{Arg, App};
 
-mod errors;
-mod string_interner;
-mod span;
-mod lexer;
-mod ast;
-mod parser;
-mod ty;
-mod ir;
-mod interpreter;
-
+use javalette::*;
 use span::{Span, Spanned};
 
 fn slurp_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
