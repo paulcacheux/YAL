@@ -101,8 +101,11 @@ fn translate_function(
     let mut symbol_table = SymbolTable::new(globals);
     symbol_table.begin_scope();
 
-    for (param_ty, param_name) in function.parameters.clone() {
-        if symbol_table.register_local(param_name.clone(), param_ty) {
+    let mut parameters = Vec::with_capacity(function.parameters.len());
+    for (param_ty, param_name) in function.parameters {
+        if let Some(id) = symbol_table.register_local(param_name.clone(), param_ty.clone()) {
+            parameters.push((param_ty, id));
+        } else {
             return error!(TranslationError::ParameterAlreadyDefined(param_name), function.span);
         }
     }
@@ -122,7 +125,7 @@ fn translate_function(
     Ok(ir::Function {
         return_ty: function.return_ty,
         name: function.name,
-        parameters: function.parameters,
+        parameters,
         body,
         span: function.span
     })
@@ -221,25 +224,24 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                             );
                         }
 
-
                         ir::TypedExpression {
                             ty: ty.clone(),
                             expr: ir::Expression::DefaultValue,
                         }
                     };
 
-                    if self.symbol_table.register_local(name.clone(), ty.clone()) {
+                    if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
+                        self.statements.push(ir::Statement::VarDecl {
+                            ty: ty.clone(),
+                            id,
+                            value,
+                        });
+                    } else {
                         return error!(
                             TranslationError::LocalAlreadyDefined(name.clone()),
                             stmt_span
                         );
                     }
-
-                    self.statements.push(ir::Statement::VarDecl {
-                        ty: ty.clone(),
-                        name,
-                        value,
-                    });
                 }
             }
             ast::Statement::If(ast::IfStatement {
@@ -292,14 +294,19 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 }
 
                 self.symbol_table.begin_scope();
-                self.symbol_table.register_local(name.clone(), ty);
+                let id = if let Some(id) = self.symbol_table.register_local(name.clone(), ty) {
+                    id
+                } else {
+                    unreachable!()
+                };
+                
                 let old_in_loop = self.func_infos.in_loop;
                 self.func_infos.in_loop = true;
                 let body = self.translate_statement_as_block(*body)?;
                 self.func_infos.in_loop = old_in_loop;
                 self.symbol_table.end_scope();
 
-                self.statements.push(ir::Statement::For { name, array, body });
+                self.statements.push(ir::Statement::For { id, array, body });
             }
             ast::Statement::Return(maybe_expr) => {
                 let expr = if let Some(expr) = maybe_expr {
@@ -371,10 +378,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 })
             }
             ast::Expression::Identifier(id) => {
-                if let Some(ty) = self.symbol_table.lookup_local(&id).cloned() {
+                if let Some(ref symbol) = self.symbol_table.lookup_local(&id) {
                     Ok(ir::TypedExpression {
-                        ty: ty::Type::LValue(Box::new(ty)),
-                        expr: ir::Expression::Identifier(id),
+                        ty: ty::Type::LValue(Box::new(symbol.ty.clone())),
+                        expr: ir::Expression::Identifier(symbol.id),
                     })
                 } else {
                     error!(TranslationError::UndefinedLocal(id), expr_span)

@@ -99,8 +99,8 @@ impl<'p> Interpreter<'p> {
 
     fn interpret_function(&mut self, function: &ir::Function, args: &[Value]) -> InterpreterResult<Value> {
         self.memory.begin_scope();
-        for (index, &(_, ref param)) in function.parameters.iter().enumerate() {
-            self.memory.set_new(param.clone(), args[index]);
+        for (index, &(_, param_id)) in function.parameters.iter().enumerate() {
+            self.memory.set_new(param_id, args[index]);
         }
 
         if let StatementResult::Return(ret) = self.interpret_block(&function.body)? {
@@ -127,12 +127,12 @@ impl<'p> Interpreter<'p> {
         match *stmt {
             Statement::Block(ref b) => self.interpret_block(b),
             Statement::VarDecl {
-                ref name,
+                id,
                 ref value,
                 ..
             } => {
                 let value = self.interpret_expression(value)?;
-                self.memory.set_new(name.clone(), value);
+                self.memory.set_new(id, value);
                 Ok(StatementResult::Nothing)
             }
             Statement::If {
@@ -169,7 +169,7 @@ impl<'p> Interpreter<'p> {
                 }
                 Ok(StatementResult::Nothing)
             }
-            Statement::For { ref name, ref array, ref body } => {
+            Statement::For { id, ref array, ref body } => {
                 let array = self.interpret_expression(array)?;
                 let array_index = extract_pattern!(array; Value::Array(ArrayId(id)) => id);
                 let array = self.arrays[array_index].clone();
@@ -178,7 +178,7 @@ impl<'p> Interpreter<'p> {
                     let value_index = extract_pattern!(value; Value::LValue(id) => id);
                     let value = self.memory.value_from_index(value_index);
                     self.memory.begin_scope();
-                    self.memory.set_new(name.clone(), value);
+                    self.memory.set_new(id, value);
 
                     match self.interpret_block(body)? {
                         StatementResult::Nothing | StatementResult::Continue => {}
@@ -229,7 +229,7 @@ impl<'p> Interpreter<'p> {
                 ir::Literal::BooleanLiteral(b) => Value::Boolean(b),
                 ir::Literal::StringLiteral(s) => Value::String(s),
             }),
-            Expression::Identifier(ref id) => Ok(Value::LValue(self.memory.index_from_name(id))),
+            Expression::Identifier(id) => Ok(Value::LValue(self.memory.index_from_identifier(id))),
             Expression::Assign { ref lhs, ref rhs } => {
                 let lhs = self.interpret_expression(lhs)?;
                 let rhs = self.interpret_expression(rhs)?;
@@ -442,7 +442,7 @@ enum StatementResult {
 
 struct Memory {
     memory: Vec<Value>, // TODO we don't currently clean the memory
-    scopes: Vec<HashMap<String, usize>>,
+    scopes: Vec<HashMap<ir::IdentifierId, usize>>,
 }
 
 impl Memory {
@@ -467,18 +467,18 @@ impl Memory {
         index
     }
 
-    fn set_new(&mut self, name: String, value: Value) {
+    fn set_new(&mut self, id: ir::IdentifierId, value: Value) {
         let index = self.set_new_unnamed(value);
-        self.scopes.last_mut().unwrap().insert(name, index);
+        self.scopes.last_mut().unwrap().insert(id, index);
     }
 
     fn set_from_index(&mut self, index: usize, value: Value) {
         self.memory[index] = value;
     }
 
-    fn index_from_name(&self, name: &str) -> usize {
+    fn index_from_identifier(&self, id: ir::IdentifierId) -> usize {
         for scope in self.scopes.iter().rev() {
-            if let Some(&value) = scope.get(name) {
+            if let Some(&value) = scope.get(&id) {
                 return value;
             }
         }

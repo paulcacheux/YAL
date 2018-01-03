@@ -5,6 +5,9 @@ use span::Span;
 mod symbol_table;
 pub mod translator;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct IdentifierId(pub usize);
+
 #[derive(Debug, Clone)]
 pub struct Program {
     pub strings: StringInterner,
@@ -15,7 +18,7 @@ pub struct Program {
 pub struct Function {
     pub return_ty: Type,
     pub name: String,
-    pub parameters: Vec<(Type, String)>,
+    pub parameters: Vec<(Type, IdentifierId)>,
     pub body: BlockStatement,
     pub span: Span
 }
@@ -25,7 +28,7 @@ pub enum Statement {
     Block(BlockStatement),
     VarDecl {
         ty: Type,
-        name: String,
+        id: IdentifierId,
         value: TypedExpression,
     },
     If {
@@ -38,7 +41,7 @@ pub enum Statement {
         body: BlockStatement,
     },
     For {
-        name: String,
+        id: IdentifierId,
         array: TypedExpression,
         body: BlockStatement
     },
@@ -61,7 +64,7 @@ pub enum Expression {
     DefaultValue,
     LValueToRValue(Box<TypedExpression>),
     Literal(Literal),
-    Identifier(String),
+    Identifier(IdentifierId),
     Assign {
         lhs: Box<TypedExpression>,
         rhs: Box<TypedExpression>,
