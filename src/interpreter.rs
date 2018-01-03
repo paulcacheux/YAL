@@ -7,6 +7,7 @@ use span::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Value {
+    Null,
     Void,
     Int(i64),
     Double(f64),
@@ -127,12 +128,10 @@ impl<'p> Interpreter<'p> {
         match *stmt {
             Statement::Block(ref b) => self.interpret_block(b),
             Statement::VarDecl {
+                ref ty,
                 id,
-                ref value,
-                ..
             } => {
-                let value = self.interpret_expression(value)?;
-                self.memory.set_new(id, value);
+                self.memory.set_new(id, default_value(ty));
                 Ok(StatementResult::Nothing)
             }
             Statement::If {
@@ -428,7 +427,7 @@ fn default_value(ty: &ty::Type) -> Value {
         ty::Type::Double => Value::Double(0.0),
         ty::Type::Boolean => Value::Boolean(false),
         ty::Type::Void => Value::Void,
-        _ => unreachable!(), // string doesn't have a default value
+        _ => Value::Null,
     }
 }
 

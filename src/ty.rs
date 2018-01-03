@@ -10,6 +10,15 @@ pub enum Type {
     Array(Box<Type>)
 }
 
+impl Type {
+    pub fn has_default_value(&self) -> bool {
+        match *self {
+            Type::Int | Type::Double | Type::Boolean => true,
+            _ => false
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionType {
     pub return_ty: Type,

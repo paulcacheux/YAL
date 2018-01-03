@@ -199,6 +199,53 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             other => translate_block_statement(self.symbol_table, ast::BlockStatement::from_vec(vec![Spanned::new(other, statement.span)]), self.func_infos),
         }
     }
+    
+    fn translate_var_decl(&mut self, ty: ty::Type, name: String, value: Option<Spanned<ast::Expression>>, error_span: Span) -> TranslationResult<()> {
+        // we must compute this first to avoid shadowing
+        let value_expr = if let Some(value) = value {
+            let value_span = value.span;
+            let expr = self.translate_expression(value)?;
+            let expr = lvalue_to_rvalue(expr);
+            check_eq_types(&expr.ty, &ty, value_span)?;
+            Some(expr)
+        } else {
+            None
+        };
+
+        let id = if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
+            self.statements.push(ir::Statement::VarDecl {
+                ty: ty.clone(),
+                id,
+            });
+            id
+        } else {
+            return error!(
+                TranslationError::LocalAlreadyDefined(name.clone()),
+                error_span
+            );
+        };
+
+        if let Some(rhs) = value_expr {
+            let lhs = ir::Expression::Identifier(id);
+            let lhs = ir::TypedExpression {
+                ty: ty::Type::LValue(Box::new(ty.clone())),
+                expr: lhs
+            };
+            
+            let assign_expr = ir::TypedExpression {
+                ty,
+                expr: ir::Expression::Assign {
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                }
+            };
+
+            self.statements.push(ir::Statement::Expression(assign_expr));
+        } else if !ty.has_default_value() {
+            return error!(TranslationError::NoDefaultValue, error_span);
+        }
+        Ok(())
+    }
 
     fn translate_statement(&mut self, statement: Spanned<ast::Statement>) -> TranslationResult<()> {
         let Spanned { inner: statement, span: stmt_span } = statement;
@@ -210,38 +257,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
             ast::Statement::VarDecl(ast::VarDeclarations { ty, declarations }) => {
                 for (name, value) in declarations {
-                    let value = if let Some(value) = value {
-                        let value_span = value.span;
-                        let expr = self.translate_expression(value)?;
-                        let expr = lvalue_to_rvalue(expr);
-                        check_eq_types(&expr.ty, &ty, value_span)?;
-                        expr
-                    } else {
-                        if ty != ty::Type::Int && ty != ty::Type::Boolean && ty != ty::Type::Double {
-                            return error!(
-                                TranslationError::NoDefaultValue,
-                                stmt_span
-                            );
-                        }
-
-                        ir::TypedExpression {
-                            ty: ty.clone(),
-                            expr: ir::Expression::DefaultValue,
-                        }
-                    };
-
-                    if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
-                        self.statements.push(ir::Statement::VarDecl {
-                            ty: ty.clone(),
-                            id,
-                            value,
-                        });
-                    } else {
-                        return error!(
-                            TranslationError::LocalAlreadyDefined(name.clone()),
-                            stmt_span
-                        );
-                    }
+                    self.translate_var_decl(ty.clone(), name, value, stmt_span)?;
                 }
             }
             ast::Statement::If(ast::IfStatement {

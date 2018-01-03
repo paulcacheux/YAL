@@ -29,7 +29,6 @@ pub enum Statement {
     VarDecl {
         ty: Type,
         id: IdentifierId,
-        value: TypedExpression,
     },
     If {
         condition: TypedExpression,
