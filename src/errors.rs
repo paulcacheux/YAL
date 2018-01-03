@@ -6,6 +6,7 @@ use ast;
 
 #[derive(Debug, Clone)]
 pub enum LexingError {
+    UnparsableNumber,
     ReservedIdentifier(String),
     UnknownChar(char),
 }
@@ -60,6 +61,7 @@ impl From<Spanned<LexingError>> for Spanned<ParsingError> {
 impl fmt::Display for LexingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            LexingError::UnparsableNumber => write!(f, "Can't parse this number"),
             LexingError::ReservedIdentifier(ref id) => write!(f, "'{}' is a reserved identifier", id),
             LexingError::UnknownChar(c) => write!(f, "Unknown char  '{}'", c),
         }

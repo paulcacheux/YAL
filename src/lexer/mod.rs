@@ -174,12 +174,28 @@ impl<'input> Lexer<'input> {
         }
         if let Some(s) = self.match_regex(&DOUBLE_REGEX) {
             let len = s.len();
-            let token = Token::DoubleLiteral(s.parse().unwrap());
+            let number = if let Ok(n) = s.parse() {
+                n
+            } else {
+                return Err(Spanned::new(
+                    LexingError::UnparsableNumber,
+                    Span::new_with_len(start_pos, len)
+                ));
+            };
+            let token = Token::DoubleLiteral(number);
             return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
         }
         if let Some(s) = self.match_regex(&INTEGER_REGEX) {
             let len = s.len();
-            let token = Token::IntegerLiteral(s.parse().unwrap());
+            let number = if let Ok(n) = s.parse() {
+                n
+            } else {
+                return Err(Spanned::new(
+                    LexingError::UnparsableNumber,
+                    Span::new_with_len(start_pos, len)
+                ));
+            };
+            let token = Token::IntegerLiteral(number);
             return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
         }
         if let Some(s) = self.match_regex(&STRING_REGEX) {
