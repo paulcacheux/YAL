@@ -1,5 +1,5 @@
 use ty::*;
-use string_interner::StringId;
+use string_interner::{StringId, StringInterner};
 use span::Span;
 
 mod symbol_table;
@@ -7,6 +7,7 @@ pub mod translator;
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    pub strings: StringInterner,
     pub declarations: Vec<Function>,
 }
 

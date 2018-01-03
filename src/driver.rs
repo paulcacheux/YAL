@@ -67,15 +67,10 @@ fn main() {
     let path = matches.value_of("INPUT").unwrap();
     let input = slurp_file(&path).unwrap();
 
-    let mut string_interner = string_interner::StringInterner::new();
-
     let lexer = lexer::Lexer::new(&input);
-    let program = {
-        let mut parser = parser::Parser::new(lexer, &mut string_interner);
-        continue_or_exit(&path, &input, parser.parse_program())
-    };
+    let program = continue_or_exit(&path, &input, parser::parse_program(lexer));
     // println!("{:#?}", program);
     let ir_prog = continue_or_exit(&path, &input, ir::translator::translate_program(program));
     // println!("{:#?}", ir_prog);
-    interpreter::interpret_program(&ir_prog, &string_interner).expect("Interpreter error");
+    interpreter::interpret_program(&ir_prog).expect("Interpreter error");
 }

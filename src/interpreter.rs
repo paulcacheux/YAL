@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ir;
 use ty;
-use string_interner::{StringId, StringInterner};
+use string_interner::StringId;
 use span::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,8 +23,8 @@ pub enum InterpreterError {
 
 pub type InterpreterResult<T> = Result<T, InterpreterError>;
 
-pub fn interpret_program(program: &ir::Program, strings: &StringInterner) -> InterpreterResult<()> {
-    let mut interpreter = Interpreter::new(program, strings);
+pub fn interpret_program(program: &ir::Program) -> InterpreterResult<()> {
+    let mut interpreter = Interpreter::new(program);
 
     // TODO maybe return int
     interpreter.interpret_function_by_name("main", &[]).map(|_| ())
@@ -33,10 +33,9 @@ pub fn interpret_program(program: &ir::Program, strings: &StringInterner) -> Int
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ArrayId(usize);
 
-struct Interpreter<'p, 'si> {
+struct Interpreter<'p> {
     program: &'p ir::Program,
     memory: Memory,
-    strings: &'si StringInterner,
     arrays: Vec<Vec<Value>>,
 }
 
@@ -65,12 +64,11 @@ macro_rules! extract_pattern {
     }
 }
 
-impl<'p, 'si> Interpreter<'p, 'si> {
-    fn new(program: &'p ir::Program, strings: &'si StringInterner) -> Self {
+impl<'p> Interpreter<'p> {
+    fn new(program: &'p ir::Program) -> Self {
         Interpreter {
             program,
             memory: Memory::new(),
-            strings,
             arrays: Vec::new()
         }
     }
@@ -510,7 +508,7 @@ mod builtins {
 
     pub(super) fn print_string(interpreter: &Interpreter, args: &[Value]) -> Value {
         let sid = extract_pattern!(args[0]; Value::String(sid) => sid);
-        println!("{}", interpreter.strings.get_str(sid));
+        println!("{}", interpreter.program.strings.get_str(sid));
         Value::Void
     }
 

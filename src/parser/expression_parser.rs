@@ -130,7 +130,7 @@ fn apply(
     }
 }
 
-pub fn parse_expression_inner<'si, 'input>(
+pub(super) fn parse_expression_inner<'si, 'input>(
     parser: &mut Parser<'si, 'input>,
     lhs: Spanned<ast::Expression>,
     min_prec: usize,

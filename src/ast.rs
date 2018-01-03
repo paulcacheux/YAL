@@ -1,9 +1,10 @@
 use ty::*;
-use string_interner::StringId;
+use string_interner::{StringId, StringInterner};
 use span::{Span, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    pub strings: StringInterner,
     pub declarations: Vec<Declaration>,
 }
 
