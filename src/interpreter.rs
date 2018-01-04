@@ -196,8 +196,12 @@ impl<'p> Interpreter<'p> {
                 Ok(StatementResult::Nothing)
             }
             Statement::Return(ref expr) => {
-                let expr = self.interpret_expression(expr)?;
-                Ok(StatementResult::Return(expr))
+                if let Some(ref expr) = *expr {
+                    let expr = self.interpret_expression(expr)?;
+                    Ok(StatementResult::Return(expr))
+                } else {
+                    Ok(StatementResult::Return(Value::Void))
+                }
             }
             Statement::Expression(ref expr) => {
                 self.interpret_expression(expr)?;
@@ -211,12 +215,9 @@ impl<'p> Interpreter<'p> {
     fn interpret_expression(&mut self, expr: &ir::TypedExpression) -> InterpreterResult<Value> {
         use ir::Expression;
 
-        let ir::TypedExpression { ref ty, ref expr } = *expr;
+        let ir::TypedExpression { ref expr, .. } = *expr;
 
         match *expr {
-            Expression::DefaultValue => {
-                Ok(default_value(ty))
-            }
             Expression::LValueToRValue(ref sub) => {
                 let sub = self.interpret_expression(sub)?;
                 let index = extract_pattern!(sub; Value::LValue(v) => v);

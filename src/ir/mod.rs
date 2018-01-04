@@ -39,12 +39,12 @@ pub enum Statement {
         condition: TypedExpression,
         body: BlockStatement,
     },
-    For {
+    For { // TODO lower this to while
         id: IdentifierId,
         array: TypedExpression,
         body: BlockStatement
     },
-    Return(TypedExpression),
+    Return(Option<TypedExpression>), // None for void
     Expression(TypedExpression),
     Break,
     Continue,
@@ -60,7 +60,6 @@ pub struct TypedExpression {
 
 #[derive(Debug, Clone)]
 pub enum Expression {
-    DefaultValue,
     LValueToRValue(Box<TypedExpression>),
     Literal(Literal),
     Identifier(IdentifierId),

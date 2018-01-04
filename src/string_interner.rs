@@ -27,6 +27,10 @@ impl StringInterner {
         &self.strs[index][..]
     }
 
+    pub fn into_strings(self) -> Vec<String> {
+        self.strs
+    }
+
     /*pub fn get_string(&self, StringId(index): StringId) -> String {
         self.strs[index].clone()
     }*/

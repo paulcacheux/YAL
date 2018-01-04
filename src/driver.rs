@@ -63,7 +63,6 @@ fn main() {
             .index(1))
         .get_matches();
 
-
     let path = matches.value_of("INPUT").unwrap();
     let input = slurp_file(&path).unwrap();
 
@@ -72,5 +71,10 @@ fn main() {
     // println!("{:#?}", program);
     let ir_prog = continue_or_exit(&path, &input, ir::translator::translate_program(program));
     // println!("{:#?}", ir_prog);
-    interpreter::interpret_program(&ir_prog).expect("Interpreter error");
+    // interpreter::interpret_program(&ir_prog).expect("Interpreter error");
+
+    let llvm_exec = llvm_backend::llvm_gen_program(ir_prog).unwrap();
+    llvm_exec.verify_module();
+    // llvm_exec.print_module();
+    llvm_exec.call_main();
 }

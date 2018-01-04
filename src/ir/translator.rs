@@ -113,10 +113,14 @@ fn translate_function(
     symbol_table.begin_scope();
 
     let mut func_infos = FunctionInfos::new(function.return_ty.clone());
-    let body = translate_block_statement(&mut symbol_table, function.body, &mut func_infos)?;
+    let mut body = translate_block_statement(&mut symbol_table, function.body, &mut func_infos)?;
 
-    if function.return_ty != ty::Type::Void && !check_return_paths(&body) {
-        return error!(TranslationError::NotAllPathsReturn, function.span);
+    if !check_return_paths(&body) {
+        if function.return_ty != ir::Type::Void {
+            return error!(TranslationError::NotAllPathsReturn, function.span);
+        } else {
+            body.push(ir::Statement::Return(None)); // we add a return void
+        }
     }
 
     symbol_table.end_scope();
@@ -208,6 +212,17 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             let expr = lvalue_to_rvalue(expr);
             check_eq_types(&expr.ty, &ty, value_span)?;
             Some(expr)
+        } else if ty.has_default_value() {
+            let lit = match ty {
+                ty::Type::Int => ir::Literal::IntLiteral(0),
+                ty::Type::Double => ir::Literal::DoubleLiteral(0.0),
+                ty::Type::Boolean => ir::Literal::BooleanLiteral(false),
+                _ => unreachable!()
+            };
+            Some(ir::TypedExpression {
+                ty: ty.clone(),
+                expr: ir::Expression::Literal(lit)
+            })
         } else {
             None
         };
@@ -331,14 +346,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     let expr = lvalue_to_rvalue(expr);
                     check_eq_types(&expr.ty, &self.func_infos.ret_ty, expr_span)?;
 
-                    expr
+                    Some(expr)
                 } else {
                     check_eq_types(&ty::Type::Void, &self.func_infos.ret_ty, stmt_span)?;
-
-                    ir::TypedExpression {
-                        ty: ty::Type::Void,
-                        expr: ir::Expression::DefaultValue,
-                    }
+                    None
                 };
 
                 self.statements.push(ir::Statement::Return(expr));
