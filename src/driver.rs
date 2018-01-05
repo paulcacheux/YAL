@@ -74,7 +74,7 @@ fn main() {
     // interpreter::interpret_program(&ir_prog).expect("Interpreter error");
 
     let llvm_exec = llvm_backend::llvm_gen_program(ir_prog).unwrap();
-    llvm_exec.verify_module();
     // llvm_exec.print_module();
+    llvm_exec.verify_module();
     llvm_exec.call_main();
 }

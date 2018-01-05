@@ -157,7 +157,11 @@ impl LLVMBackend {
             self.gen_parameter(ty, id, func_ref, index);
         }
 
-        self.gen_block_statement(function.body);
+        if !self.gen_block_statement(function.body) {
+            unsafe {
+                LLVMBuildUnreachable(self.builder);
+            }
+        }
     }
 
     fn gen_parameter(&mut self, ty: ty::Type, id: ir::IdentifierId, func: LLVMValueRef, index: usize) {
@@ -306,6 +310,7 @@ impl LLVMBackend {
             ir::Expression::Identifier(id) => self.gen_identifier(id),
             ir::Expression::Assign { lhs, rhs } => self.gen_assign(*lhs, *rhs),
             ir::Expression::BinaryOperator { binop, lhs, rhs } => self.gen_binop(binop, *lhs, *rhs),
+            ir::Expression::LazyOperator { lazyop, lhs, rhs } => self.gen_lazyop(lazyop, *lhs, *rhs),
             ir::Expression::UnaryOperator { unop, sub } => self.gen_unop(unop, *sub),
             ir::Expression::Increment(sub) => self.gen_incdecrement(*sub, true),
             ir::Expression::Decrement(sub) => self.gen_incdecrement(*sub, false),
@@ -406,6 +411,45 @@ impl LLVMBackend {
                 bok::IntGreaterEqual => LLVMBuildICmp(b, LLVMIntSGE, lhs, rhs, name),
                 bok::DoubleGreaterEqual => LLVMBuildFCmp(b, LLVMRealUGE, lhs, rhs, name),
             }
+        }
+    }
+
+    fn gen_lazyop(&mut self, lazyop: ir::LazyOperatorKind, lhs: ir::TypedExpression, rhs: ir::TypedExpression) -> LLVMValueRef {
+        let lhs = self.gen_expression(lhs);
+        let bool_ty = self.gen_type(&ty::Type::Boolean);
+        unsafe {
+            let (condition, then_value) = match lazyop {
+                ir::LazyOperatorKind::BooleanLogicalAnd => {
+                    let condition = LLVMBuildNot(self.builder, lhs, c_str(b"\0"));
+                    let then_value = LLVMConstInt(bool_ty, 0, 0);
+                    (condition, then_value)
+                },
+                ir::LazyOperatorKind::BooleanLogicalOr => {
+                    let then_value = LLVMConstInt(bool_ty, 1, 1);
+                    (lhs, then_value)
+                }
+            };
+
+            let then_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"then\0"));
+            let else_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"else\0"));
+            let end_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"end\0"));
+
+            LLVMBuildCondBr(self.builder, condition, then_bb, else_bb);
+
+            LLVMPositionBuilderAtEnd(self.builder, then_bb);
+            LLVMBuildBr(self.builder, end_bb);
+            LLVMPositionBuilderAtEnd(self.builder, else_bb);
+            let else_value = self.gen_expression(rhs);
+            let else_out_bb = LLVMGetInsertBlock(self.builder);
+            LLVMBuildBr(self.builder, end_bb);
+
+            let mut values = [then_value, else_value];
+            let mut bbs = [then_bb, else_out_bb];
+
+            LLVMPositionBuilderAtEnd(self.builder, end_bb);
+            let phi = LLVMBuildPhi(self.builder, bool_ty, c_str(b"\0"));
+            LLVMAddIncoming(phi, values.as_mut_ptr(), bbs.as_mut_ptr(), 2);
+            phi
         }
     }
 
