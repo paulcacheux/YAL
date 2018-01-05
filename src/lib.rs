@@ -14,5 +14,5 @@ pub mod ast;
 pub mod parser;
 pub mod ty;
 pub mod ir;
-pub mod interpreter;
-pub mod llvm_backend;
+pub mod ir_translator;
+pub mod backend;

@@ -91,7 +91,7 @@ impl LLVMBackend {
     }
 
     fn load_runtime(&mut self) {
-        let mut bytes: Vec<_> = include_bytes!("../runtime/runtime.ll").as_ref().into();
+        let mut bytes: Vec<_> = include_bytes!("../../runtime/runtime.ll").as_ref().into();
         bytes.push(0);
 
         unsafe {

@@ -2,9 +2,6 @@ use ty::*;
 use string_interner::{StringId, StringInterner};
 use span::Span;
 
-mod symbol_table;
-pub mod translator;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IdentifierId(pub usize);
 

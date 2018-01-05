@@ -1,9 +1,11 @@
 use ast;
 use ty;
 use ir;
-use ir::symbol_table::{GlobalsTable, SymbolTable};
 use span::*;
 use errors::TranslationError;
+
+mod symbol_table;
+use self::symbol_table::{GlobalsTable, SymbolTable};
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
 
@@ -116,7 +118,7 @@ fn translate_function(
     let mut body = translate_block_statement(&mut symbol_table, function.body, &mut func_infos)?;
 
     if !check_return_paths(&body) {
-        if function.return_ty != ir::Type::Void {
+        if function.return_ty != ty::Type::Void {
             return error!(TranslationError::NotAllPathsReturn, function.span);
         } else {
             body.push(ir::Statement::Return(None)); // we add a return void

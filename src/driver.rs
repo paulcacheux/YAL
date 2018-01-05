@@ -91,12 +91,12 @@ fn main() {
     let lexer = lexer::Lexer::new(&input);
     let program = continue_or_exit(&path, &input, parser::parse_program(lexer));
     // println!("{:#?}", program);
-    let ir_prog = continue_or_exit(&path, &input, ir::translator::translate_program(program));
+    let ir_prog = continue_or_exit(&path, &input, ir_translator::translate_program(program));
     // println!("{:#?}", ir_prog);
     
     match backend {
         Backend::LLVM => {
-            let mut llvm_exec = llvm_backend::llvm_gen_program(ir_prog).unwrap();
+            let mut llvm_exec = backend::llvm::llvm_gen_program(ir_prog).unwrap();
             // llvm_exec.print_module();
             llvm_exec.verify_module();
             if opt {
@@ -105,7 +105,7 @@ fn main() {
             llvm_exec.call_main();
         },
         Backend::Interpreter => {
-            interpreter::interpret_program(&ir_prog).expect("Interpreter error");
+            backend::interpreter::interpret_program(&ir_prog).expect("Interpreter error");
         }
     }
 }
