@@ -579,6 +579,19 @@ impl LLVMExecutionModule {
         }
     }
 
+    pub fn optimize(&mut self) {
+        unsafe {
+            let pass = LLVMCreatePassManager();
+            llvm::transforms::scalar::LLVMAddConstantPropagationPass(pass);
+            llvm::transforms::scalar::LLVMAddInstructionCombiningPass(pass);
+            llvm::transforms::scalar::LLVMAddPromoteMemoryToRegisterPass(pass);
+            llvm::transforms::scalar::LLVMAddGVNPass(pass);
+            llvm::transforms::scalar::LLVMAddCFGSimplificationPass(pass);
+            LLVMRunPassManager(pass, self.backend.module);
+            LLVMDisposePassManager(pass);
+        }
+    }
+
     pub fn call_main(&self) {
         unsafe {
             llvm::execution_engine::LLVMRunFunction(

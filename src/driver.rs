@@ -53,6 +53,12 @@ fn continue_or_exit<T, E: std::fmt::Display>(path: &str, input: &str, res: Resul
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Backend {
+    LLVM,
+    Interpreter
+}
+
 fn main() {
     let matches = App::new("Javalette interpreter")
         .version("0.1")
@@ -61,9 +67,25 @@ fn main() {
             .help("Sets the input file.")
             .required(true)
             .index(1))
+        .arg(Arg::with_name("OPT")
+             .help("Activate optimizations.")
+             .short("O")
+             .long("opt"))
+        .arg(Arg::with_name("BACKEND")
+             .help("Choose backend. LLVM by default.")
+             .long("backend")
+             .takes_value(true)
+             .possible_values(&["LLVM", "interpreter"]))
         .get_matches();
 
     let path = matches.value_of("INPUT").unwrap();
+    let opt = matches.is_present("OPT");
+    let backend = match matches.value_of("BACKEND") {
+        Some("LLVM") => Backend::LLVM,
+        Some("interpreter") => Backend::Interpreter,
+        _ => Backend::LLVM
+    };
+
     let input = slurp_file(&path).unwrap();
 
     let lexer = lexer::Lexer::new(&input);
@@ -71,10 +93,19 @@ fn main() {
     // println!("{:#?}", program);
     let ir_prog = continue_or_exit(&path, &input, ir::translator::translate_program(program));
     // println!("{:#?}", ir_prog);
-    // interpreter::interpret_program(&ir_prog).expect("Interpreter error");
-
-    let llvm_exec = llvm_backend::llvm_gen_program(ir_prog).unwrap();
-    // llvm_exec.print_module();
-    llvm_exec.verify_module();
-    llvm_exec.call_main();
+    
+    match backend {
+        Backend::LLVM => {
+            let mut llvm_exec = llvm_backend::llvm_gen_program(ir_prog).unwrap();
+            // llvm_exec.print_module();
+            llvm_exec.verify_module();
+            if opt {
+                llvm_exec.optimize();
+            }
+            llvm_exec.call_main();
+        },
+        Backend::Interpreter => {
+            interpreter::interpret_program(&ir_prog).expect("Interpreter error");
+        }
+    }
 }
