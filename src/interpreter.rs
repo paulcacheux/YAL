@@ -174,10 +174,8 @@ impl<'p> Interpreter<'p> {
                 let array = self.arrays[array_index].clone();
 
                 for value in array {
-                    let value_index = extract_pattern!(value; Value::LValue(id) => id);
-                    let value = self.memory.value_from_index(value_index);
                     self.memory.begin_scope();
-                    self.memory.set_new(id, value);
+                    self.memory.set_direct(id, value);
 
                     match self.interpret_block(body)? {
                         StatementResult::Nothing | StatementResult::Continue => {}
@@ -220,8 +218,7 @@ impl<'p> Interpreter<'p> {
         match *expr {
             Expression::LValueToRValue(ref sub) => {
                 let sub = self.interpret_expression(sub)?;
-                let index = extract_pattern!(sub; Value::LValue(v) => v);
-                Ok(self.memory.value_from_index(index))
+                Ok(self.memory.value_from_lvalue(sub))
             }
             Expression::Literal(lit) => Ok(match lit {
                 ir::Literal::IntLiteral(i) => Value::Int(i),
@@ -229,12 +226,11 @@ impl<'p> Interpreter<'p> {
                 ir::Literal::BooleanLiteral(b) => Value::Boolean(b),
                 ir::Literal::StringLiteral(s) => Value::String(s),
             }),
-            Expression::Identifier(id) => Ok(Value::LValue(self.memory.index_from_identifier(id))),
+            Expression::Identifier(id) => Ok(self.memory.index_from_identifier(id)),
             Expression::Assign { ref lhs, ref rhs } => {
                 let lhs = self.interpret_expression(lhs)?;
                 let rhs = self.interpret_expression(rhs)?;
-                let index = extract_pattern!(lhs; Value::LValue(v) => v);
-                self.memory.set_from_index(index, rhs);
+                self.memory.set_from_lvalue(lhs, rhs);
                 Ok(rhs)
             }
             Expression::BinaryOperator {
@@ -358,18 +354,16 @@ impl<'p> Interpreter<'p> {
             }
             Expression::Increment(ref sub) => {
                 let sub = self.interpret_expression(sub)?;
-                let index = extract_pattern!(sub; Value::LValue(i) => i);
-                let value = self.memory.value_from_index(index);
+                let value = self.memory.value_from_lvalue(sub);
                 let value = extract_pattern!(value; Value::Int(i) => Value::Int(i + 1));
-                self.memory.set_from_index(index, value);
+                self.memory.set_from_lvalue(sub, value);
                 Ok(sub)
             }
             Expression::Decrement(ref sub) => {
                 let sub = self.interpret_expression(sub)?;
-                let index = extract_pattern!(sub; Value::LValue(i) => i);
-                let value = self.memory.value_from_index(index);
+                let value = self.memory.value_from_lvalue(sub);
                 let value = extract_pattern!(value; Value::Int(i) => Value::Int(i - 1));
-                self.memory.set_from_index(index, value);
+                self.memory.set_from_lvalue(sub, value);
                 Ok(sub)
             }
             Expression::Subscript { ref array, ref index } => {
@@ -412,7 +406,7 @@ impl<'p> Interpreter<'p> {
             let mut values = Vec::with_capacity(size);
             for _ in 0..size {
                 let expr = self.create_array(base_ty, &sizes[1..]);
-                values.push(Value::LValue(self.memory.set_new_unnamed(expr)));
+                values.push(self.memory.set_new_unnamed(expr));
             }
             let id = self.new_array(values);
             Value::Array(id)
@@ -442,7 +436,7 @@ enum StatementResult {
 
 struct Memory {
     memory: Vec<Value>, // TODO we don't currently clean the memory
-    scopes: Vec<HashMap<ir::IdentifierId, usize>>,
+    scopes: Vec<HashMap<ir::IdentifierId, Value>>,
 }
 
 impl Memory {
@@ -461,22 +455,27 @@ impl Memory {
         self.scopes.pop();
     }
 
-    fn set_new_unnamed(&mut self, value: Value) -> usize {
+    fn set_new_unnamed(&mut self, value: Value) -> Value {
         let index = self.memory.len();
         self.memory.push(value);
-        index
+        Value::LValue(index)
     }
 
     fn set_new(&mut self, id: ir::IdentifierId, value: Value) {
-        let index = self.set_new_unnamed(value);
-        self.scopes.last_mut().unwrap().insert(id, index);
+        let lvalue = self.set_new_unnamed(value);
+        self.scopes.last_mut().unwrap().insert(id, lvalue);
     }
 
-    fn set_from_index(&mut self, index: usize, value: Value) {
+    fn set_from_lvalue(&mut self, lvalue: Value, value: Value) {
+        let index = extract_pattern!(lvalue; Value::LValue(index) => index);
         self.memory[index] = value;
     }
 
-    fn index_from_identifier(&self, id: ir::IdentifierId) -> usize {
+    fn set_direct(&mut self, id: ir::IdentifierId, lvalue: Value) {
+        self.scopes.last_mut().unwrap().insert(id, lvalue);
+    }
+
+    fn index_from_identifier(&self, id: ir::IdentifierId) -> Value {
         for scope in self.scopes.iter().rev() {
             if let Some(&value) = scope.get(&id) {
                 return value;
@@ -485,7 +484,8 @@ impl Memory {
         unreachable!()
     }
 
-    fn value_from_index(&self, index: usize) -> Value {
+    fn value_from_lvalue(&self, lvalue: Value) -> Value {
+        let index = extract_pattern!(lvalue; Value::LValue(index) => index);
         self.memory[index]
     }
 }

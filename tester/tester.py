@@ -2,12 +2,12 @@ import sys
 import os
 import subprocess
 
-print(sys.argv)
+exec_opt = ["-O", "--backend=interpreter"]
 exec_path = sys.argv[1]
 testsuite_path = sys.argv[2] if len(sys.argv) > 2 else os.getcwd()
 
 def run_exec(path, input=None):
-    return subprocess.run([exec_path, path], input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    return subprocess.run([exec_path, path] + exec_opt, input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
 
 def handle_suite(path, run_test):
     names = set(os.path.splitext(f)[0] for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)))
