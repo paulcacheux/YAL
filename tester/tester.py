@@ -2,7 +2,7 @@ import sys
 import os
 import subprocess
 
-exec_opt = ["-O", "--backend=interpreter"]
+exec_opt = ["-O", "--backend=LLVM"]
 exec_path = sys.argv[1]
 testsuite_path = sys.argv[2] if len(sys.argv) > 2 else os.getcwd()
 

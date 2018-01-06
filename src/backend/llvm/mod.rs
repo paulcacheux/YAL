@@ -1,5 +1,4 @@
 use std;
-use std::ops::Drop;
 use std::ffi::{CString, CStr};
 use std::collections::HashMap;
 use std::ptr;
@@ -14,8 +13,11 @@ use ir;
 use ty;
 use string_interner::{StringId, StringInterner};
 
+mod helper;
+use self::helper::*;
+
 pub fn llvm_gen_program(program: ir::Program) -> Result<LLVMExecutionModule, CString> {
-    let mut backend = LLVMBackend::new(program.strings);
+    let mut backend = Backend::new(program.strings);
 
     //self.register_builtins();
     backend.load_runtime();
@@ -31,11 +33,13 @@ pub fn llvm_gen_program(program: ir::Program) -> Result<LLVMExecutionModule, CSt
     backend.into_exec_module()
 }
 
+
+
 #[derive(Debug, Clone)]
-pub struct LLVMBackend {
-    context: LLVMContextRef,
+pub struct Backend {
+    context: Context,
     module: LLVMModuleRef,
-    builder: LLVMBuilderRef,
+    builder: IRBuilder,
     functions: HashMap<String, LLVMValueRef>,
     ids: HashMap<ir::IdentifierId, LLVMValueRef>,
     strings: StringInterner,
@@ -44,19 +48,15 @@ pub struct LLVMBackend {
     current_continue: LLVMBasicBlockRef,
 }
 
-fn c_str(b: &[u8]) -> *const libc::c_char {
-    b.as_ptr() as *const _
-}
 
-impl LLVMBackend {
-    pub fn new(strings: StringInterner) -> LLVMBackend {
-        let context = unsafe { LLVMContextCreate() };
-        let module = unsafe {
-            LLVMModuleCreateWithNameInContext(c_str(b"main\0"), context)
-        };
-        let builder = unsafe { LLVMCreateBuilder() };
 
-        LLVMBackend {
+impl Backend {
+    pub fn new(strings: StringInterner) -> Backend {
+        let context = Context::new();
+        let module = context.create_module(b"main\0");
+        let builder = IRBuilder::new_in_context(&context);
+
+        Backend {
             context,
             module,
             builder,
@@ -70,28 +70,23 @@ impl LLVMBackend {
     }
 
     fn gen_type(&self, ty: &ty::Type) -> LLVMTypeRef {
-        unsafe {
-            match *ty {
-                ty::Type::Void => LLVMVoidTypeInContext(self.context),
-                ty::Type::Int => LLVMInt32TypeInContext(self.context),
-                ty::Type::Double => LLVMDoubleTypeInContext(self.context),
-                ty::Type::Boolean => LLVMInt1TypeInContext(self.context),
-                ty::Type::String => {
-                    LLVMPointerType(LLVMInt8TypeInContext(self.context), 0)
-                },
-                ty::Type::LValue(ref sub) => {
-                    LLVMPointerType(self.gen_type(sub), 0)
-                },
-                ty::Type::Array(ref sub) => {
-                    LLVMPointerType(self.gen_type(sub), 0)
-                },
-                _ => unimplemented!()
-            }
+        match *ty {
+            ty::Type::Void => self.context.void_ty(),
+            ty::Type::Int => self.context.i32_ty(),
+            ty::Type::Double => self.context.double_ty(),
+            ty::Type::Boolean => self.context.i1_ty(),
+            ty::Type::String => {
+                Context::pointer_ty(self.context.i8_ty())
+            },
+            ty::Type::LValue(ref sub) => {
+                Context::pointer_ty(self.gen_type(sub))
+            },
+            _ => unimplemented!()
         }
     }
 
     fn load_runtime(&mut self) {
-        let mut bytes: Vec<_> = include_bytes!("../../runtime/runtime.ll").as_ref().into();
+        let mut bytes: Vec<_> = include_bytes!("./runtime.ll").as_ref().into();
         bytes.push(0);
 
         unsafe {
@@ -99,7 +94,7 @@ impl LLVMBackend {
             let mut runtime_module = ptr::null_mut();
             let mut err_msg = ptr::null_mut();
 
-            let result = llvm::ir_reader::LLVMParseIRInContext(self.context, buf, &mut runtime_module, &mut err_msg);
+            let result = llvm::ir_reader::LLVMParseIRInContext(self.context.context, buf, &mut runtime_module, &mut err_msg);
 
             if result != 0 {
                 panic!("{}", CStr::from_ptr(err_msg).to_string_lossy().into_owned())
@@ -144,11 +139,11 @@ impl LLVMBackend {
         let func_ref = *self.functions.get(&function.name).unwrap();
         unsafe {
             let entry_bb = LLVMAppendBasicBlockInContext(
-                self.context,
+                self.context.context,
                 func_ref,
                 c_str(b"entry\0")
             );
-            LLVMPositionBuilderAtEnd(self.builder, entry_bb);
+            self.builder.position_at_end(entry_bb);
         }
 
         self.current_func = func_ref;
@@ -158,18 +153,16 @@ impl LLVMBackend {
         }
 
         if !self.gen_block_statement(function.body) {
-            unsafe {
-                LLVMBuildUnreachable(self.builder);
-            }
+            self.builder.build_unreachable();
         }
     }
 
     fn gen_parameter(&mut self, ty: ty::Type, id: ir::IdentifierId, func: LLVMValueRef, index: usize) {
         let llvm_ty = self.gen_type(&ty);
         let ptr = unsafe {
-            let ptr = LLVMBuildAlloca(self.builder, llvm_ty, c_str(b"\0"));
+            let ptr = self.builder.build_alloca(llvm_ty, b"\0");
             let arg_value = LLVMGetParam(func, index as _);
-            LLVMBuildStore(self.builder, arg_value, ptr);
+            self.builder.build_store(arg_value, ptr);
             ptr
         };
 
@@ -200,9 +193,7 @@ impl LLVMBackend {
 
     fn gen_vardecl_statement(&mut self, ty: ty::Type, id: ir::IdentifierId) -> bool {
         let llvm_ty = self.gen_type(&ty);
-        let ptr = unsafe {
-            LLVMBuildAlloca(self.builder, llvm_ty, c_str(b"\0"))
-        };
+        let ptr = self.builder.build_alloca(llvm_ty, b"\0");
 
         self.ids.insert(id, ptr);
         false
@@ -211,24 +202,24 @@ impl LLVMBackend {
     fn gen_if(&mut self, cond: ir::TypedExpression, body: ir::BlockStatement, else_clause: ir::BlockStatement) -> bool {
         let cond = self.gen_expression(cond);
         unsafe {
-            let then_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"then\0"));
-            let else_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"else\0"));
-            let end_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"end\0"));
+            let then_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"then\0"));
+            let else_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"else\0"));
+            let end_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"end\0"));
 
-            LLVMBuildCondBr(self.builder, cond, then_bb, else_bb);
+            self.builder.build_cond_br(cond, then_bb, else_bb);
 
             let mut then_res = true;
             let mut else_res = true;
 
-            LLVMPositionBuilderAtEnd(self.builder, then_bb);
+            self.builder.position_at_end(then_bb);
             if !self.gen_block_statement(body) {
-                LLVMBuildBr(self.builder, end_bb);
+                self.builder.build_br(end_bb);
                 then_res = false;
             }
             
-            LLVMPositionBuilderAtEnd(self.builder, else_bb);
+            self.builder.position_at_end(else_bb);
             if !self.gen_block_statement(else_clause) {
-                LLVMBuildBr(self.builder, end_bb);
+                self.builder.build_br(end_bb);
                 else_res = false;
             }
 
@@ -236,7 +227,7 @@ impl LLVMBackend {
             if res {
                 LLVMRemoveBasicBlockFromParent(end_bb);
             } else {
-                LLVMPositionBuilderAtEnd(self.builder, end_bb);
+                self.builder.position_at_end(end_bb);
             }
             res
         }
@@ -244,61 +235,52 @@ impl LLVMBackend {
 
     fn gen_while(&mut self, cond: ir::TypedExpression, body: ir::BlockStatement) -> bool {
         unsafe {
-            let loop_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"loop\0"));
-            let then_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"then\0"));
-            let end_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"end\0"));
+            let loop_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"loop\0"));
+            let then_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"then\0"));
+            let end_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"end\0"));
 
-            LLVMBuildBr(self.builder, loop_bb);
-            LLVMPositionBuilderAtEnd(self.builder, loop_bb);
+            self.builder.build_br(loop_bb);
+            self.builder.position_at_end(loop_bb);
             let cond = self.gen_expression(cond);
-            LLVMBuildCondBr(self.builder, cond, then_bb, end_bb);
+            self.builder.build_cond_br(cond, then_bb, end_bb);
 
             self.current_break = end_bb;
             self.current_continue = loop_bb;
 
-            LLVMPositionBuilderAtEnd(self.builder, then_bb);
+            self.builder.position_at_end(then_bb);
             if self.gen_block_statement(body) {
                 self.gen_next_bb();
             }
-            LLVMBuildBr(self.builder, loop_bb);
-            LLVMPositionBuilderAtEnd(self.builder, end_bb);
-            
+            self.builder.build_br(loop_bb);
+            self.builder.position_at_end(end_bb);
         }
         false
     }
 
     fn gen_next_bb(&mut self) {
         unsafe {
-            let bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"next"));
-            LLVMPositionBuilderAtEnd(self.builder, bb);
+            let bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"next"));
+            self.builder.position_at_end(bb);
         }
     }
     
     fn gen_return_statement(&mut self, expr: Option<ir::TypedExpression>) -> bool {
         if let Some(expr) = expr {
             let expr = self.gen_expression(expr);
-            unsafe {
-                LLVMBuildRet(self.builder, expr);
-            }
+            self.builder.build_ret(expr);
         } else {
-            unsafe {
-                LLVMBuildRetVoid(self.builder);
-            }
+            self.builder.build_ret_void();
         }
         true
     }
 
     fn gen_break_statement(&mut self) -> bool {
-        unsafe {
-            LLVMBuildBr(self.builder, self.current_break);
-        }
+        self.builder.build_br(self.current_break);
         true
     }
 
     fn gen_continue_statement(&mut self) -> bool {
-        unsafe {
-            LLVMBuildBr(self.builder, self.current_continue);
-        }
+        self.builder.build_br(self.current_continue);
         true
     }
 
@@ -321,9 +303,7 @@ impl LLVMBackend {
 
     fn gen_l2r_expr(&mut self, expr: ir::TypedExpression) -> LLVMValueRef {
         let expr = self.gen_expression(expr);
-        unsafe {
-            LLVMBuildLoad(self.builder, expr, c_str(b"\0"))
-        }
+        self.builder.build_load(expr, b"\0")
     }
 
     fn gen_literal(&mut self, literal: ir::Literal) -> LLVMValueRef {
@@ -350,14 +330,10 @@ impl LLVMBackend {
 
     fn gen_string_literal(&mut self, id: StringId) -> LLVMValueRef {
         let s = self.strings.get_str(id);
-        let cs = CString::new(s.to_string()).unwrap();
 
-        unsafe {
-            let gs = LLVMBuildGlobalStringPtr(self.builder, cs.as_ptr(), c_str(b"\0"));
-            let s_ty = self.gen_type(&ty::Type::String);
-            
-            LLVMBuildBitCast(self.builder, gs, s_ty, c_str(b"\0"))
-        }
+        let gs = self.builder.build_global_string_ptr(s.to_string(), b"\0");
+        let s_ty = self.gen_type(&ty::Type::String);
+        self.builder.build_bitcast(gs, s_ty, b"\0")
     }
 
     fn gen_identifier(&mut self, id: ir::IdentifierId) -> LLVMValueRef {
@@ -368,9 +344,7 @@ impl LLVMBackend {
         let lhs = self.gen_expression(lhs);
         let rhs = self.gen_expression(rhs);
         
-        unsafe {
-            LLVMBuildStore(self.builder, rhs, lhs);
-        }
+        self.builder.build_store(rhs, lhs);
 
         rhs
     }
@@ -379,39 +353,54 @@ impl LLVMBackend {
         let lhs = self.gen_expression(lhs);
         let rhs = self.gen_expression(rhs);
 
-        let name = c_str(b"\0");
-        let b = self.builder;
-
         use ir::BinaryOperatorKind as bok;
         use llvm::LLVMIntPredicate::*;
         use llvm::LLVMRealPredicate::*;
-        unsafe {
-            match binop {
-                bok::IntPlus => LLVMBuildAdd(b, lhs, rhs, name),
-                bok::DoublePlus => LLVMBuildFAdd(b, lhs, rhs, name),
-                bok::IntMinus => LLVMBuildSub(b, lhs, rhs, name),
-                bok::DoubleMinus => LLVMBuildFSub(b, lhs, rhs, name),
-                bok::IntMultiply => LLVMBuildMul(b, lhs, rhs, name),
-                bok::DoubleMultiply => LLVMBuildFMul(b, lhs, rhs, name),
-                bok::IntDivide => LLVMBuildSDiv(b, lhs, rhs, name),
-                bok::DoubleDivide => LLVMBuildFDiv(b, lhs, rhs, name),
-                bok::IntModulo => LLVMBuildSRem(b, lhs, rhs, name),
-                bok::IntEqual => LLVMBuildICmp(b, LLVMIntEQ, lhs, rhs, name),
-                bok::DoubleEqual => LLVMBuildFCmp(b, LLVMRealUEQ, lhs, rhs, name),
-                bok::BooleanEqual => LLVMBuildICmp(b, LLVMIntEQ, lhs, rhs, name),
-                bok::IntNotEqual => LLVMBuildICmp(b, LLVMIntNE, lhs, rhs, name),
-                bok::DoubleNotEqual => LLVMBuildFCmp(b, LLVMRealUNE, lhs, rhs, name),
-                bok::BooleanNotEqual => LLVMBuildICmp(b, LLVMIntNE, lhs, rhs, name),
-                bok::IntLess => LLVMBuildICmp(b, LLVMIntSLT, lhs, rhs, name),
-                bok::DoubleLess => LLVMBuildFCmp(b, LLVMRealULT, lhs, rhs, name),
-                bok::IntLessEqual => LLVMBuildICmp(b, LLVMIntSLE, lhs, rhs, name),
-                bok::DoubleLessEqual => LLVMBuildFCmp(b, LLVMRealULE, lhs, rhs, name),
-                bok::IntGreater => LLVMBuildICmp(b, LLVMIntSGT, lhs, rhs, name),
-                bok::DoubleGreater => LLVMBuildFCmp(b, LLVMRealUGT, lhs, rhs, name),
-                bok::IntGreaterEqual => LLVMBuildICmp(b, LLVMIntSGE, lhs, rhs, name),
-                bok::DoubleGreaterEqual => LLVMBuildFCmp(b, LLVMRealUGE, lhs, rhs, name),
-            }
+
+        macro_rules! cmp_builder {
+            (@inner $pred:expr, $func:ident) => {
+                {
+                    fn tmp(b: &IRBuilder, l: LLVMValueRef, r: LLVMValueRef, n: &[u8]) -> LLVMValueRef {
+                        b.$func($pred, l, r, n)
+                    }
+                    tmp
+                }
+            };
+            (@i $pred:expr) => {
+                cmp_builder!(@inner $pred, build_icmp)
+            };
+            (@f $pred:expr) => {
+                cmp_builder!(@inner $pred, build_fcmp)
+            };
         }
+
+        let func = match binop {
+            bok::IntPlus => IRBuilder::build_add,
+            bok::DoublePlus => IRBuilder::build_fadd,
+            bok::IntMinus => IRBuilder::build_sub,
+            bok::DoubleMinus => IRBuilder::build_fsub,
+            bok::IntMultiply => IRBuilder::build_mul,
+            bok::DoubleMultiply => IRBuilder::build_fmul,
+            bok::IntDivide => IRBuilder::build_sdiv,
+            bok::DoubleDivide => IRBuilder::build_fdiv,
+            bok::IntModulo => IRBuilder::build_srem,
+            bok::IntEqual => cmp_builder!(@i LLVMIntEQ),
+            bok::DoubleEqual => cmp_builder!(@f LLVMRealUEQ),
+            bok::BooleanEqual => cmp_builder!(@i LLVMIntEQ),
+            bok::IntNotEqual => cmp_builder!(@i LLVMIntNE),
+            bok::DoubleNotEqual => cmp_builder!(@f LLVMRealUNE),
+            bok::BooleanNotEqual => cmp_builder!(@i LLVMIntNE),
+            bok::IntLess => cmp_builder!(@i LLVMIntSLT),
+            bok::DoubleLess => cmp_builder!(@f LLVMRealULT),
+            bok::IntLessEqual => cmp_builder!(@i LLVMIntSLE),
+            bok::DoubleLessEqual => cmp_builder!(@f LLVMRealULE),
+            bok::IntGreater => cmp_builder!(@i LLVMIntSGT),
+            bok::DoubleGreater => cmp_builder!(@f LLVMRealUGT),
+            bok::IntGreaterEqual => cmp_builder!(@i LLVMIntSGE),
+            bok::DoubleGreaterEqual => cmp_builder!(@f LLVMRealUGE),
+        };
+
+        func(&self.builder, lhs, rhs, b"\0")
     }
 
     fn gen_lazyop(&mut self, lazyop: ir::LazyOperatorKind, lhs: ir::TypedExpression, rhs: ir::TypedExpression) -> LLVMValueRef {
@@ -420,7 +409,7 @@ impl LLVMBackend {
         unsafe {
             let (condition, then_value) = match lazyop {
                 ir::LazyOperatorKind::BooleanLogicalAnd => {
-                    let condition = LLVMBuildNot(self.builder, lhs, c_str(b"\0"));
+                    let condition = self.builder.build_not(lhs, b"\0");
                     let then_value = LLVMConstInt(bool_ty, 0, 0);
                     (condition, then_value)
                 },
@@ -430,24 +419,24 @@ impl LLVMBackend {
                 }
             };
 
-            let then_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"then\0"));
-            let else_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"else\0"));
-            let end_bb = LLVMAppendBasicBlockInContext(self.context, self.current_func, c_str(b"end\0"));
+            let then_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"then\0"));
+            let else_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"else\0"));
+            let end_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"end\0"));
 
-            LLVMBuildCondBr(self.builder, condition, then_bb, else_bb);
+            self.builder.build_cond_br(condition, then_bb, else_bb);
 
-            LLVMPositionBuilderAtEnd(self.builder, then_bb);
-            LLVMBuildBr(self.builder, end_bb);
-            LLVMPositionBuilderAtEnd(self.builder, else_bb);
+            self.builder.position_at_end(then_bb);
+            self.builder.build_br(end_bb);
+            self.builder.position_at_end(else_bb);
             let else_value = self.gen_expression(rhs);
-            let else_out_bb = LLVMGetInsertBlock(self.builder);
-            LLVMBuildBr(self.builder, end_bb);
+            let else_out_bb = self.builder.get_insert_block();
+            self.builder.build_br(end_bb);
 
             let mut values = [then_value, else_value];
             let mut bbs = [then_bb, else_out_bb];
 
-            LLVMPositionBuilderAtEnd(self.builder, end_bb);
-            let phi = LLVMBuildPhi(self.builder, bool_ty, c_str(b"\0"));
+            self.builder.position_at_end(end_bb);
+            let phi = self.builder.build_phi(bool_ty, b"\0");
             LLVMAddIncoming(phi, values.as_mut_ptr(), bbs.as_mut_ptr(), 2);
             phi
         }
@@ -455,20 +444,19 @@ impl LLVMBackend {
 
     fn gen_unop(&mut self, unop: ir::UnaryOperatorKind, sub: ir::TypedExpression) -> LLVMValueRef {
         let sub = self.gen_expression(sub);
-        let name = c_str(b"\0");
 
         unsafe {
             match unop {
                 ir::UnaryOperatorKind::IntMinus => {
                     let const0 = LLVMConstInt(self.gen_type(&ty::Type::Int), 0, 0);
-                    LLVMBuildSub(self.builder, const0, sub, name)
+                    self.builder.build_sub(const0, sub, b"\0")
                 },
                 ir::UnaryOperatorKind::DoubleMinus => {
                     let const0 = LLVMConstReal(self.gen_type(&ty::Type::Double), 0.0);
-                    LLVMBuildFSub(self.builder, const0, sub, name)
+                    self.builder.build_fsub(const0, sub, b"\0")
                 },
                 ir::UnaryOperatorKind::BooleanNot => {
-                    LLVMBuildNot(self.builder, sub, name)
+                    self.builder.build_not(sub, b"\0")
                 }
             }
         }
@@ -476,32 +464,29 @@ impl LLVMBackend {
 
     fn gen_incdecrement(&mut self, sub: ir::TypedExpression, inc: bool) -> LLVMValueRef {
         let ptr = self.gen_expression(sub);
-        let name = c_str(b"\0");
 
-        unsafe {
+        let c1 = unsafe {
             let ty = self.gen_type(&ty::Type::Int);
-            let c1 = LLVMConstInt(ty, 1, 1);
+            LLVMConstInt(ty, 1, 1)
+        };
 
-            let value = LLVMBuildLoad(self.builder, ptr, c_str(b"\0"));
-            let value = if inc {
-                LLVMBuildAdd(self.builder, value, c1, name)
-            } else {
-                LLVMBuildSub(self.builder, value, c1, name)
-            };
+        let value = self.builder.build_load(ptr, b"\0");
+        let value = if inc {
+            self.builder.build_add(value, c1, b"\0")
+        } else {
+            self.builder.build_sub(value, c1, b"\0")
+        };
 
-            LLVMBuildStore(self.builder, value, ptr);
-        }
+        self.builder.build_store(value, ptr);
+
         ptr
     }
 
     fn gen_funccall(&mut self, func: String, args: Vec<ir::TypedExpression>) -> LLVMValueRef {
         let func = *self.functions.get(&func).unwrap();
+        let args: Vec<_> = args.into_iter().map(|e| self.gen_expression(e)).collect();
 
-        let mut args: Vec<_> = args.into_iter().map(|e| self.gen_expression(e)).collect();
-
-        unsafe {
-            LLVMBuildCall(self.builder, func, args.as_mut_ptr(), args.len() as _, c_str(b"\0"))
-        }
+        self.builder.build_call(func, args, b"\0")
     }
 
     fn into_exec_module(self) -> Result<LLVMExecutionModule, CString> {
@@ -509,22 +494,14 @@ impl LLVMBackend {
     }
 }
 
-impl Drop for LLVMBackend {
-    fn drop(&mut self) {
-        unsafe {
-            LLVMContextDispose(self.context)
-        };
-    }
-}
-
 pub struct LLVMExecutionModule {
-    backend: LLVMBackend,
+    backend: Backend,
     exec_engine: LLVMExecutionEngineRef,
     main_func: LLVMValueRef
 }
 
 impl LLVMExecutionModule {
-    fn from_backend(backend: LLVMBackend) -> Result<Self, CString> {
+    fn from_backend(backend: Backend) -> Result<Self, CString> {
         use llvm::execution_engine::LLVMMCJITCompilerOptions;
         
         let mut exec_engine: LLVMExecutionEngineRef = std::ptr::null_mut();
