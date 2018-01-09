@@ -11,7 +11,7 @@ use libc;
 
 use ir;
 use ty;
-use string_interner::{StringId, StringInterner};
+use interner::{InternerId, Interner};
 
 mod helper;
 use self::helper::*;
@@ -40,14 +40,14 @@ pub struct Backend {
     builder: IRBuilder,
     functions: HashMap<String, LLVMValueRef>,
     ids: HashMap<ir::IdentifierId, LLVMValueRef>,
-    strings: StringInterner,
+    strings: Interner<String>,
     current_func: LLVMValueRef,
     current_break: LLVMBasicBlockRef,
     current_continue: LLVMBasicBlockRef,
 }
 
 impl Backend {
-    pub fn new(strings: StringInterner) -> Backend {
+    pub fn new(strings: Interner<String>) -> Backend {
         let context = Context::new();
         let module = context.create_module(b"main\0");
         let builder = IRBuilder::new_in_context(&context);
@@ -375,8 +375,8 @@ impl Backend {
         }
     }
 
-    fn gen_string_literal(&mut self, id: StringId) -> LLVMValueRef {
-        let s = self.strings.get_str(id);
+    fn gen_string_literal(&mut self, id: InternerId) -> LLVMValueRef {
+        let s = self.strings.get_ref(id);
 
         let gs = self.builder.build_global_string_ptr(s.to_string(), b"\0");
         let s_ty = self.gen_type(&ty::Type::String);

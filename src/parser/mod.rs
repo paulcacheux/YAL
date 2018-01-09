@@ -1,7 +1,7 @@
 use lexer::{Lexer, Token, TokenAndSpan};
 use ast;
 use ty;
-use string_interner::StringInterner;
+use interner::Interner;
 use span::{Span, Spanned};
 use errors::ParsingError;
 
@@ -12,7 +12,7 @@ use self::expression_parser::*;
 pub type ParsingResult<T> = Result<T, Spanned<ParsingError>>;
 
 pub fn parse_program(lexer: Lexer) -> ParsingResult<ast::Program> {
-    let mut strings = StringInterner::new();
+    let mut strings = Interner::new();
 
     let declarations = {
         let mut parser = Parser::new(lexer, &mut strings);
@@ -33,7 +33,7 @@ pub fn parse_program(lexer: Lexer) -> ParsingResult<ast::Program> {
 
 struct Parser<'si, 'input> {
     pub lexer: Lexer<'input>,
-    pub string_interner: &'si mut StringInterner,
+    pub string_interner: &'si mut Interner<String>,
 }
 
 macro_rules! accept {
@@ -65,7 +65,7 @@ macro_rules! return_unexpected {
 }
 
 impl<'si, 'input> Parser<'si, 'input> {
-    fn new(lexer: Lexer<'input>, string_interner: &'si mut StringInterner) -> Self {
+    fn new(lexer: Lexer<'input>, string_interner: &'si mut Interner<String>) -> Self {
         Parser {
             lexer,
             string_interner,

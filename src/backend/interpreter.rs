@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ir;
 use ty;
-use string_interner::StringId;
+use interner::InternerId;
 use span::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -12,7 +12,7 @@ pub enum Value {
     Int(i64),
     Double(f64),
     Boolean(bool),
-    String(StringId),
+    String(InternerId),
     LValue(usize),
     Array(ArrayId),
 }
@@ -528,7 +528,7 @@ mod builtins {
 
     pub(super) fn print_string(interpreter: &Interpreter, args: &[Value]) -> Value {
         let sid = extract_pattern!(args[0]; Value::String(sid) => sid);
-        println!("{}", interpreter.program.strings.get_str(sid));
+        println!("{}", interpreter.program.strings.get_ref(sid));
         Value::Void
     }
 

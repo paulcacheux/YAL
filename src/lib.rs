@@ -7,7 +7,7 @@ extern crate llvm_sys as llvm;
 extern crate regex;
 
 pub mod errors;
-pub mod string_interner;
+pub mod interner;
 pub mod span;
 pub mod lexer;
 pub mod ast;

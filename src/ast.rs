@@ -1,10 +1,10 @@
 use ty::*;
-use string_interner::{StringId, StringInterner};
+use interner::{InternerId, Interner};
 use span::{Span, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub strings: StringInterner,
+    pub strings: Interner<String>,
     pub declarations: Vec<Declaration>,
 }
 
@@ -150,7 +150,7 @@ pub enum Literal {
     IntLiteral(i64),
     DoubleLiteral(f64),
     BooleanLiteral(bool),
-    StringLiteral(StringId),
+    StringLiteral(InternerId),
 }
 
 #[derive(Debug, Clone, Copy)]
