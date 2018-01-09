@@ -48,7 +48,7 @@ fn continue_or_exit<T, E: std::fmt::Display>(
     res: Result<T, Spanned<E>>,
 ) -> T {
     match res {
-        Ok(v) => return v,
+        Ok(v) => v,
         Err(Spanned { inner: error, span }) => {
             eprintln!("{}:{}:{}: {}", path, span.start, span.end, error);
             print_error_line(input, span);
@@ -91,7 +91,6 @@ fn main() {
     let path = matches.value_of("INPUT").unwrap();
     let opt = matches.is_present("OPT");
     let backend = match matches.value_of("BACKEND") {
-        Some("LLVM") => Backend::LLVM,
         Some("interpreter") => Backend::Interpreter,
         _ => Backend::LLVM,
     };
@@ -99,9 +98,9 @@ fn main() {
     let input = slurp_file(&path).unwrap();
 
     let lexer = lexer::Lexer::new(&input);
-    let program = continue_or_exit(&path, &input, parser::parse_program(lexer));
+    let program = continue_or_exit(path, &input, parser::parse_program(lexer));
     // println!("{:#?}", program);
-    let ir_prog = continue_or_exit(&path, &input, ir_translator::translate_program(program));
+    let ir_prog = continue_or_exit(path, &input, ir_translator::translate_program(program));
     // println!("{:#?}", ir_prog);
 
     match backend {

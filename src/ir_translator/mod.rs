@@ -253,7 +253,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             id
         } else {
             return error!(
-                TranslationError::LocalAlreadyDefined(name.clone()),
+                TranslationError::LocalAlreadyDefined(name),
                 error_span
             );
         };
@@ -433,7 +433,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 })
             }
             ast::Expression::Identifier(id) => {
-                if let Some(ref symbol) = self.symbol_table.lookup_local(&id) {
+                if let Some(symbol) = self.symbol_table.lookup_local(&id) {
                     Ok(ir::TypedExpression {
                         ty: ty::Type::LValue(Box::new(symbol.ty.clone())),
                         expr: ir::Expression::Identifier(symbol.id),
@@ -587,7 +587,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         let arg_span = arg.span;
                         let arg = self.translate_expression(arg)?;
                         let arg = lvalue_to_rvalue(arg);
-                        check_eq_types(&arg.ty, &param_ty, arg_span)?;
+                        check_eq_types(&arg.ty, param_ty, arg_span)?;
                         args_translated.push(arg);
                     }
                     let ret_ty = func_ty.return_ty;
@@ -784,7 +784,7 @@ fn unop_typeck(
     }
 }
 
-fn check_return_paths(block: &ir::BlockStatement) -> bool {
+fn check_return_paths(block: &[ir::Statement]) -> bool {
     block.iter().map(check_return_paths_stmt).any(|b| b)
 }
 

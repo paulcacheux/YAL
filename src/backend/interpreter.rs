@@ -126,7 +126,7 @@ impl<'p> Interpreter<'p> {
 
     fn interpret_block(
         &mut self,
-        block: &ir::BlockStatement,
+        block: &[ir::Statement],
     ) -> InterpreterResult<StatementResult> {
         self.memory.begin_scope();
         for stmt in block {

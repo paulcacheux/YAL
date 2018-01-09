@@ -139,7 +139,7 @@ impl Backend {
     }
 
     fn gen_function(&mut self, function: ir::Function) {
-        let func_ref = *self.functions.get(&function.name).unwrap();
+        let func_ref = self.functions[&function.name];
         unsafe {
             let entry_bb =
                 LLVMAppendBasicBlockInContext(self.context.context, func_ref, c_str(b"entry\0"));
@@ -149,7 +149,7 @@ impl Backend {
         self.current_func = func_ref;
 
         for (index, (ty, id)) in function.parameters.into_iter().enumerate() {
-            self.gen_parameter(ty, id, func_ref, index);
+            self.gen_parameter(&ty, id, func_ref, index);
         }
 
         if !self.gen_block_statement(function.body) {
@@ -159,12 +159,12 @@ impl Backend {
 
     fn gen_parameter(
         &mut self,
-        ty: ty::Type,
+        ty: &ty::Type,
         id: ir::IdentifierId,
         func: LLVMValueRef,
         index: usize,
     ) {
-        let llvm_ty = self.gen_type(&ty);
+        let llvm_ty = self.gen_type(ty);
         let ptr = unsafe {
             let ptr = self.builder.build_alloca(llvm_ty, b"\0");
             let arg_value = LLVMGetParam(func, index as _);
@@ -187,7 +187,7 @@ impl Backend {
         // return true if the statement end on a terminator
         match statement {
             ir::Statement::Block(block) => self.gen_block_statement(block),
-            ir::Statement::VarDecl { ty, id } => self.gen_vardecl_statement(ty, id),
+            ir::Statement::VarDecl { ty, id } => self.gen_vardecl_statement(&ty, id),
             ir::Statement::If {
                 condition,
                 body,
@@ -205,8 +205,8 @@ impl Backend {
         }
     }
 
-    fn gen_vardecl_statement(&mut self, ty: ty::Type, id: ir::IdentifierId) -> bool {
-        let llvm_ty = self.gen_type(&ty);
+    fn gen_vardecl_statement(&mut self, ty: &ty::Type, id: ir::IdentifierId) -> bool {
+        let llvm_ty = self.gen_type(ty);
         let ptr = self.builder.build_alloca(llvm_ty, b"\0");
 
         self.ids.insert(id, ptr);
@@ -345,7 +345,7 @@ impl Backend {
             ir::Expression::UnaryOperator { unop, sub } => self.gen_unop(unop, *sub),
             ir::Expression::Increment(sub) => self.gen_incdecrement(*sub, true),
             ir::Expression::Decrement(sub) => self.gen_incdecrement(*sub, false),
-            ir::Expression::FunctionCall { function, args } => self.gen_funccall(function, args),
+            ir::Expression::FunctionCall { function, args } => self.gen_funccall(&function, args),
             _ => unimplemented!(),
         }
     }
@@ -384,7 +384,7 @@ impl Backend {
     }
 
     fn gen_identifier(&mut self, id: ir::IdentifierId) -> LLVMValueRef {
-        *self.ids.get(&id).unwrap()
+        self.ids[&id]
     }
 
     fn gen_assign(&mut self, lhs: ir::TypedExpression, rhs: ir::TypedExpression) -> LLVMValueRef {
@@ -552,8 +552,8 @@ impl Backend {
         ptr
     }
 
-    fn gen_funccall(&mut self, func: String, args: Vec<ir::TypedExpression>) -> LLVMValueRef {
-        let func = *self.functions.get(&func).unwrap();
+    fn gen_funccall(&mut self, func: &str, args: Vec<ir::TypedExpression>) -> LLVMValueRef {
+        let func = self.functions[func];
         let args: Vec<_> = args.into_iter().map(|e| self.gen_expression(e)).collect();
 
         self.builder.build_call(func, args, b"\0")

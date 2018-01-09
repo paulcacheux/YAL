@@ -11,7 +11,7 @@ use self::expression_parser::*;
 
 pub type ParsingResult<T> = Result<T, Spanned<ParsingError>>;
 
-pub fn parse_program<'input>(lexer: Lexer<'input>) -> ParsingResult<ast::Program> {
+pub fn parse_program(lexer: Lexer) -> ParsingResult<ast::Program> {
     let mut strings = StringInterner::new();
 
     let declarations = {
@@ -19,7 +19,7 @@ pub fn parse_program<'input>(lexer: Lexer<'input>) -> ParsingResult<ast::Program
 
         let mut declarations = Vec::new();
 
-        while !parser.is_at_eof()? {
+        while !parser.at_eof()? {
             declarations.push(parser.parse_declaration()?);
         }
         declarations
@@ -72,7 +72,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         }
     }
 
-    fn is_at_eof(&mut self) -> ParsingResult<bool> {
+    fn at_eof(&mut self) -> ParsingResult<bool> {
         if let Token::EOF = self.lexer.peek_token()?.token {
             Ok(true)
         } else {
@@ -296,7 +296,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             None
         };
 
-        let end_span = if let &Some(ref e) = &else_clause {
+        let end_span = if let Some(ref e) = else_clause {
             e.span
         } else {
             body.span

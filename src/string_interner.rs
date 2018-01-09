@@ -1,14 +1,14 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StringId(usize);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct StringInterner {
     strs: Vec<String>,
 }
 
 impl StringInterner {
     pub fn new() -> StringInterner {
-        StringInterner { strs: Vec::new() }
+        StringInterner::default()
     }
 
     pub fn intern(&mut self, s: String) -> StringId {
