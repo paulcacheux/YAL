@@ -14,12 +14,12 @@ pub enum Value {
     Boolean(bool),
     String(StringId),
     LValue(usize),
-    Array(ArrayId)
+    Array(ArrayId),
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum InterpreterError {
-    PathWithoutReturn(Span)
+    PathWithoutReturn(Span),
 }
 
 pub type InterpreterResult<T> = Result<T, InterpreterError>;
@@ -28,7 +28,9 @@ pub fn interpret_program(program: &ir::Program) -> InterpreterResult<()> {
     let mut interpreter = Interpreter::new(program);
 
     // TODO maybe return int
-    interpreter.interpret_function_by_name("main", &[]).map(|_| ())
+    interpreter
+        .interpret_function_by_name("main", &[])
+        .map(|_| ())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,7 +72,7 @@ impl<'p> Interpreter<'p> {
         Interpreter {
             program,
             memory: Memory::new(),
-            arrays: Vec::new()
+            arrays: Vec::new(),
         }
     }
 
@@ -80,7 +82,11 @@ impl<'p> Interpreter<'p> {
         ArrayId(index)
     }
 
-    fn interpret_function_by_name(&mut self, name: &str, args: &[Value]) -> InterpreterResult<Value> {
+    fn interpret_function_by_name(
+        &mut self,
+        name: &str,
+        args: &[Value],
+    ) -> InterpreterResult<Value> {
         match name {
             "printInt" => Ok(builtins::print_int(self, args)),
             "printDouble" => Ok(builtins::print_double(self, args)),
@@ -98,7 +104,11 @@ impl<'p> Interpreter<'p> {
         }
     }
 
-    fn interpret_function(&mut self, function: &ir::Function, args: &[Value]) -> InterpreterResult<Value> {
+    fn interpret_function(
+        &mut self,
+        function: &ir::Function,
+        args: &[Value],
+    ) -> InterpreterResult<Value> {
         self.memory.begin_scope();
         for (index, &(_, param_id)) in function.parameters.iter().enumerate() {
             self.memory.set_new(param_id, args[index]);
@@ -114,7 +124,10 @@ impl<'p> Interpreter<'p> {
         }
     }
 
-    fn interpret_block(&mut self, block: &ir::BlockStatement) -> InterpreterResult<StatementResult> {
+    fn interpret_block(
+        &mut self,
+        block: &ir::BlockStatement,
+    ) -> InterpreterResult<StatementResult> {
         self.memory.begin_scope();
         for stmt in block {
             propagate!(self.interpret_statement(stmt)?, self.memory.end_scope());
@@ -127,10 +140,7 @@ impl<'p> Interpreter<'p> {
         use ir::Statement;
         match *stmt {
             Statement::Block(ref b) => self.interpret_block(b),
-            Statement::VarDecl {
-                ref ty,
-                id,
-            } => {
+            Statement::VarDecl { ref ty, id } => {
                 self.memory.set_new(id, default_value(ty));
                 Ok(StatementResult::Nothing)
             }
@@ -168,7 +178,11 @@ impl<'p> Interpreter<'p> {
                 }
                 Ok(StatementResult::Nothing)
             }
-            Statement::For { id, ref array, ref body } => {
+            Statement::For {
+                id,
+                ref array,
+                ref body,
+            } => {
                 let array = self.interpret_expression(array)?;
                 let array_index = extract_pattern!(array; Value::Array(ArrayId(id)) => id);
                 let array = self.arrays[array_index].clone();
@@ -366,7 +380,10 @@ impl<'p> Interpreter<'p> {
                 self.memory.set_from_lvalue(sub, value);
                 Ok(sub)
             }
-            Expression::Subscript { ref array, ref index } => {
+            Expression::Subscript {
+                ref array,
+                ref index,
+            } => {
                 let array = self.interpret_expression(array)?;
                 let index = self.interpret_expression(index)?;
 
@@ -383,7 +400,10 @@ impl<'p> Interpreter<'p> {
                     .collect();
                 self.interpret_function_by_name(function, &(args?))
             }
-            Expression::NewArray { ref base_ty, ref sizes } => {
+            Expression::NewArray {
+                ref base_ty,
+                ref sizes,
+            } => {
                 let mut real_sizes = Vec::with_capacity(sizes.len());
                 for size in sizes {
                     let size = self.interpret_expression(size)?;
@@ -399,7 +419,7 @@ impl<'p> Interpreter<'p> {
             }
         }
     }
-    
+
     fn create_array(&mut self, base_ty: &ty::Type, sizes: &[usize]) -> Value {
         if !sizes.is_empty() {
             let size = *sizes.first().unwrap();

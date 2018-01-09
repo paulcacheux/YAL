@@ -1,6 +1,6 @@
 use regex::Regex;
 use errors::LexingError;
-use span::{Spanned, Span};
+use span::{Span, Spanned};
 
 mod token;
 pub use self::token::{Token, TokenAndSpan};
@@ -23,7 +23,7 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct LexerState<'input> {
     pos: usize,
-    buffer: Option<TokenAndSpan<'input>>
+    buffer: Option<TokenAndSpan<'input>>,
 }
 
 pub struct Lexer<'input> {
@@ -46,14 +46,14 @@ impl<'input> Lexer<'input> {
     pub fn save_state(&self) -> LexerState<'input> {
         LexerState {
             pos: self.pos,
-            buffer: self.buffer.clone()
+            buffer: self.buffer.clone(),
         }
     }
 
     pub fn load_state(&mut self, state: LexerState<'input>) {
         self.pos = state.pos;
         self.buffer = state.buffer;
-    } 
+    }
 
     pub fn skip_whitespaces(&mut self) {
         'main_loop: loop {
@@ -164,13 +164,13 @@ impl<'input> Lexer<'input> {
                     if s.starts_with("___") {
                         return Err(Spanned::new(
                             LexingError::ReservedIdentifier(s.to_string()),
-                            Span::new_with_len(self.pos, s.len())
+                            Span::new_with_len(self.pos, s.len()),
                         ));
                     }
                     Token::Identifier(s)
                 }
             };
-            return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
+            return Ok(TokenAndSpan::new_with_len(token, start_pos, len));
         }
         if let Some(s) = self.match_regex(&DOUBLE_REGEX) {
             let len = s.len();
@@ -179,11 +179,11 @@ impl<'input> Lexer<'input> {
             } else {
                 return Err(Spanned::new(
                     LexingError::UnparsableNumber,
-                    Span::new_with_len(start_pos, len)
+                    Span::new_with_len(start_pos, len),
                 ));
             };
             let token = Token::DoubleLiteral(number);
-            return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
+            return Ok(TokenAndSpan::new_with_len(token, start_pos, len));
         }
         if let Some(s) = self.match_regex(&INTEGER_REGEX) {
             let len = s.len();
@@ -192,21 +192,21 @@ impl<'input> Lexer<'input> {
             } else {
                 return Err(Spanned::new(
                     LexingError::UnparsableNumber,
-                    Span::new_with_len(start_pos, len)
+                    Span::new_with_len(start_pos, len),
                 ));
             };
             let token = Token::IntegerLiteral(number);
-            return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
+            return Ok(TokenAndSpan::new_with_len(token, start_pos, len));
         }
         if let Some(s) = self.match_regex(&STRING_REGEX) {
             let len = s.len();
             let token = Token::StringLiteral(s);
-            return Ok(TokenAndSpan::new_with_len(token, start_pos, len))
+            return Ok(TokenAndSpan::new_with_len(token, start_pos, len));
         }
 
         Err(Spanned::new(
             LexingError::UnknownChar((&self.input[self.pos..]).chars().next().unwrap()),
-            Span::new_one(self.pos)
+            Span::new_one(self.pos),
         ))
     }
 }

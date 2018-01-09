@@ -2,9 +2,9 @@
 extern crate if_chain;
 #[macro_use]
 extern crate lazy_static;
-extern crate regex;
-extern crate llvm_sys as llvm;
 extern crate libc;
+extern crate llvm_sys as llvm;
+extern crate regex;
 
 pub mod errors;
 pub mod string_interner;

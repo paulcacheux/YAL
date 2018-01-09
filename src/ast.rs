@@ -12,7 +12,7 @@ pub struct Program {
 pub enum Declaration {
     Typedef(Typedef),
     Struct(Struct),
-    Function(Function)
+    Function(Function),
 }
 
 #[derive(Debug, Clone)]
@@ -72,9 +72,7 @@ pub struct BlockStatement {
 
 impl BlockStatement {
     pub fn from_vec(statements: Vec<Spanned<Statement>>) -> Self {
-        BlockStatement {
-            statements
-        }
+        BlockStatement { statements }
     }
 }
 
@@ -102,7 +100,7 @@ pub struct ForStatement {
     pub ty: Type,
     pub name: String,
     pub array: Spanned<Expression>,
-    pub body: Box<Spanned<Statement>>
+    pub body: Box<Spanned<Statement>>,
 }
 
 #[derive(Debug, Clone)]
@@ -143,8 +141,8 @@ pub enum Expression {
     },
     MemberAccess {
         expr: Box<Spanned<Expression>>,
-        member: String
-    }
+        member: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]

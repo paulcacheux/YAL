@@ -1,5 +1,5 @@
 use std;
-use std::ffi::{CString, CStr};
+use std::ffi::{CStr, CString};
 use std::collections::HashMap;
 use std::ptr;
 
@@ -33,8 +33,6 @@ pub fn llvm_gen_program(program: ir::Program) -> Result<LLVMExecutionModule, CSt
     backend.into_exec_module()
 }
 
-
-
 #[derive(Debug, Clone)]
 pub struct Backend {
     context: Context,
@@ -47,8 +45,6 @@ pub struct Backend {
     current_break: LLVMBasicBlockRef,
     current_continue: LLVMBasicBlockRef,
 }
-
-
 
 impl Backend {
     pub fn new(strings: StringInterner) -> Backend {
@@ -75,13 +71,9 @@ impl Backend {
             ty::Type::Int => self.context.i32_ty(),
             ty::Type::Double => self.context.double_ty(),
             ty::Type::Boolean => self.context.i1_ty(),
-            ty::Type::String => {
-                Context::pointer_ty(self.context.i8_ty())
-            },
-            ty::Type::LValue(ref sub) => {
-                Context::pointer_ty(self.gen_type(sub))
-            },
-            _ => unimplemented!()
+            ty::Type::String => Context::pointer_ty(self.context.i8_ty()),
+            ty::Type::LValue(ref sub) => Context::pointer_ty(self.gen_type(sub)),
+            _ => unimplemented!(),
         }
     }
 
@@ -90,11 +82,21 @@ impl Backend {
         bytes.push(0);
 
         unsafe {
-            let buf = LLVMCreateMemoryBufferWithMemoryRange(bytes.as_ptr() as *const _, (bytes.len() - 1) as _, c_str(b"\0"), 1);
+            let buf = LLVMCreateMemoryBufferWithMemoryRange(
+                bytes.as_ptr() as *const _,
+                (bytes.len() - 1) as _,
+                c_str(b"\0"),
+                1,
+            );
             let mut runtime_module = ptr::null_mut();
             let mut err_msg = ptr::null_mut();
 
-            let result = llvm::ir_reader::LLVMParseIRInContext(self.context.context, buf, &mut runtime_module, &mut err_msg);
+            let result = llvm::ir_reader::LLVMParseIRInContext(
+                self.context.context,
+                buf,
+                &mut runtime_module,
+                &mut err_msg,
+            );
 
             if result != 0 {
                 panic!("{}", CStr::from_ptr(err_msg).to_string_lossy().into_owned())
@@ -108,7 +110,6 @@ impl Backend {
         self.register_named_func("printString".to_string());
         self.register_named_func("readInt".to_string());
         self.register_named_func("readDouble".to_string());
-
     }
 
     fn register_named_func(&mut self, name: String) {
@@ -119,9 +120,11 @@ impl Backend {
 
     fn pre_gen_function(&mut self, function: &ir::Function) {
         let ret_ty = self.gen_type(&function.return_ty);
-        let mut param_types: Vec<_> = function.parameters.iter().map(|&(ref ty, _)| {
-            self.gen_type(ty)
-        }).collect();
+        let mut param_types: Vec<_> = function
+            .parameters
+            .iter()
+            .map(|&(ref ty, _)| self.gen_type(ty))
+            .collect();
 
         let func_ty = unsafe {
             LLVMFunctionType(ret_ty, param_types.as_mut_ptr(), param_types.len() as _, 0)
@@ -130,7 +133,7 @@ impl Backend {
         let c_name = CString::new(function.name.clone()).unwrap();
 
         unsafe {
-            let func = LLVMAddFunction(self.module, c_name.as_ptr(),func_ty);
+            let func = LLVMAddFunction(self.module, c_name.as_ptr(), func_ty);
             self.functions.insert(function.name.clone(), func);
         }
     }
@@ -138,11 +141,8 @@ impl Backend {
     fn gen_function(&mut self, function: ir::Function) {
         let func_ref = *self.functions.get(&function.name).unwrap();
         unsafe {
-            let entry_bb = LLVMAppendBasicBlockInContext(
-                self.context.context,
-                func_ref,
-                c_str(b"entry\0")
-            );
+            let entry_bb =
+                LLVMAppendBasicBlockInContext(self.context.context, func_ref, c_str(b"entry\0"));
             self.builder.position_at_end(entry_bb);
         }
 
@@ -157,7 +157,13 @@ impl Backend {
         }
     }
 
-    fn gen_parameter(&mut self, ty: ty::Type, id: ir::IdentifierId, func: LLVMValueRef, index: usize) {
+    fn gen_parameter(
+        &mut self,
+        ty: ty::Type,
+        id: ir::IdentifierId,
+        func: LLVMValueRef,
+        index: usize,
+    ) {
         let llvm_ty = self.gen_type(&ty);
         let ptr = unsafe {
             let ptr = self.builder.build_alloca(llvm_ty, b"\0");
@@ -177,17 +183,25 @@ impl Backend {
         res
     }
 
-    fn gen_statement(&mut self, statement: ir::Statement) -> bool { // return true if the statement end on a terminator
+    fn gen_statement(&mut self, statement: ir::Statement) -> bool {
+        // return true if the statement end on a terminator
         match statement {
             ir::Statement::Block(block) => self.gen_block_statement(block),
             ir::Statement::VarDecl { ty, id } => self.gen_vardecl_statement(ty, id),
-            ir::Statement::If { condition, body, else_clause } => self.gen_if(condition, body, else_clause),
+            ir::Statement::If {
+                condition,
+                body,
+                else_clause,
+            } => self.gen_if(condition, body, else_clause),
             ir::Statement::While { condition, body } => self.gen_while(condition, body),
             ir::Statement::Return(expr) => self.gen_return_statement(expr),
-            ir::Statement::Expression(expr) => { self.gen_expression(expr); false },
+            ir::Statement::Expression(expr) => {
+                self.gen_expression(expr);
+                false
+            }
             ir::Statement::Break => self.gen_break_statement(),
             ir::Statement::Continue => self.gen_continue_statement(),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
@@ -199,12 +213,29 @@ impl Backend {
         false
     }
 
-    fn gen_if(&mut self, cond: ir::TypedExpression, body: ir::BlockStatement, else_clause: ir::BlockStatement) -> bool {
+    fn gen_if(
+        &mut self,
+        cond: ir::TypedExpression,
+        body: ir::BlockStatement,
+        else_clause: ir::BlockStatement,
+    ) -> bool {
         let cond = self.gen_expression(cond);
         unsafe {
-            let then_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"then\0"));
-            let else_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"else\0"));
-            let end_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"end\0"));
+            let then_bb = LLVMAppendBasicBlockInContext(
+                self.context.context,
+                self.current_func,
+                c_str(b"then\0"),
+            );
+            let else_bb = LLVMAppendBasicBlockInContext(
+                self.context.context,
+                self.current_func,
+                c_str(b"else\0"),
+            );
+            let end_bb = LLVMAppendBasicBlockInContext(
+                self.context.context,
+                self.current_func,
+                c_str(b"end\0"),
+            );
 
             self.builder.build_cond_br(cond, then_bb, else_bb);
 
@@ -216,7 +247,7 @@ impl Backend {
                 self.builder.build_br(end_bb);
                 then_res = false;
             }
-            
+
             self.builder.position_at_end(else_bb);
             if !self.gen_block_statement(else_clause) {
                 self.builder.build_br(end_bb);
@@ -235,9 +266,21 @@ impl Backend {
 
     fn gen_while(&mut self, cond: ir::TypedExpression, body: ir::BlockStatement) -> bool {
         unsafe {
-            let loop_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"loop\0"));
-            let then_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"then\0"));
-            let end_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"end\0"));
+            let loop_bb = LLVMAppendBasicBlockInContext(
+                self.context.context,
+                self.current_func,
+                c_str(b"loop\0"),
+            );
+            let then_bb = LLVMAppendBasicBlockInContext(
+                self.context.context,
+                self.current_func,
+                c_str(b"then\0"),
+            );
+            let end_bb = LLVMAppendBasicBlockInContext(
+                self.context.context,
+                self.current_func,
+                c_str(b"end\0"),
+            );
 
             self.builder.build_br(loop_bb);
             self.builder.position_at_end(loop_bb);
@@ -259,11 +302,15 @@ impl Backend {
 
     fn gen_next_bb(&mut self) {
         unsafe {
-            let bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"next"));
+            let bb = LLVMAppendBasicBlockInContext(
+                self.context.context,
+                self.current_func,
+                c_str(b"next"),
+            );
             self.builder.position_at_end(bb);
         }
     }
-    
+
     fn gen_return_statement(&mut self, expr: Option<ir::TypedExpression>) -> bool {
         if let Some(expr) = expr {
             let expr = self.gen_expression(expr);
@@ -285,14 +332,16 @@ impl Backend {
     }
 
     fn gen_expression(&mut self, expr: ir::TypedExpression) -> LLVMValueRef {
-        let ir::TypedExpression{ expr, .. } = expr;
+        let ir::TypedExpression { expr, .. } = expr;
         match expr {
             ir::Expression::LValueToRValue(sub) => self.gen_l2r_expr(*sub),
             ir::Expression::Literal(lit) => self.gen_literal(lit),
             ir::Expression::Identifier(id) => self.gen_identifier(id),
             ir::Expression::Assign { lhs, rhs } => self.gen_assign(*lhs, *rhs),
             ir::Expression::BinaryOperator { binop, lhs, rhs } => self.gen_binop(binop, *lhs, *rhs),
-            ir::Expression::LazyOperator { lazyop, lhs, rhs } => self.gen_lazyop(lazyop, *lhs, *rhs),
+            ir::Expression::LazyOperator { lazyop, lhs, rhs } => {
+                self.gen_lazyop(lazyop, *lhs, *rhs)
+            }
             ir::Expression::UnaryOperator { unop, sub } => self.gen_unop(unop, *sub),
             ir::Expression::Increment(sub) => self.gen_incdecrement(*sub, true),
             ir::Expression::Decrement(sub) => self.gen_incdecrement(*sub, false),
@@ -312,19 +361,17 @@ impl Backend {
                 ir::Literal::IntLiteral(i) => {
                     let ty = self.gen_type(&ty::Type::Int);
                     LLVMConstInt(ty, i as _, 1)
-                },
+                }
                 ir::Literal::DoubleLiteral(d) => {
                     let ty = self.gen_type(&ty::Type::Double);
                     LLVMConstReal(ty, d as _)
-                },
+                }
                 ir::Literal::BooleanLiteral(b) => {
                     let ty = self.gen_type(&ty::Type::Boolean);
                     LLVMConstInt(ty, b as _, 0)
-                },
-                ir::Literal::StringLiteral(id) => {
-                    self.gen_string_literal(id)
                 }
-            }     
+                ir::Literal::StringLiteral(id) => self.gen_string_literal(id),
+            }
         }
     }
 
@@ -343,13 +390,18 @@ impl Backend {
     fn gen_assign(&mut self, lhs: ir::TypedExpression, rhs: ir::TypedExpression) -> LLVMValueRef {
         let lhs = self.gen_expression(lhs);
         let rhs = self.gen_expression(rhs);
-        
+
         self.builder.build_store(rhs, lhs);
 
         rhs
     }
 
-    fn gen_binop(&mut self, binop: ir::BinaryOperatorKind, lhs: ir::TypedExpression, rhs: ir::TypedExpression) -> LLVMValueRef {
+    fn gen_binop(
+        &mut self,
+        binop: ir::BinaryOperatorKind,
+        lhs: ir::TypedExpression,
+        rhs: ir::TypedExpression,
+    ) -> LLVMValueRef {
         let lhs = self.gen_expression(lhs);
         let rhs = self.gen_expression(rhs);
 
@@ -360,7 +412,10 @@ impl Backend {
         macro_rules! cmp_builder {
             (@inner $pred:expr, $func:ident) => {
                 {
-                    fn tmp(b: &IRBuilder, l: LLVMValueRef, r: LLVMValueRef, n: &[u8]) -> LLVMValueRef {
+                    fn tmp(b: &IRBuilder,
+                        l: LLVMValueRef,
+                        r: LLVMValueRef,
+                        n: &[u8]) -> LLVMValueRef {
                         b.$func($pred, l, r, n)
                     }
                     tmp
@@ -403,7 +458,12 @@ impl Backend {
         func(&self.builder, lhs, rhs, b"\0")
     }
 
-    fn gen_lazyop(&mut self, lazyop: ir::LazyOperatorKind, lhs: ir::TypedExpression, rhs: ir::TypedExpression) -> LLVMValueRef {
+    fn gen_lazyop(
+        &mut self,
+        lazyop: ir::LazyOperatorKind,
+        lhs: ir::TypedExpression,
+        rhs: ir::TypedExpression,
+    ) -> LLVMValueRef {
         let lhs = self.gen_expression(lhs);
         let bool_ty = self.gen_type(&ty::Type::Boolean);
         unsafe {
@@ -412,16 +472,28 @@ impl Backend {
                     let condition = self.builder.build_not(lhs, b"\0");
                     let then_value = LLVMConstInt(bool_ty, 0, 0);
                     (condition, then_value)
-                },
+                }
                 ir::LazyOperatorKind::BooleanLogicalOr => {
                     let then_value = LLVMConstInt(bool_ty, 1, 1);
                     (lhs, then_value)
                 }
             };
 
-            let then_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"then\0"));
-            let else_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"else\0"));
-            let end_bb = LLVMAppendBasicBlockInContext(self.context.context, self.current_func, c_str(b"end\0"));
+            let then_bb = LLVMAppendBasicBlockInContext(
+                self.context.context,
+                self.current_func,
+                c_str(b"then\0"),
+            );
+            let else_bb = LLVMAppendBasicBlockInContext(
+                self.context.context,
+                self.current_func,
+                c_str(b"else\0"),
+            );
+            let end_bb = LLVMAppendBasicBlockInContext(
+                self.context.context,
+                self.current_func,
+                c_str(b"end\0"),
+            );
 
             self.builder.build_cond_br(condition, then_bb, else_bb);
 
@@ -450,14 +522,12 @@ impl Backend {
                 ir::UnaryOperatorKind::IntMinus => {
                     let const0 = LLVMConstInt(self.gen_type(&ty::Type::Int), 0, 0);
                     self.builder.build_sub(const0, sub, b"\0")
-                },
+                }
                 ir::UnaryOperatorKind::DoubleMinus => {
                     let const0 = LLVMConstReal(self.gen_type(&ty::Type::Double), 0.0);
                     self.builder.build_fsub(const0, sub, b"\0")
-                },
-                ir::UnaryOperatorKind::BooleanNot => {
-                    self.builder.build_not(sub, b"\0")
                 }
+                ir::UnaryOperatorKind::BooleanNot => self.builder.build_not(sub, b"\0"),
             }
         }
     }
@@ -497,23 +567,19 @@ impl Backend {
 pub struct LLVMExecutionModule {
     backend: Backend,
     exec_engine: LLVMExecutionEngineRef,
-    main_func: LLVMValueRef
+    main_func: LLVMValueRef,
 }
 
 impl LLVMExecutionModule {
     fn from_backend(backend: Backend) -> Result<Self, CString> {
         use llvm::execution_engine::LLVMMCJITCompilerOptions;
-        
+
         let mut exec_engine: LLVMExecutionEngineRef = std::ptr::null_mut();
         unsafe {
             let mut error: *mut libc::c_char = std::ptr::null_mut();
             let mut options: LLVMMCJITCompilerOptions = std::mem::zeroed();
-            let options_size = 
-                std::mem::size_of::<LLVMMCJITCompilerOptions>();
-            llvm::execution_engine::LLVMInitializeMCJITCompilerOptions(
-                &mut options,
-                options_size
-            );
+            let options_size = std::mem::size_of::<LLVMMCJITCompilerOptions>();
+            llvm::execution_engine::LLVMInitializeMCJITCompilerOptions(&mut options, options_size);
 
             options.OptLevel = 3;
 
@@ -526,27 +592,30 @@ impl LLVMExecutionModule {
                 backend.module,
                 &mut options,
                 options_size,
-                &mut error
-                ) != 0 {
+                &mut error,
+            ) != 0
+            {
                 return Err(CString::from_raw(error));
             }
         }
 
-        let main_func = unsafe {
-            LLVMGetNamedFunction(backend.module, c_str(b"main\0"))
-        };
+        let main_func = unsafe { LLVMGetNamedFunction(backend.module, c_str(b"main\0")) };
 
         Ok(LLVMExecutionModule {
             backend,
             exec_engine,
-            main_func
+            main_func,
         })
     }
 
     pub fn verify_module(&self) {
         unsafe {
             use llvm::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
-            LLVMVerifyModule(self.backend.module, LLVMVerifierFailureAction::LLVMPrintMessageAction, ptr::null_mut());
+            LLVMVerifyModule(
+                self.backend.module,
+                LLVMVerifierFailureAction::LLVMPrintMessageAction,
+                ptr::null_mut(),
+            );
         }
     }
 
@@ -575,7 +644,7 @@ impl LLVMExecutionModule {
                 self.exec_engine,
                 self.main_func,
                 0,
-                ptr::null_mut()
+                ptr::null_mut(),
             );
         }
     }

@@ -65,10 +65,15 @@ impl<'g> SymbolTable<'g> {
         let identifier_id = self.new_identifier_id();
         let symbol = Symbol {
             ty,
-            id: identifier_id
+            id: identifier_id,
         };
 
-        if self.scopes.last_mut().unwrap().insert(name, symbol).is_none() {
+        if self.scopes
+            .last_mut()
+            .unwrap()
+            .insert(name, symbol)
+            .is_none()
+        {
             Some(identifier_id)
         } else {
             None

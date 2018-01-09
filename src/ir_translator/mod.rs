@@ -63,7 +63,10 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
             ast::Declaration::Struct(_) => unimplemented!(),
             ast::Declaration::Function(ref func) => {
                 if globals_table.register_function(func.name.clone(), func.get_type()) {
-                    return error!(TranslationError::FunctionAlreadyDefined(func.name.clone()), func.span);
+                    return error!(
+                        TranslationError::FunctionAlreadyDefined(func.name.clone()),
+                        func.span
+                    );
                 }
 
                 if func.name == "main" {
@@ -75,7 +78,6 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
                 }
             }
         }
-        
     }
 
     if !is_main_present {
@@ -93,7 +95,10 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
         }
     }
 
-    Ok(ir::Program { strings: program.strings, declarations })
+    Ok(ir::Program {
+        strings: program.strings,
+        declarations,
+    })
 }
 
 fn translate_function(
@@ -108,7 +113,10 @@ fn translate_function(
         if let Some(id) = symbol_table.register_local(param_name.clone(), param_ty.clone()) {
             parameters.push((param_ty, id));
         } else {
-            return error!(TranslationError::ParameterAlreadyDefined(param_name), function.span);
+            return error!(
+                TranslationError::ParameterAlreadyDefined(param_name),
+                function.span
+            );
         }
     }
 
@@ -133,7 +141,7 @@ fn translate_function(
         name: function.name,
         parameters,
         body,
-        span: function.span
+        span: function.span,
     })
 }
 
@@ -202,11 +210,21 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Statement::Block(b) => {
                 translate_block_statement(self.symbol_table, b, self.func_infos)
             }
-            other => translate_block_statement(self.symbol_table, ast::BlockStatement::from_vec(vec![Spanned::new(other, statement.span)]), self.func_infos),
+            other => translate_block_statement(
+                self.symbol_table,
+                ast::BlockStatement::from_vec(vec![Spanned::new(other, statement.span)]),
+                self.func_infos,
+            ),
         }
     }
-    
-    fn translate_var_decl(&mut self, ty: ty::Type, name: String, value: Option<Spanned<ast::Expression>>, error_span: Span) -> TranslationResult<()> {
+
+    fn translate_var_decl(
+        &mut self,
+        ty: ty::Type,
+        name: String,
+        value: Option<Spanned<ast::Expression>>,
+        error_span: Span,
+    ) -> TranslationResult<()> {
         // we must compute this first to avoid shadowing
         let value_expr = if let Some(value) = value {
             let value_span = value.span;
@@ -219,21 +237,19 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 ty::Type::Int => ir::Literal::IntLiteral(0),
                 ty::Type::Double => ir::Literal::DoubleLiteral(0.0),
                 ty::Type::Boolean => ir::Literal::BooleanLiteral(false),
-                _ => unreachable!()
+                _ => unreachable!(),
             };
             Some(ir::TypedExpression {
                 ty: ty.clone(),
-                expr: ir::Expression::Literal(lit)
+                expr: ir::Expression::Literal(lit),
             })
         } else {
             None
         };
 
         let id = if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
-            self.statements.push(ir::Statement::VarDecl {
-                ty: ty.clone(),
-                id,
-            });
+            self.statements
+                .push(ir::Statement::VarDecl { ty: ty.clone(), id });
             id
         } else {
             return error!(
@@ -246,15 +262,15 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             let lhs = ir::Expression::Identifier(id);
             let lhs = ir::TypedExpression {
                 ty: ty::Type::LValue(Box::new(ty.clone())),
-                expr: lhs
+                expr: lhs,
             };
-            
+
             let assign_expr = ir::TypedExpression {
                 ty,
                 expr: ir::Expression::Assign {
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
-                }
+                },
             };
 
             self.statements.push(ir::Statement::Expression(assign_expr));
@@ -265,7 +281,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
     }
 
     fn translate_statement(&mut self, statement: Spanned<ast::Statement>) -> TranslationResult<()> {
-        let Spanned { inner: statement, span: stmt_span } = statement;
+        let Spanned {
+            inner: statement,
+            span: stmt_span,
+        } = statement;
         match statement {
             ast::Statement::Empty => {}
             ast::Statement::Block(block) => {
@@ -315,7 +334,12 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 self.statements
                     .push(ir::Statement::While { condition, body })
             }
-            ast::Statement::For(ast::ForStatement { ty, name, array, body }) => {
+            ast::Statement::For(ast::ForStatement {
+                ty,
+                name,
+                array,
+                body,
+            }) => {
                 let array_span = array.span;
                 let array = self.translate_expression(array)?;
                 let array = lvalue_to_rvalue(array);
@@ -323,7 +347,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 if let ty::Type::Array(sub_ty) = array.ty.clone() {
                     check_eq_types(&sub_ty, &ty, array_span)?;
                 } else {
-                    return error!(TranslationError::SubscriptNotArray(array.ty), array_span)
+                    return error!(TranslationError::SubscriptNotArray(array.ty), array_span);
                 }
 
                 self.symbol_table.begin_scope();
@@ -332,7 +356,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 } else {
                     unreachable!()
                 };
-                
+
                 let old_in_loop = self.func_infos.in_loop;
                 self.func_infos.in_loop = true;
                 let body = self.translate_statement_as_block(*body)?;
@@ -383,8 +407,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         &mut self,
         expression: Spanned<ast::Expression>,
     ) -> TranslationResult<ir::TypedExpression> {
-        
-        let Spanned { inner: expression, span: expr_span } = expression;
+        let Spanned {
+            inner: expression,
+            span: expr_span,
+        } = expression;
 
         match expression {
             ast::Expression::Literal(lit) => {
@@ -450,7 +476,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     };
                     Ok(ir::TypedExpression { ty, expr })
                 } else {
-                    error!(TranslationError::BinOpUndefined(binop, lhs.ty, rhs.ty), expr_span)
+                    error!(
+                        TranslationError::BinOpUndefined(binop, lhs.ty, rhs.ty),
+                        expr_span
+                    )
                 }
             }
             ast::Expression::LazyOperator { lazyop, lhs, rhs } => {
@@ -467,7 +496,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     };
                     Ok(ir::TypedExpression { ty, expr })
                 } else {
-                    error!(TranslationError::LazyOpUndefined(lazyop, lhs.ty, rhs.ty), expr_span)
+                    error!(
+                        TranslationError::LazyOpUndefined(lazyop, lhs.ty, rhs.ty),
+                        expr_span
+                    )
                 }
             }
             ast::Expression::UnaryOperator { unop, sub } => {
@@ -531,8 +563,8 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         ty: ty::Type::LValue(sub_ty),
                         expr: ir::Expression::Subscript {
                             array: Box::new(array),
-                            index: Box::new(index)
-                        }
+                            index: Box::new(index),
+                        },
                     })
                 } else {
                     error!(TranslationError::SubscriptNotArray(array.ty), expr_span)
@@ -569,13 +601,13 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 } else {
                     error!(TranslationError::FunctionUndefined(function), expr_span)
                 }
-            },
+            }
             ast::Expression::NewArray { ty, sizes } => {
                 let mut array_ty = ty.clone();
                 for _ in 0..sizes.len() {
                     array_ty = ty::Type::Array(Box::new(array_ty));
                 }
-                
+
                 let mut new_sizes = Vec::with_capacity(sizes.len());
                 for size in sizes {
                     let size_span = size.span;
@@ -586,15 +618,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     new_sizes.push(size);
                 }
 
-
                 Ok(ir::TypedExpression {
                     ty: array_ty,
                     expr: ir::Expression::NewArray {
                         base_ty: ty,
-                        sizes: new_sizes
-                    }
+                        sizes: new_sizes,
+                    },
                 })
-            },
+            }
             ast::Expression::MemberAccess { expr, member } => {
                 // TODO change this. It currently only works for .length on arrays
                 let expr = self.translate_expression(*expr)?;
@@ -607,7 +638,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 if let ty::Type::Array(_) = expr.ty {
                     Ok(ir::TypedExpression {
                         ty: ty::Type::Int,
-                        expr: ir::Expression::ArrayLength(Box::new(expr))
+                        expr: ir::Expression::ArrayLength(Box::new(expr)),
                     })
                 } else {
                     // TODO change the error
@@ -760,16 +791,16 @@ fn check_return_paths(block: &ir::BlockStatement) -> bool {
 fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
     match *stmt {
         ir::Statement::Block(ref b) => check_return_paths(b),
-        ir::Statement::If { ref condition, ref body, ref else_clause } => {
-            match condition.expr {
-                ir::Expression::Literal(ir::Literal::BooleanLiteral(true)) => {
-                    check_return_paths(body)
-                },
-                ir::Expression::Literal(ir::Literal::BooleanLiteral(false)) => {
-                    check_return_paths(else_clause)
-                },
-                _ => check_return_paths(body) && check_return_paths(else_clause)
+        ir::Statement::If {
+            ref condition,
+            ref body,
+            ref else_clause,
+        } => match condition.expr {
+            ir::Expression::Literal(ir::Literal::BooleanLiteral(true)) => check_return_paths(body),
+            ir::Expression::Literal(ir::Literal::BooleanLiteral(false)) => {
+                check_return_paths(else_clause)
             }
+            _ => check_return_paths(body) && check_return_paths(else_clause),
         },
         ir::Statement::While { ref condition, .. } => {
             if let ir::Expression::Literal(ir::Literal::BooleanLiteral(true)) = condition.expr {
@@ -777,7 +808,7 @@ fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
             } else {
                 false
             }
-        },
+        }
         ir::Statement::Return(_) => true,
         _ => false,
     }
@@ -785,10 +816,10 @@ fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
 
 fn check_eq_types(a: &ty::Type, b: &ty::Type, error_span: Span) -> TranslationResult<()> {
     if a != b {
-        error!(TranslationError::MismatchingTypes(
-            a.clone(),
-            b.clone(),
-        ), error_span)
+        error!(
+            TranslationError::MismatchingTypes(a.clone(), b.clone(),),
+            error_span
+        )
     } else {
         Ok(())
     }

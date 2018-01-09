@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
-use clap::{Arg, App};
+use clap::{App, Arg};
 
 use javalette::*;
 use span::{Span, Spanned};
@@ -22,12 +22,12 @@ fn print_error_line(input: &str, span: Span) {
 
     for (i, c) in input.chars().enumerate() {
         arrow.push(match c {
-                       '\n' => '\n',
-                       '\t' => '\t',
-                       '\r' => '\r',
-                       _ if span.start <= i && i < span.end => '^',
-                       _ => ' ',
-                   });
+            '\n' => '\n',
+            '\t' => '\t',
+            '\r' => '\r',
+            _ if span.start <= i && i < span.end => '^',
+            _ => ' ',
+        });
     }
 
     let iter = input
@@ -42,7 +42,11 @@ fn print_error_line(input: &str, span: Span) {
     }
 }
 
-fn continue_or_exit<T, E: std::fmt::Display>(path: &str, input: &str, res: Result<T, Spanned<E>>) -> T {
+fn continue_or_exit<T, E: std::fmt::Display>(
+    path: &str,
+    input: &str,
+    res: Result<T, Spanned<E>>,
+) -> T {
     match res {
         Ok(v) => return v,
         Err(Spanned { inner: error, span }) => {
@@ -56,26 +60,32 @@ fn continue_or_exit<T, E: std::fmt::Display>(path: &str, input: &str, res: Resul
 #[derive(Debug, Clone, Copy)]
 enum Backend {
     LLVM,
-    Interpreter
+    Interpreter,
 }
 
 fn main() {
     let matches = App::new("Javalette interpreter")
         .version("0.1")
         .author("Paul CACHEUX <paulcacheux@gmail.com>")
-        .arg(Arg::with_name("INPUT")
-            .help("Sets the input file.")
-            .required(true)
-            .index(1))
-        .arg(Arg::with_name("OPT")
-             .help("Activate optimizations.")
-             .short("O")
-             .long("opt"))
-        .arg(Arg::with_name("BACKEND")
-             .help("Choose backend. LLVM by default.")
-             .long("backend")
-             .takes_value(true)
-             .possible_values(&["LLVM", "interpreter"]))
+        .arg(
+            Arg::with_name("INPUT")
+                .help("Sets the input file.")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            Arg::with_name("OPT")
+                .help("Activate optimizations.")
+                .short("O")
+                .long("opt"),
+        )
+        .arg(
+            Arg::with_name("BACKEND")
+                .help("Choose backend. LLVM by default.")
+                .long("backend")
+                .takes_value(true)
+                .possible_values(&["LLVM", "interpreter"]),
+        )
         .get_matches();
 
     let path = matches.value_of("INPUT").unwrap();
@@ -83,7 +93,7 @@ fn main() {
     let backend = match matches.value_of("BACKEND") {
         Some("LLVM") => Backend::LLVM,
         Some("interpreter") => Backend::Interpreter,
-        _ => Backend::LLVM
+        _ => Backend::LLVM,
     };
 
     let input = slurp_file(&path).unwrap();
@@ -93,7 +103,7 @@ fn main() {
     // println!("{:#?}", program);
     let ir_prog = continue_or_exit(&path, &input, ir_translator::translate_program(program));
     // println!("{:#?}", ir_prog);
-    
+
     match backend {
         Backend::LLVM => {
             let mut llvm_exec = backend::llvm::llvm_gen_program(ir_prog).unwrap();
@@ -103,7 +113,7 @@ fn main() {
                 llvm_exec.optimize();
             }
             llvm_exec.call_main();
-        },
+        }
         Backend::Interpreter => {
             backend::interpreter::interpret_program(&ir_prog).expect("Interpreter error");
         }

@@ -24,7 +24,7 @@ impl Span {
     pub fn merge(start: Span, end: Span) -> Self {
         Span {
             start: start.start,
-            end: end.end
+            end: end.end,
         }
     }
 }
@@ -32,14 +32,11 @@ impl Span {
 #[derive(Debug, Clone, Copy)]
 pub struct Spanned<T> {
     pub inner: T,
-    pub span: Span
+    pub span: Span,
 }
 
 impl<T> Spanned<T> {
     pub fn new(inner: T, span: Span) -> Self {
-        Spanned {
-            inner,
-            span
-        }
+        Spanned { inner, span }
     }
 }

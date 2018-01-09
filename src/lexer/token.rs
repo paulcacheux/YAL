@@ -59,15 +59,12 @@ pub enum Token<'input> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TokenAndSpan<'input> {
     pub token: Token<'input>,
-    pub span: Span
+    pub span: Span,
 }
 
 impl<'input> TokenAndSpan<'input> {
     pub fn new(token: Token<'input>, span: Span) -> Self {
-        TokenAndSpan {
-            token,
-            span
-        }
+        TokenAndSpan { token, span }
     }
 
     pub fn new_with_len(token: Token<'input>, start: usize, len: usize) -> Self {

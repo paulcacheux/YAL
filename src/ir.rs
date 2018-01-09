@@ -17,7 +17,7 @@ pub struct Function {
     pub name: String,
     pub parameters: Vec<(Type, IdentifierId)>,
     pub body: BlockStatement,
-    pub span: Span
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -36,10 +36,11 @@ pub enum Statement {
         condition: TypedExpression,
         body: BlockStatement,
     },
-    For { // TODO lower this to while
+    For {
+        // TODO lower this to while
         id: IdentifierId,
         array: TypedExpression,
-        body: BlockStatement
+        body: BlockStatement,
     },
     Return(Option<TypedExpression>), // None for void
     Expression(TypedExpression),
@@ -90,7 +91,7 @@ pub enum Expression {
     },
     NewArray {
         base_ty: Type,
-        sizes: Vec<TypedExpression>
+        sizes: Vec<TypedExpression>,
     },
     ArrayLength(Box<TypedExpression>),
 }

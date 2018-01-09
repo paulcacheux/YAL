@@ -7,14 +7,14 @@ pub enum Type {
     Void,
     StructPointer(String),
     LValue(Box<Type>),
-    Array(Box<Type>)
+    Array(Box<Type>),
 }
 
 impl Type {
     pub fn has_default_value(&self) -> bool {
         match *self {
             Type::Int | Type::Double | Type::Boolean => true,
-            _ => false
+            _ => false,
         }
     }
 }
