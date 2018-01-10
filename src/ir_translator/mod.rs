@@ -323,7 +323,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 ty,
                 name,
                 array,
-                body,
+                body
             }) => {
                 let array_span = array.span;
                 let array = self.translate_expression(array)?;
@@ -335,8 +335,23 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     return error!(TranslationError::SubscriptNotArray(array.ty), array_span);
                 }
 
+                // initialization of the counter and the array
+                let index_id = self.symbol_table.new_identifier_id();
+                let index_expr = utils::build_texpr_from_id(ty::Type::Int, index_id);
+                let index_rvalue = utils::lvalue_to_rvalue(index_expr.clone());
+                let array_id = self.symbol_table.new_identifier_id();
+                let array_expr = utils::build_texpr_from_id(array.ty.clone(), array_id);
+                let array_rvalue = utils::lvalue_to_rvalue(array_expr.clone());
+
+                let const0 = utils::literal_to_texpr(ir::Literal::IntLiteral(0));
+                let array_len_expr = ir::TypedExpression {
+                    ty: ty::Type::Int,
+                    expr: ir::Expression::ArrayLength(Box::new(array_rvalue.clone()))
+                };
+
+                // translation of stmt
                 self.symbol_table.begin_scope();
-                let id = if let Some(id) = self.symbol_table.register_local(name.clone(), ty) {
+                let current_id = if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
                     id
                 } else {
                     unreachable!()
@@ -348,7 +363,56 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 self.func_infos.in_loop = old_in_loop;
                 self.symbol_table.end_scope();
 
-                self.statements.push(ir::Statement::For { id, array, body });
+                // translation of current loop value
+                let current_expr = utils::build_texpr_from_id(ty.clone(), current_id);
+                let array_indexed = utils::lvalue_to_rvalue(ir::TypedExpression {
+                    ty: ty::Type::LValue(Box::new(ty.clone())),
+                    expr: ir::Expression::Subscript {
+                        array: Box::new(array_rvalue.clone()),
+                        index: Box::new(index_rvalue.clone()),
+                    }
+                });
+
+                // translation of index++
+                let index_inc = ir::TypedExpression {
+                    ty: ty::Type::LValue(Box::new(ty::Type::Int)),
+                    expr: ir::Expression::Increment(Box::new(index_expr.clone()))
+                };
+                
+
+                // finalization
+                let stmts = vec![
+                    ir::Statement::VarDecl {
+                        ty: array_rvalue.ty.clone(),
+                        id: array_id
+                    },
+                    ir::Statement::Expression(utils::build_assign(array_expr.clone(), array)),
+                    ir::Statement::VarDecl {
+                        ty: ty::Type::Int,
+                        id: index_id
+                    },
+                    ir::Statement::Expression(utils::build_assign(index_expr.clone(), const0.clone())),
+                    ir::Statement::While {
+                        condition: ir::TypedExpression {
+                            ty: ty::Type::Boolean,
+                            expr: ir::Expression::BinaryOperator {
+                                binop: ir::BinaryOperatorKind::IntLess,
+                                lhs: Box::new(index_rvalue.clone()),
+                                rhs: Box::new(array_len_expr),
+                            }
+                        },
+                        body: vec![
+                            ir::Statement::VarDecl {
+                                ty: ty,
+                                id: current_id
+                            },
+                            ir::Statement::Expression(utils::build_assign(current_expr, array_indexed)),
+                            ir::Statement::Block(body),
+                            ir::Statement::Expression(index_inc)
+                        ]
+                    }
+                ];
+                self.statements.push(ir::Statement::Block(stmts))
             }
             ast::Statement::Return(maybe_expr) => {
                 let expr = if let Some(expr) = maybe_expr {

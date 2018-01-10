@@ -201,7 +201,6 @@ impl Backend {
             }
             ir::Statement::Break => self.gen_break_statement(),
             ir::Statement::Continue => self.gen_continue_statement(),
-            _ => unimplemented!(),
         }
     }
 

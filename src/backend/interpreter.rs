@@ -178,35 +178,6 @@ impl<'p> Interpreter<'p> {
                 }
                 Ok(StatementResult::Nothing)
             }
-            Statement::For {
-                id,
-                ref array,
-                ref body,
-            } => {
-                let array = self.interpret_expression(array)?;
-                let array_index = extract_pattern!(array; Value::Array(ArrayId(id)) => id);
-                let array = self.arrays[array_index].clone();
-
-                for value in array {
-                    self.memory.begin_scope();
-                    self.memory.set_direct(id, value);
-
-                    match self.interpret_block(body)? {
-                        StatementResult::Nothing | StatementResult::Continue => {}
-                        StatementResult::Break => {
-                            self.memory.end_scope();
-                            break;
-                        }
-                        r @ StatementResult::Return(_) => {
-                            self.memory.end_scope();
-                            return Ok(r);
-                        }
-                    }
-
-                    self.memory.end_scope();
-                }
-                Ok(StatementResult::Nothing)
-            }
             Statement::Return(ref expr) => {
                 if let Some(ref expr) = *expr {
                     let expr = self.interpret_expression(expr)?;
@@ -470,10 +441,6 @@ impl Memory {
     fn set_from_lvalue(&mut self, lvalue: Value, value: Value) {
         let index = extract_pattern!(lvalue; Value::LValue(index) => index);
         self.memory[index] = value;
-    }
-
-    fn set_direct(&mut self, id: ir::IdentifierId, lvalue: Value) {
-        self.scopes.last_mut().unwrap().insert(id, lvalue);
     }
 
     fn index_from_identifier(&self, id: ir::IdentifierId) -> Value {

@@ -36,12 +36,6 @@ pub enum Statement {
         condition: TypedExpression,
         body: BlockStatement,
     },
-    For {
-        // TODO lower this to while
-        id: IdentifierId,
-        array: TypedExpression,
-        body: BlockStatement,
-    },
     Return(Option<TypedExpression>), // None for void
     Expression(TypedExpression),
     Break,
