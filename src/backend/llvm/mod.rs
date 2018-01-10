@@ -13,7 +13,7 @@ use ir;
 use ty;
 use interner::{InternerId, Interner};
 
-mod helper;
+pub mod helper;
 use self::helper::*;
 
 pub fn llvm_gen_program(program: ir::Program) -> Result<LLVMExecutionModule, CString> {

@@ -5,15 +5,11 @@ use span::*;
 use errors::TranslationError;
 
 mod symbol_table;
+#[macro_use]
+mod utils;
 use self::symbol_table::{GlobalsTable, SymbolTable};
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
-
-macro_rules! error {
-    ($err:expr, $span:expr) => {
-        Err(Spanned::new($err, $span))
-    }
-}
 
 pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program> {
     let mut globals_table = GlobalsTable::new();
@@ -226,12 +222,12 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         error_span: Span,
     ) -> TranslationResult<()> {
         // we must compute this first to avoid shadowing
-        let value_expr = if let Some(value) = value {
+        let rhs = if let Some(value) = value {
             let value_span = value.span;
             let expr = self.translate_expression(value)?;
-            let expr = lvalue_to_rvalue(expr);
-            check_eq_types(&expr.ty, &ty, value_span)?;
-            Some(expr)
+            let expr = utils::lvalue_to_rvalue(expr);
+            utils::check_eq_types(&expr.ty, &ty, value_span)?;
+            expr
         } else if ty.has_default_value() {
             let lit = match ty {
                 ty::Type::Int => ir::Literal::IntLiteral(0),
@@ -239,12 +235,9 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 ty::Type::Boolean => ir::Literal::BooleanLiteral(false),
                 _ => unreachable!(),
             };
-            Some(ir::TypedExpression {
-                ty: ty.clone(),
-                expr: ir::Expression::Literal(lit),
-            })
+            utils::literal_to_texpr(lit)
         } else {
-            None
+            return error!(TranslationError::NoDefaultValue, error_span);
         };
 
         let id = if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
@@ -258,25 +251,17 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             );
         };
 
-        if let Some(rhs) = value_expr {
-            let lhs = ir::Expression::Identifier(id);
-            let lhs = ir::TypedExpression {
-                ty: ty::Type::LValue(Box::new(ty.clone())),
-                expr: lhs,
-            };
+        let lhs = utils::build_texpr_from_id(ty.clone(), id);
 
-            let assign_expr = ir::TypedExpression {
-                ty,
-                expr: ir::Expression::Assign {
-                    lhs: Box::new(lhs),
-                    rhs: Box::new(rhs),
-                },
-            };
+        let assign_expr = ir::TypedExpression {
+            ty,
+            expr: ir::Expression::Assign {
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+            },
+        };
 
-            self.statements.push(ir::Statement::Expression(assign_expr));
-        } else if !ty.has_default_value() {
-            return error!(TranslationError::NoDefaultValue, error_span);
-        }
+        self.statements.push(ir::Statement::Expression(assign_expr));
         Ok(())
     }
 
@@ -303,8 +288,8 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }) => {
                 let condition_span = condition.span;
                 let condition = self.translate_expression(condition)?;
-                let condition = lvalue_to_rvalue(condition);
-                check_eq_types(&condition.ty, &ty::Type::Boolean, condition_span)?;
+                let condition = utils::lvalue_to_rvalue(condition);
+                utils::check_eq_types(&condition.ty, &ty::Type::Boolean, condition_span)?;
 
                 let body = self.translate_statement_as_block(*body)?;
 
@@ -323,8 +308,8 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Statement::While(ast::WhileStatement { condition, body }) => {
                 let condition_span = condition.span;
                 let condition = self.translate_expression(condition)?;
-                let condition = lvalue_to_rvalue(condition);
-                check_eq_types(&condition.ty, &ty::Type::Boolean, condition_span)?;
+                let condition = utils::lvalue_to_rvalue(condition);
+                utils::check_eq_types(&condition.ty, &ty::Type::Boolean, condition_span)?;
 
                 let old_in_loop = self.func_infos.in_loop;
                 self.func_infos.in_loop = true;
@@ -342,10 +327,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }) => {
                 let array_span = array.span;
                 let array = self.translate_expression(array)?;
-                let array = lvalue_to_rvalue(array);
+                let array = utils::lvalue_to_rvalue(array);
 
                 if let ty::Type::Array(sub_ty) = array.ty.clone() {
-                    check_eq_types(&sub_ty, &ty, array_span)?;
+                    utils::check_eq_types(&sub_ty, &ty, array_span)?;
                 } else {
                     return error!(TranslationError::SubscriptNotArray(array.ty), array_span);
                 }
@@ -369,12 +354,12 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let expr = if let Some(expr) = maybe_expr {
                     let expr_span = expr.span;
                     let expr = self.translate_expression(expr)?;
-                    let expr = lvalue_to_rvalue(expr);
-                    check_eq_types(&expr.ty, &self.func_infos.ret_ty, expr_span)?;
+                    let expr = utils::lvalue_to_rvalue(expr);
+                    utils::check_eq_types(&expr.ty, &self.func_infos.ret_ty, expr_span)?;
 
                     Some(expr)
                 } else {
-                    check_eq_types(&ty::Type::Void, &self.func_infos.ret_ty, stmt_span)?;
+                    utils::check_eq_types(&ty::Type::Void, &self.func_infos.ret_ty, stmt_span)?;
                     None
                 };
 
@@ -382,7 +367,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
             ast::Statement::Expression(expr) => {
                 let expr = self.translate_expression(expr)?;
-                let expr = lvalue_to_rvalue(expr);
+                let expr = utils::lvalue_to_rvalue(expr);
                 self.statements.push(ir::Statement::Expression(expr));
             }
             ast::Statement::Break => {
@@ -434,10 +419,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
             ast::Expression::Identifier(id) => {
                 if let Some(symbol) = self.symbol_table.lookup_local(&id) {
-                    Ok(ir::TypedExpression {
-                        ty: ty::Type::LValue(Box::new(symbol.ty.clone())),
-                        expr: ir::Expression::Identifier(symbol.id),
-                    })
+                    Ok(utils::build_texpr_from_id(symbol.ty.clone(), symbol.id))
                 } else {
                     error!(TranslationError::UndefinedLocal(id), expr_span)
                 }
@@ -446,27 +428,21 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let lhs_span = lhs.span;
                 let lhs = self.translate_expression(*lhs)?;
                 let rhs = self.translate_expression(*rhs)?;
-                let rhs = lvalue_to_rvalue(rhs);
+                let rhs = utils::lvalue_to_rvalue(rhs);
 
                 if let ty::Type::LValue(ref sub) = lhs.ty {
-                    check_eq_types(sub, &rhs.ty, expr_span)?;
+                    utils::check_eq_types(sub, &rhs.ty, expr_span)?;
                 } else {
                     return error!(TranslationError::NonLValueAssign, lhs_span);
                 }
 
-                let ty = rhs.ty.clone();
-                let expr = ir::Expression::Assign {
-                    lhs: Box::new(lhs),
-                    rhs: Box::new(rhs),
-                };
-
-                Ok(ir::TypedExpression { ty, expr })
+                Ok(utils::build_assign(lhs, rhs))
             }
             ast::Expression::BinaryOperator { binop, lhs, rhs } => {
                 let lhs = self.translate_expression(*lhs)?;
-                let lhs = lvalue_to_rvalue(lhs);
+                let lhs = utils::lvalue_to_rvalue(lhs);
                 let rhs = self.translate_expression(*rhs)?;
-                let rhs = lvalue_to_rvalue(rhs);
+                let rhs = utils::lvalue_to_rvalue(rhs);
 
                 if let Some((ty, op)) = binop_typeck(binop, &lhs.ty, &rhs.ty) {
                     let expr = ir::Expression::BinaryOperator {
@@ -484,9 +460,9 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
             ast::Expression::LazyOperator { lazyop, lhs, rhs } => {
                 let lhs = self.translate_expression(*lhs)?;
-                let lhs = lvalue_to_rvalue(lhs);
+                let lhs = utils::lvalue_to_rvalue(lhs);
                 let rhs = self.translate_expression(*rhs)?;
-                let rhs = lvalue_to_rvalue(rhs);
+                let rhs = utils::lvalue_to_rvalue(rhs);
 
                 if lhs.ty != ty::Type::Boolean || rhs.ty != ty::Type::Boolean {
                     return error!(
@@ -497,10 +473,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
                 let (init, cond) = match lazyop {
                     ast::LazyOperatorKind::LogicalOr => {
-                        let init = ir::TypedExpression {
-                            ty: ty::Type::Boolean,
-                            expr: ir::Expression::Literal(ir::Literal::BooleanLiteral(true)),
-                        };
+                        let init = utils::literal_to_texpr(ir::Literal::BooleanLiteral(true));
 
                         let cond = ir::TypedExpression {
                             ty: ty::Type::Boolean,
@@ -513,44 +486,28 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         (init, cond)
                     },
                     ast::LazyOperatorKind::LogicalAnd => {
-                        let init = ir::TypedExpression {
-                            ty: ty::Type::Boolean,
-                            expr: ir::Expression::Literal(ir::Literal::BooleanLiteral(false)),
-                        };
-
+                        let init = utils::literal_to_texpr(ir::Literal::BooleanLiteral(false));
                         (init, lhs)
                     }
                 };
 
-                let lval_bool_ty = ty::Type::LValue(Box::new(ty::Type::Boolean));
                 let res_id = self.symbol_table.new_identifier_id();
-                let res_id_expr = ir::TypedExpression {
-                    ty: lval_bool_ty,
-                    expr: ir::Expression::Identifier(res_id)
-                };
+                let res_id_expr = utils::build_texpr_from_id(ty::Type::Boolean, res_id);
 
                 let stmts = vec![
                     ir::Statement::VarDecl {
                         ty: ty::Type::Boolean,
                         id: res_id
                     },
-                    ir::Statement::Expression(ir::TypedExpression {
-                        ty: ty::Type::Boolean,
-                        expr: ir::Expression::Assign {
-                            lhs: Box::new(res_id_expr.clone()),
-                            rhs: Box::new(init)
-                        }
-                    }),
+                    ir::Statement::Expression(
+                        utils::build_assign(res_id_expr.clone(), init)
+                    ),
                     ir::Statement::If {
                         condition: cond,
                         body: vec![
-                            ir::Statement::Expression(ir::TypedExpression {
-                                ty: ty::Type::Boolean,
-                                expr: ir::Expression::Assign {
-                                    lhs: Box::new(res_id_expr.clone()),
-                                    rhs: Box::new(rhs)
-                                }
-                            })
+                            ir::Statement::Expression(
+                                utils::build_assign(res_id_expr.clone(), rhs)
+                            )
                         ],
                         else_clause: vec![]
                     }
@@ -560,13 +517,13 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     ty: ty::Type::Boolean,
                     expr: ir::Expression::Block(Box::new(ir::BlockExpression {
                         stmts,
-                        final_expr: lvalue_to_rvalue(res_id_expr)
+                        final_expr: utils::lvalue_to_rvalue(res_id_expr)
                     }))
                 })
             }
             ast::Expression::UnaryOperator { unop, sub } => {
                 let sub = self.translate_expression(*sub)?;
-                let sub = lvalue_to_rvalue(sub);
+                let sub = utils::lvalue_to_rvalue(sub);
 
                 if let Some((ty, op)) = unop_typeck(unop, &sub.ty) {
                     let expr = ir::Expression::UnaryOperator {
@@ -583,7 +540,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let sub = self.translate_expression(*sub)?;
 
                 if let ty::Type::LValue(ref sub_ty) = sub.ty {
-                    check_eq_types(sub_ty, &ty::Type::Int, sub_span)?;
+                    utils::check_eq_types(sub_ty, &ty::Type::Int, sub_span)?;
                 } else {
                     return error!(TranslationError::IncDecNonLValue, sub_span);
                 }
@@ -600,7 +557,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let sub = self.translate_expression(*sub)?;
 
                 if let ty::Type::LValue(ref sub_ty) = sub.ty {
-                    check_eq_types(sub_ty, &ty::Type::Int, sub_span)?;
+                    utils::check_eq_types(sub_ty, &ty::Type::Int, sub_span)?;
                 } else {
                     return error!(TranslationError::IncDecNonLValue, sub_span);
                 }
@@ -615,12 +572,12 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Expression::Subscript { array, index } => {
                 let index_span = index.span;
                 let array = self.translate_expression(*array)?;
-                let array = lvalue_to_rvalue(array);
+                let array = utils::lvalue_to_rvalue(array);
                 let index = self.translate_expression(*index)?;
-                let index = lvalue_to_rvalue(index);
+                let index = utils::lvalue_to_rvalue(index);
 
                 if let ty::Type::Array(sub_ty) = array.ty.clone() {
-                    check_eq_types(&index.ty, &ty::Type::Int, index_span)?;
+                    utils::check_eq_types(&index.ty, &ty::Type::Int, index_span)?;
                     Ok(ir::TypedExpression {
                         ty: ty::Type::LValue(sub_ty),
                         expr: ir::Expression::Subscript {
@@ -648,8 +605,8 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     for (arg, param_ty) in args.into_iter().zip(func_ty.parameters_ty.iter()) {
                         let arg_span = arg.span;
                         let arg = self.translate_expression(arg)?;
-                        let arg = lvalue_to_rvalue(arg);
-                        check_eq_types(&arg.ty, param_ty, arg_span)?;
+                        let arg = utils::lvalue_to_rvalue(arg);
+                        utils::check_eq_types(&arg.ty, param_ty, arg_span)?;
                         args_translated.push(arg);
                     }
                     let ret_ty = func_ty.return_ty;
@@ -674,9 +631,9 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 for size in sizes {
                     let size_span = size.span;
                     let size = self.translate_expression(size)?;
-                    let size = lvalue_to_rvalue(size);
+                    let size = utils::lvalue_to_rvalue(size);
 
-                    check_eq_types(&ty::Type::Int, &size.ty, size_span)?;
+                    utils::check_eq_types(&ty::Type::Int, &size.ty, size_span)?;
                     new_sizes.push(size);
                 }
 
@@ -691,7 +648,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Expression::MemberAccess { expr, member } => {
                 // TODO change this. It currently only works for .length on arrays
                 let expr = self.translate_expression(*expr)?;
-                let expr = lvalue_to_rvalue(expr);
+                let expr = utils::lvalue_to_rvalue(expr);
 
                 if member != "length" {
                     return error!(TranslationError::MemberUndefined, expr_span);
@@ -708,19 +665,6 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 }
             }
         }
-    }
-}
-
-fn lvalue_to_rvalue(expression: ir::TypedExpression) -> ir::TypedExpression {
-    match expression.ty.clone() {
-        ty::Type::LValue(sub) => ir::TypedExpression {
-            ty: *sub,
-            expr: ir::Expression::LValueToRValue(Box::new(expression)),
-        },
-        other => ir::TypedExpression {
-            ty: other,
-            expr: expression.expr,
-        },
     }
 }
 
@@ -858,13 +802,3 @@ fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
     }
 }
 
-fn check_eq_types(a: &ty::Type, b: &ty::Type, error_span: Span) -> TranslationResult<()> {
-    if a != b {
-        error!(
-            TranslationError::MismatchingTypes(a.clone(), b.clone(),),
-            error_span
-        )
-    } else {
-        Ok(())
-    }
-}
