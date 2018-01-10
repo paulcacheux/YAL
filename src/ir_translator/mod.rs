@@ -488,19 +488,81 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let rhs = self.translate_expression(*rhs)?;
                 let rhs = lvalue_to_rvalue(rhs);
 
-                if let Some((ty, op)) = lazyop_typeck(lazyop, &lhs.ty, &rhs.ty) {
-                    let expr = ir::Expression::LazyOperator {
-                        lazyop: op,
-                        lhs: Box::new(lhs),
-                        rhs: Box::new(rhs),
-                    };
-                    Ok(ir::TypedExpression { ty, expr })
-                } else {
-                    error!(
+                if lhs.ty != ty::Type::Boolean || rhs.ty != ty::Type::Boolean {
+                    return error!(
                         TranslationError::LazyOpUndefined(lazyop, lhs.ty, rhs.ty),
                         expr_span
                     )
                 }
+
+                let (init, cond) = match lazyop {
+                    ast::LazyOperatorKind::LogicalOr => {
+                        let init = ir::TypedExpression {
+                            ty: ty::Type::Boolean,
+                            expr: ir::Expression::Literal(ir::Literal::BooleanLiteral(true)),
+                        };
+
+                        let cond = ir::TypedExpression {
+                            ty: ty::Type::Boolean,
+                            expr: ir::Expression::UnaryOperator {
+                                unop: ir::UnaryOperatorKind::BooleanNot,
+                                sub: Box::new(lhs)
+                            }
+                        };
+
+                        (init, cond)
+                    },
+                    ast::LazyOperatorKind::LogicalAnd => {
+                        let init = ir::TypedExpression {
+                            ty: ty::Type::Boolean,
+                            expr: ir::Expression::Literal(ir::Literal::BooleanLiteral(false)),
+                        };
+
+                        (init, lhs)
+                    }
+                };
+
+                let lval_bool_ty = ty::Type::LValue(Box::new(ty::Type::Boolean));
+                let res_id = self.symbol_table.new_identifier_id();
+                let res_id_expr = ir::TypedExpression {
+                    ty: lval_bool_ty,
+                    expr: ir::Expression::Identifier(res_id)
+                };
+
+                let stmts = vec![
+                    ir::Statement::VarDecl {
+                        ty: ty::Type::Boolean,
+                        id: res_id
+                    },
+                    ir::Statement::Expression(ir::TypedExpression {
+                        ty: ty::Type::Boolean,
+                        expr: ir::Expression::Assign {
+                            lhs: Box::new(res_id_expr.clone()),
+                            rhs: Box::new(init)
+                        }
+                    }),
+                    ir::Statement::If {
+                        condition: cond,
+                        body: vec![
+                            ir::Statement::Expression(ir::TypedExpression {
+                                ty: ty::Type::Boolean,
+                                expr: ir::Expression::Assign {
+                                    lhs: Box::new(res_id_expr.clone()),
+                                    rhs: Box::new(rhs)
+                                }
+                            })
+                        ],
+                        else_clause: vec![]
+                    }
+                ];
+
+                Ok(ir::TypedExpression {
+                    ty: ty::Type::Boolean,
+                    expr: ir::Expression::Block(Box::new(ir::BlockExpression {
+                        stmts,
+                        final_expr: lvalue_to_rvalue(res_id_expr)
+                    }))
+                })
             }
             ast::Expression::UnaryOperator { unop, sub } => {
                 let sub = self.translate_expression(*sub)?;
@@ -746,24 +808,6 @@ fn binop_typeck(
             ir::BinaryOperatorKind::DoubleGreaterEqual,
         )),
 
-        _ => None,
-    }
-}
-
-fn lazyop_typeck(
-    lazyop: ast::LazyOperatorKind,
-    lhs: &ty::Type,
-    rhs: &ty::Type,
-) -> Option<(ty::Type, ir::LazyOperatorKind)> {
-    use ast::LazyOperatorKind::*;
-
-    match (lazyop, lhs, rhs) {
-        (LogicalAnd, &ty::Type::Boolean, &ty::Type::Boolean) => {
-            Some((ty::Type::Boolean, ir::LazyOperatorKind::BooleanLogicalAnd))
-        }
-        (LogicalOr, &ty::Type::Boolean, &ty::Type::Boolean) => {
-            Some((ty::Type::Boolean, ir::LazyOperatorKind::BooleanLogicalOr))
-        }
         _ => None,
     }
 }

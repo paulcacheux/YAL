@@ -58,6 +58,7 @@ pub struct TypedExpression {
 
 #[derive(Debug, Clone)]
 pub enum Expression {
+    Block(Box<BlockExpression>),
     LValueToRValue(Box<TypedExpression>),
     Literal(Literal),
     Identifier(IdentifierId),
@@ -67,11 +68,6 @@ pub enum Expression {
     },
     BinaryOperator {
         binop: BinaryOperatorKind,
-        lhs: Box<TypedExpression>,
-        rhs: Box<TypedExpression>,
-    },
-    LazyOperator {
-        lazyop: LazyOperatorKind,
         lhs: Box<TypedExpression>,
         rhs: Box<TypedExpression>,
     },
@@ -94,6 +90,12 @@ pub enum Expression {
         sizes: Vec<TypedExpression>,
     },
     ArrayLength(Box<TypedExpression>),
+}
+
+#[derive(Debug, Clone)]
+pub struct BlockExpression {
+    pub stmts: Vec<Statement>,
+    pub final_expr: TypedExpression,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -129,12 +131,6 @@ pub enum BinaryOperatorKind {
     DoubleGreater,
     IntGreaterEqual,
     DoubleGreaterEqual,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum LazyOperatorKind {
-    BooleanLogicalAnd,
-    BooleanLogicalOr,
 }
 
 #[derive(Debug, Clone, Copy)]

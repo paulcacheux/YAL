@@ -334,20 +334,25 @@ impl Backend {
     fn gen_expression(&mut self, expr: ir::TypedExpression) -> LLVMValueRef {
         let ir::TypedExpression { expr, .. } = expr;
         match expr {
+            ir::Expression::Block(block) => self.gen_expr_block(*block),
             ir::Expression::LValueToRValue(sub) => self.gen_l2r_expr(*sub),
             ir::Expression::Literal(lit) => self.gen_literal(lit),
             ir::Expression::Identifier(id) => self.gen_identifier(id),
             ir::Expression::Assign { lhs, rhs } => self.gen_assign(*lhs, *rhs),
             ir::Expression::BinaryOperator { binop, lhs, rhs } => self.gen_binop(binop, *lhs, *rhs),
-            ir::Expression::LazyOperator { lazyop, lhs, rhs } => {
-                self.gen_lazyop(lazyop, *lhs, *rhs)
-            }
             ir::Expression::UnaryOperator { unop, sub } => self.gen_unop(unop, *sub),
             ir::Expression::Increment(sub) => self.gen_incdecrement(*sub, true),
             ir::Expression::Decrement(sub) => self.gen_incdecrement(*sub, false),
             ir::Expression::FunctionCall { function, args } => self.gen_funccall(&function, args),
             _ => unimplemented!(),
         }
+    }
+
+    fn gen_expr_block(&mut self, block: ir::BlockExpression) -> LLVMValueRef {
+        for stmt in block.stmts {
+            self.gen_statement(stmt);
+        }
+        self.gen_expression(block.final_expr)
     }
 
     fn gen_l2r_expr(&mut self, expr: ir::TypedExpression) -> LLVMValueRef {
@@ -456,62 +461,6 @@ impl Backend {
         };
 
         func(&self.builder, lhs, rhs, b"\0")
-    }
-
-    fn gen_lazyop(
-        &mut self,
-        lazyop: ir::LazyOperatorKind,
-        lhs: ir::TypedExpression,
-        rhs: ir::TypedExpression,
-    ) -> LLVMValueRef {
-        let lhs = self.gen_expression(lhs);
-        let bool_ty = self.gen_type(&ty::Type::Boolean);
-        unsafe {
-            let (condition, then_value) = match lazyop {
-                ir::LazyOperatorKind::BooleanLogicalAnd => {
-                    let condition = self.builder.build_not(lhs, b"\0");
-                    let then_value = LLVMConstInt(bool_ty, 0, 0);
-                    (condition, then_value)
-                }
-                ir::LazyOperatorKind::BooleanLogicalOr => {
-                    let then_value = LLVMConstInt(bool_ty, 1, 1);
-                    (lhs, then_value)
-                }
-            };
-
-            let then_bb = LLVMAppendBasicBlockInContext(
-                self.context.context,
-                self.current_func,
-                c_str(b"then\0"),
-            );
-            let else_bb = LLVMAppendBasicBlockInContext(
-                self.context.context,
-                self.current_func,
-                c_str(b"else\0"),
-            );
-            let end_bb = LLVMAppendBasicBlockInContext(
-                self.context.context,
-                self.current_func,
-                c_str(b"end\0"),
-            );
-
-            self.builder.build_cond_br(condition, then_bb, else_bb);
-
-            self.builder.position_at_end(then_bb);
-            self.builder.build_br(end_bb);
-            self.builder.position_at_end(else_bb);
-            let else_value = self.gen_expression(rhs);
-            let else_out_bb = self.builder.get_insert_block();
-            self.builder.build_br(end_bb);
-
-            let mut values = [then_value, else_value];
-            let mut bbs = [then_bb, else_out_bb];
-
-            self.builder.position_at_end(end_bb);
-            let phi = self.builder.build_phi(bool_ty, b"\0");
-            LLVMAddIncoming(phi, values.as_mut_ptr(), bbs.as_mut_ptr(), 2);
-            phi
-        }
     }
 
     fn gen_unop(&mut self, unop: ir::UnaryOperatorKind, sub: ir::TypedExpression) -> LLVMValueRef {
