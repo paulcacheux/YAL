@@ -230,6 +230,12 @@ impl<'p> Interpreter<'p> {
         let ir::TypedExpression { ref expr, .. } = *expr;
 
         match *expr {
+            Expression::Block(ref block) => {
+                for stmt in &block.stmts {
+                    self.interpret_statement(stmt)?;
+                }
+                self.interpret_expression(&block.final_expr)
+            }
             Expression::LValueToRValue(ref sub) => {
                 let sub = self.interpret_expression(sub)?;
                 Ok(self.memory.value_from_lvalue(sub))
@@ -329,31 +335,6 @@ impl<'p> Interpreter<'p> {
                         (lhs, rhs);
                         (Value::Double(a), Value::Double(b)) => Value::Boolean(a >= b)
                     ),
-                })
-            }
-            Expression::LazyOperator {
-                lazyop,
-                ref lhs,
-                ref rhs,
-            } => {
-                let lhs = self.interpret_expression(lhs)?;
-
-                use ir::LazyOperatorKind::*;
-                Ok(match lazyop {
-                    BooleanLogicalAnd => {
-                        if !extract_pattern!(lhs; Value::Boolean(b) => b) {
-                            Value::Boolean(false)
-                        } else {
-                            self.interpret_expression(rhs)?
-                        }
-                    }
-                    BooleanLogicalOr => {
-                        if extract_pattern!(lhs; Value::Boolean(b) => b) {
-                            Value::Boolean(true)
-                        } else {
-                            self.interpret_expression(rhs)?
-                        }
-                    }
                 })
             }
             Expression::UnaryOperator { unop, ref sub } => {
