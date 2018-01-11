@@ -140,8 +140,13 @@ impl<'p> Interpreter<'p> {
         use ir::Statement;
         match *stmt {
             Statement::Block(ref b) => self.interpret_block(b),
-            Statement::VarDecl { ref ty, id } => {
-                self.memory.set_new(id, default_value(ty));
+            Statement::VarDecl { ref ty, id, ref init } => {
+                let value = if let Some(ref init) = *init {
+                    self.interpret_expression(init)?
+                } else {
+                    default_value(ty)
+                };
+                self.memory.set_new(id, value);
                 Ok(StatementResult::Nothing)
             }
             Statement::If {

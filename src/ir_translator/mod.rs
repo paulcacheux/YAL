@@ -240,28 +240,16 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             return error!(TranslationError::NoDefaultValue, error_span);
         };
 
-        let id = if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
+        if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
             self.statements
-                .push(ir::Statement::VarDecl { ty: ty.clone(), id });
-            id
+                .push(ir::Statement::VarDecl { ty: ty.clone(), id, init: Some(rhs)});
         } else {
             return error!(
                 TranslationError::LocalAlreadyDefined(name),
                 error_span
             );
-        };
+        }
 
-        let lhs = utils::build_texpr_from_id(ty.clone(), id);
-
-        let assign_expr = ir::TypedExpression {
-            ty,
-            expr: ir::Expression::Assign {
-                lhs: Box::new(lhs),
-                rhs: Box::new(rhs),
-            },
-        };
-
-        self.statements.push(ir::Statement::Expression(assign_expr));
         Ok(())
     }
 
@@ -364,7 +352,6 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 self.symbol_table.end_scope();
 
                 // translation of current loop value
-                let current_expr = utils::build_texpr_from_id(ty.clone(), current_id);
                 let array_indexed = utils::lvalue_to_rvalue(ir::TypedExpression {
                     ty: ty::Type::LValue(Box::new(ty.clone())),
                     expr: ir::Expression::Subscript {
@@ -384,14 +371,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let stmts = vec![
                     ir::Statement::VarDecl {
                         ty: array_rvalue.ty.clone(),
-                        id: array_id
+                        id: array_id,
+                        init: Some(array)
                     },
-                    ir::Statement::Expression(utils::build_assign(array_expr.clone(), array)),
                     ir::Statement::VarDecl {
                         ty: ty::Type::Int,
-                        id: index_id
+                        id: index_id,
+                        init: Some(const0)
                     },
-                    ir::Statement::Expression(utils::build_assign(index_expr.clone(), const0.clone())),
                     ir::Statement::While {
                         condition: ir::TypedExpression {
                             ty: ty::Type::Boolean,
@@ -404,9 +391,9 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         body: vec![
                             ir::Statement::VarDecl {
                                 ty: ty,
-                                id: current_id
+                                id: current_id,
+                                init: Some(array_indexed)
                             },
-                            ir::Statement::Expression(utils::build_assign(current_expr, array_indexed)),
                             ir::Statement::Block(body),
                             ir::Statement::Expression(index_inc)
                         ]
@@ -561,11 +548,9 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let stmts = vec![
                     ir::Statement::VarDecl {
                         ty: ty::Type::Boolean,
-                        id: res_id
+                        id: res_id,
+                        init: Some(init)
                     },
-                    ir::Statement::Expression(
-                        utils::build_assign(res_id_expr.clone(), init)
-                    ),
                     ir::Statement::If {
                         condition: cond,
                         body: vec![

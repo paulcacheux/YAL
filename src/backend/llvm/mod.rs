@@ -187,7 +187,7 @@ impl Backend {
         // return true if the statement end on a terminator
         match statement {
             ir::Statement::Block(block) => self.gen_block_statement(block),
-            ir::Statement::VarDecl { ty, id } => self.gen_vardecl_statement(&ty, id),
+            ir::Statement::VarDecl { ty, id, init } => self.gen_vardecl_statement(&ty, id, init),
             ir::Statement::If {
                 condition,
                 body,
@@ -204,9 +204,14 @@ impl Backend {
         }
     }
 
-    fn gen_vardecl_statement(&mut self, ty: &ty::Type, id: ir::IdentifierId) -> bool {
+    fn gen_vardecl_statement(&mut self, ty: &ty::Type, id: ir::IdentifierId, init: Option<ir::TypedExpression>) -> bool {
         let llvm_ty = self.gen_type(ty);
         let ptr = self.builder.build_alloca(llvm_ty, b"\0");
+
+        if let Some(init) = init {
+            let init_value = self.gen_expression(init);
+            self.builder.build_store(init_value, ptr);
+        }
 
         self.ids.insert(id, ptr);
         false
