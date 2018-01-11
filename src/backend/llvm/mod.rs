@@ -11,7 +11,7 @@ use libc;
 
 use ir;
 use ty;
-use interner::{InternerId, Interner};
+use interner::{Interner, InternerId};
 
 pub mod helper;
 use self::helper::*;
@@ -194,7 +194,12 @@ impl Backend {
         }
     }
 
-    fn gen_vardecl_statement(&mut self, ty: &ty::Type, id: ir::IdentifierId, init: Option<ir::TypedExpression>) -> bool {
+    fn gen_vardecl_statement(
+        &mut self,
+        ty: &ty::Type,
+        id: ir::IdentifierId,
+        init: Option<ir::TypedExpression>,
+    ) -> bool {
         let llvm_ty = self.gen_type(ty);
         let ptr = self.builder.build_alloca(llvm_ty, b"\0");
 
