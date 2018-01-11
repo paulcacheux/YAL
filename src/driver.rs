@@ -38,7 +38,7 @@ fn print_error_line(input: &str, span: Span) {
         .filter(|&(_, (_, ref arrow))| arrow.contains('^'));
 
     for (n, (line, arrow)) in iter {
-        eprintln!("{:04}| {}\n    |{}", n, line, arrow);
+        eprintln!("{:04}|{}\n    |{}", n, line, arrow);
     }
 }
 

@@ -164,7 +164,7 @@ impl<'input> Lexer<'input> {
                     if s.starts_with("___") {
                         return Err(Spanned::new(
                             LexingError::ReservedIdentifier(s.to_string()),
-                            Span::new_with_len(self.pos, s.len()),
+                            Span::new_with_len(start_pos, s.len()),
                         ));
                     }
                     Token::Identifier(s)
