@@ -518,9 +518,11 @@ impl<'si, 'input> Parser<'si, 'input> {
                 Ok(Spanned::new(expr, span))
             }
             Token::LeftParenthesis => {
-                let expr = self.parse_expression()?;
-                expect!(self.lexer; Token::RightParenthesis, ")");
-                Ok(expr)
+                let sub_expr = self.parse_expression()?;
+                let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
+                let span = Span::merge(span, end_span);
+                let expr = ast::Expression::Parenthesis(Box::new(sub_expr));
+                Ok(Spanned::new(expr, span))
             }
             Token::Identifier(id) => {
                 let name = id.to_string();

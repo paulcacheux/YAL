@@ -1,5 +1,5 @@
 use ty::*;
-use interner::{InternerId, Interner};
+use interner::{Interner, InternerId};
 use span::{Span, Spanned};
 
 #[derive(Debug, Clone)]
@@ -107,6 +107,7 @@ pub struct ForStatement {
 pub enum Expression {
     Literal(Literal),
     Identifier(String),
+    Parenthesis(Box<Spanned<Expression>>),
     Assign {
         lhs: Box<Spanned<Expression>>,
         rhs: Box<Spanned<Expression>>,

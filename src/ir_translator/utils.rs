@@ -14,7 +14,7 @@ macro_rules! error {
 pub fn build_texpr_from_id(ty: ty::Type, id: IdentifierId) -> ir::TypedExpression {
     ir::TypedExpression {
         ty: ty::Type::LValue(Box::new(ty)),
-        expr: ir::Expression::Identifier(id)
+        expr: ir::Expression::Identifier(id),
     }
 }
 
@@ -25,7 +25,7 @@ pub fn build_assign(lhs: ir::TypedExpression, rhs: ir::TypedExpression) -> ir::T
         expr: ir::Expression::Assign {
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
-        }
+        },
     }
 }
 
@@ -62,6 +62,6 @@ pub fn literal_to_texpr(lit: ir::Literal) -> ir::TypedExpression {
     };
     ir::TypedExpression {
         ty,
-        expr: ir::Expression::Literal(lit)
+        expr: ir::Expression::Literal(lit),
     }
 }

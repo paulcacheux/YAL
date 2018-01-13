@@ -241,13 +241,13 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         };
 
         if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
-            self.statements
-                .push(ir::Statement::VarDecl { ty: ty.clone(), id, init: Some(rhs)});
+            self.statements.push(ir::Statement::VarDecl {
+                ty: ty.clone(),
+                id,
+                init: Some(rhs),
+            });
         } else {
-            return error!(
-                TranslationError::LocalAlreadyDefined(name),
-                error_span
-            );
+            return error!(TranslationError::LocalAlreadyDefined(name), error_span);
         }
 
         Ok(())
@@ -311,7 +311,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 ty,
                 name,
                 array,
-                body
+                body,
             }) => {
                 let array_span = array.span;
                 let array = self.translate_expression(array)?;
@@ -334,16 +334,17 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let const0 = utils::literal_to_texpr(ir::Literal::IntLiteral(0));
                 let array_len_expr = ir::TypedExpression {
                     ty: ty::Type::Int,
-                    expr: ir::Expression::ArrayLength(Box::new(array_rvalue.clone()))
+                    expr: ir::Expression::ArrayLength(Box::new(array_rvalue.clone())),
                 };
 
                 // translation of stmt
                 self.symbol_table.begin_scope();
-                let current_id = if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
-                    id
-                } else {
-                    unreachable!()
-                };
+                let current_id =
+                    if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
+                        id
+                    } else {
+                        unreachable!()
+                    };
 
                 let old_in_loop = self.func_infos.in_loop;
                 self.func_infos.in_loop = true;
@@ -357,27 +358,26 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     expr: ir::Expression::Subscript {
                         array: Box::new(array_rvalue.clone()),
                         index: Box::new(index_rvalue.clone()),
-                    }
+                    },
                 });
 
                 // translation of index++
                 let index_inc = ir::TypedExpression {
                     ty: ty::Type::LValue(Box::new(ty::Type::Int)),
-                    expr: ir::Expression::Increment(Box::new(index_expr.clone()))
+                    expr: ir::Expression::Increment(Box::new(index_expr.clone())),
                 };
-                
 
                 // finalization
                 let stmts = vec![
                     ir::Statement::VarDecl {
                         ty: array_rvalue.ty.clone(),
                         id: array_id,
-                        init: Some(array)
+                        init: Some(array),
                     },
                     ir::Statement::VarDecl {
                         ty: ty::Type::Int,
                         id: index_id,
-                        init: Some(const0)
+                        init: Some(const0),
                     },
                     ir::Statement::While {
                         condition: ir::TypedExpression {
@@ -386,18 +386,18 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                                 binop: ir::BinaryOperatorKind::IntLess,
                                 lhs: Box::new(index_rvalue.clone()),
                                 rhs: Box::new(array_len_expr),
-                            }
+                            },
                         },
                         body: vec![
                             ir::Statement::VarDecl {
                                 ty: ty,
                                 id: current_id,
-                                init: Some(array_indexed)
+                                init: Some(array_indexed),
                             },
                             ir::Statement::Block(body),
-                            ir::Statement::Expression(index_inc)
-                        ]
-                    }
+                            ir::Statement::Expression(index_inc),
+                        ],
+                    },
                 ];
                 self.statements.push(ir::Statement::Block(stmts))
             }
@@ -475,6 +475,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     error!(TranslationError::UndefinedLocal(id), expr_span)
                 }
             }
+            ast::Expression::Parenthesis(sub) => self.translate_expression(*sub),
             ast::Expression::Assign { lhs, rhs } => {
                 let lhs_span = lhs.span;
                 let lhs = self.translate_expression(*lhs)?;
@@ -519,7 +520,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     return error!(
                         TranslationError::LazyOpUndefined(lazyop, lhs.ty, rhs.ty),
                         expr_span
-                    )
+                    );
                 }
 
                 let (init, cond) = match lazyop {
@@ -530,12 +531,12 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                             ty: ty::Type::Boolean,
                             expr: ir::Expression::UnaryOperator {
                                 unop: ir::UnaryOperatorKind::BooleanNot,
-                                sub: Box::new(lhs)
-                            }
+                                sub: Box::new(lhs),
+                            },
                         };
 
                         (init, cond)
-                    },
+                    }
                     ast::LazyOperatorKind::LogicalAnd => {
                         let init = utils::literal_to_texpr(ir::Literal::BooleanLiteral(false));
                         (init, lhs)
@@ -549,25 +550,26 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     ir::Statement::VarDecl {
                         ty: ty::Type::Boolean,
                         id: res_id,
-                        init: Some(init)
+                        init: Some(init),
                     },
                     ir::Statement::If {
                         condition: cond,
                         body: vec![
-                            ir::Statement::Expression(
-                                utils::build_assign(res_id_expr.clone(), rhs)
-                            )
+                            ir::Statement::Expression(utils::build_assign(
+                                res_id_expr.clone(),
+                                rhs,
+                            )),
                         ],
-                        else_clause: vec![]
-                    }
+                        else_clause: vec![],
+                    },
                 ];
 
                 Ok(ir::TypedExpression {
                     ty: ty::Type::Boolean,
                     expr: ir::Expression::Block(Box::new(ir::BlockExpression {
                         stmts,
-                        final_expr: utils::lvalue_to_rvalue(res_id_expr)
-                    }))
+                        final_expr: utils::lvalue_to_rvalue(res_id_expr),
+                    })),
                 })
             }
             ast::Expression::UnaryOperator { unop, sub } => {
@@ -850,4 +852,3 @@ fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
         _ => false,
     }
 }
-
