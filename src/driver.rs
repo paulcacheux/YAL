@@ -8,7 +8,7 @@ use std::path::Path;
 use clap::{App, Arg};
 
 use javalette::*;
-use codemap::{Span, Spanned};
+use codemap::{CodeMap, Span, Spanned};
 
 fn slurp_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
     let mut file = File::open(path)?;
@@ -30,6 +30,13 @@ fn print_error_line(input: &str, span: Span) {
         });
     }
 
+    if span.end >= input.len() {
+        unsafe {
+            let bytes = arrow.as_bytes_mut();
+            *bytes.last_mut().unwrap() = b'^';
+        }
+    }
+
     let iter = input
         .lines()
         .map(String::from)
@@ -38,20 +45,27 @@ fn print_error_line(input: &str, span: Span) {
         .filter(|&(_, (_, ref arrow))| arrow.contains('^'));
 
     for (n, (line, arrow)) in iter {
-        eprintln!("{:04}|{}\n    |{}", n, line, arrow);
+        eprintln!("{:05}|{}", n + 1, line);
+        eprintln!("     |{}", arrow);
     }
 }
 
 fn continue_or_exit<T, E: std::fmt::Display>(
     path: &str,
-    input: &str,
+    codemap: &CodeMap,
     res: Result<T, Spanned<E>>,
 ) -> T {
     match res {
         Ok(v) => v,
         Err(Spanned { inner: error, span }) => {
-            eprintln!("{}:{}:{}: {}", path, span.start, span.end, error);
-            print_error_line(input, span);
+            println!("{:?}", span);
+            let source_loc = codemap.bytepos_to_sourceloc(span.start);
+            eprintln!(
+                "{}:{}:{}: {}",
+                path, source_loc.line, source_loc.column, error
+            );
+            eprintln!("{}", error);
+            print_error_line(codemap.input, span);
             std::process::exit(1);
         }
     }
@@ -97,12 +111,11 @@ fn main() {
 
     let input = slurp_file(&path).unwrap();
     let codemap = codemap::CodeMap::new(&path, &input);
-    println!("{:#?}", codemap);
 
     let lexer = lexer::Lexer::new(&input);
-    let program = continue_or_exit(path, &input, parser::parse_program(lexer));
+    let program = continue_or_exit(path, &codemap, parser::parse_program(lexer));
     // println!("{:#?}", program);
-    let ir_prog = continue_or_exit(path, &input, ir_translator::translate_program(program));
+    let ir_prog = continue_or_exit(path, &codemap, ir_translator::translate_program(program));
     // println!("{:#?}", ir_prog);
 
     match backend {

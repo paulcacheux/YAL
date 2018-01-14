@@ -1,7 +1,8 @@
 #[derive(Debug, Clone)]
 pub struct CodeMap<'name, 'input> {
-    input_name: &'name str,
-    lines: Vec<(usize, &'input str)>,
+    pub input_name: &'name str,
+    pub input: &'input str,
+    lines: Vec<(usize, usize, &'input str)>,
 }
 
 impl<'name, 'input> CodeMap<'name, 'input> {
@@ -17,19 +18,38 @@ impl<'name, 'input> CodeMap<'name, 'input> {
         for (index, c) in input.char_indices() {
             if c == '\n' {
                 let s = string_builder(input, start_index, index);
-                lines.push((start_index, s));
+                lines.push((start_index, index, s));
                 start_index = index + 1;
             }
         }
 
         if start_index != input.len() {
             let s = string_builder(input, start_index, input.len());
-            lines.push((start_index, s));
+            lines.push((start_index, input.len(), s));
         }
 
-        CodeMap { input_name, lines }
+        CodeMap {
+            input_name,
+            input,
+            lines,
+        }
     }
 
+    pub fn bytepos_to_sourceloc(&self, bp: usize) -> SourceLocation {
+        for (index, &(start, end, _)) in self.lines.iter().enumerate() {
+            if start <= bp && bp <= end {
+                return SourceLocation {
+                    line: index + 1, // line are 1-based
+                    column: bp - start,
+                };
+            }
+        }
+        SourceLocation {
+            line: self.lines.len(),
+            column: self.lines.last().map(|&(s, e, _)| e - s).unwrap(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
