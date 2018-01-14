@@ -1,6 +1,6 @@
 use ty::*;
-use interner::{InternerId, Interner};
-use span::Span;
+use interner::{Interner, InternerId};
+use codemap::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IdentifierId(pub usize);

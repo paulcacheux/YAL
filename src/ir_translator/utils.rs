@@ -3,7 +3,7 @@ use ir;
 use ir::IdentifierId;
 use errors::TranslationError;
 use ir_translator::TranslationResult;
-use span::{Span, Spanned};
+use codemap::{Span, Spanned};
 
 macro_rules! error {
     ($err:expr, $span:expr) => {

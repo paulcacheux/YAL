@@ -1,6 +1,6 @@
 use ty::*;
 use interner::{Interner, InternerId};
-use span::{Span, Spanned};
+use codemap::{Span, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct Program {

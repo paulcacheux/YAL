@@ -8,9 +8,7 @@ pub struct Interner<T> {
 
 impl<T: Eq> Interner<T> {
     pub fn new() -> Self {
-        Interner {
-            inner: Vec::new()
-        }
+        Interner { inner: Vec::new() }
     }
 
     pub fn intern(&mut self, s: T) -> InternerId {

@@ -1,4 +1,4 @@
-use span::Span;
+use codemap::Span;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'input> {

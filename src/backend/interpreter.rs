@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ir;
 use ty;
 use interner::InternerId;
-use span::Span;
+use codemap::Span;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Value {
@@ -124,10 +124,7 @@ impl<'p> Interpreter<'p> {
         }
     }
 
-    fn interpret_block(
-        &mut self,
-        block: &[ir::Statement],
-    ) -> InterpreterResult<StatementResult> {
+    fn interpret_block(&mut self, block: &[ir::Statement]) -> InterpreterResult<StatementResult> {
         self.memory.begin_scope();
         for stmt in block {
             propagate!(self.interpret_statement(stmt)?, self.memory.end_scope());
@@ -140,7 +137,11 @@ impl<'p> Interpreter<'p> {
         use ir::Statement;
         match *stmt {
             Statement::Block(ref b) => self.interpret_block(b),
-            Statement::VarDecl { ref ty, id, ref init } => {
+            Statement::VarDecl {
+                ref ty,
+                id,
+                ref init,
+            } => {
                 let value = if let Some(ref init) = *init {
                     self.interpret_expression(init)?
                 } else {

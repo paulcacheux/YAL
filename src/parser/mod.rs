@@ -2,7 +2,7 @@ use lexer::{Lexer, Token, TokenAndSpan};
 use ast;
 use ty;
 use interner::Interner;
-use span::{Span, Spanned};
+use codemap::{Span, Spanned};
 use errors::ParsingError;
 
 mod expression_parser;

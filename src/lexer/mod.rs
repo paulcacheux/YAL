@@ -1,6 +1,6 @@
 use regex::Regex;
 use errors::LexingError;
-use span::{Span, Spanned};
+use codemap::{Span, Spanned};
 
 mod token;
 pub use self::token::{Token, TokenAndSpan};

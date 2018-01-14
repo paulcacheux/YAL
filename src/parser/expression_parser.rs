@@ -1,7 +1,7 @@
 use lexer::Token;
 use parser::*;
 use ast;
-use span::{Span, Spanned};
+use codemap::{Span, Spanned};
 
 #[derive(Debug, Clone, Copy)]
 struct Infos {

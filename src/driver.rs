@@ -8,7 +8,7 @@ use std::path::Path;
 use clap::{App, Arg};
 
 use javalette::*;
-use span::{Span, Spanned};
+use codemap::{Span, Spanned};
 
 fn slurp_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
     let mut file = File::open(path)?;
@@ -96,6 +96,8 @@ fn main() {
     };
 
     let input = slurp_file(&path).unwrap();
+    let codemap = codemap::CodeMap::new(&path, &input);
+    println!("{:#?}", codemap);
 
     let lexer = lexer::Lexer::new(&input);
     let program = continue_or_exit(path, &input, parser::parse_program(lexer));

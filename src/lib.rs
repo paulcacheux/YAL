@@ -8,7 +8,7 @@ extern crate regex;
 
 pub mod errors;
 pub mod interner;
-pub mod span;
+pub mod codemap;
 pub mod lexer;
 pub mod ast;
 pub mod parser;

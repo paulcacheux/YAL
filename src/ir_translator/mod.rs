@@ -1,7 +1,7 @@
 use ast;
 use ty;
 use ir;
-use span::*;
+use codemap::*;
 use errors::TranslationError;
 
 mod symbol_table;

@@ -48,7 +48,7 @@ impl From<LexingError> for ParsingError {
 }
 
 // hack needed for error propagation
-use span::Spanned;
+use codemap::Spanned;
 impl From<Spanned<LexingError>> for Spanned<ParsingError> {
     fn from(f: Spanned<LexingError>) -> Spanned<ParsingError> {
         Spanned {
