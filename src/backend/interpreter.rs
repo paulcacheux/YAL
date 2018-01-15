@@ -358,18 +358,7 @@ impl<'p> Interpreter<'p> {
                     .collect();
                 self.interpret_function_by_name(function, &(args?))
             }
-            Expression::NewArray {
-                ref base_ty,
-                ref sizes,
-            } => {
-                let mut real_sizes = Vec::with_capacity(sizes.len());
-                for size in sizes {
-                    let size = self.interpret_expression(size)?;
-                    let size = extract_pattern!(size; Value::Int(i) => i as usize);
-                    real_sizes.push(size);
-                }
-                Ok(self.create_array(base_ty, &real_sizes))
-            }
+            Expression::NewArray { .. } => unimplemented!(),
             Expression::ArrayLength(ref array) => {
                 let array = self.interpret_expression(array)?;
                 let array_index = extract_pattern!(array; Value::Array(ArrayId(id)) => id);

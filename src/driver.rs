@@ -73,6 +73,7 @@ fn continue_or_exit<T, E: std::fmt::Display>(
 
 #[derive(Debug, Clone, Copy)]
 enum Backend {
+    Check,
     LLVM,
     Interpreter,
 }
@@ -98,15 +99,16 @@ fn main() {
                 .help("Choose backend. LLVM by default.")
                 .long("backend")
                 .takes_value(true)
-                .possible_values(&["LLVM", "interpreter"]),
+                .possible_values(&["LLVM", "interpreter", "check"]),
         )
         .get_matches();
 
     let path = matches.value_of("INPUT").unwrap();
     let opt = matches.is_present("OPT");
     let backend = match matches.value_of("BACKEND") {
+        Some("llvm") => Backend::LLVM,
         Some("interpreter") => Backend::Interpreter,
-        _ => Backend::LLVM,
+        _ => Backend::Check,
     };
 
     let input = slurp_file(&path).unwrap();
@@ -116,9 +118,10 @@ fn main() {
     let program = continue_or_exit(path, &codemap, parser::parse_program(lexer));
     // println!("{:#?}", program);
     let ir_prog = continue_or_exit(path, &codemap, ir_translator::translate_program(program));
-    // println!("{:#?}", ir_prog);
+    println!("{:#?}", ir_prog);
 
     match backend {
+        Backend::Check => {},
         Backend::LLVM => {
             let mut llvm_exec = backend::llvm::llvm_gen_program(ir_prog).unwrap();
             // llvm_exec.print_module();

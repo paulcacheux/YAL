@@ -81,15 +81,15 @@ pub enum Expression {
         args: Vec<TypedExpression>,
     },
     NewArray {
-        base_ty: Type,
-        sizes: Vec<TypedExpression>,
+        sub_ty: Type,
+        size: Box<TypedExpression>,
     },
     ArrayLength(Box<TypedExpression>),
 }
 
 #[derive(Debug, Clone)]
 pub struct BlockExpression {
-    pub stmts: Vec<Statement>,
+    pub stmts: BlockStatement,
     pub final_expr: TypedExpression,
 }
 

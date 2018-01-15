@@ -53,6 +53,16 @@ pub fn lvalue_to_rvalue(expression: ir::TypedExpression) -> ir::TypedExpression 
     }
 }
 
+pub fn default_value_for_ty(ty: &ty::Type) -> ir::TypedExpression {
+    let lit = match *ty {
+        ty::Type::Int => ir::Literal::IntLiteral(0),
+        ty::Type::Double => ir::Literal::DoubleLiteral(0.0),
+        ty::Type::Boolean => ir::Literal::BooleanLiteral(false),
+        _ => panic!("This type doesn't have a default value")
+    };
+    literal_to_texpr(lit)
+}
+
 pub fn literal_to_texpr(lit: ir::Literal) -> ir::TypedExpression {
     let ty = match lit {
         ir::Literal::IntLiteral(_) => ty::Type::Int,
