@@ -689,7 +689,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ty: array_ty,
             expr: ir::Expression::Block(Box::new(ir::BlockExpression {
                 stmts: block,
-                final_expr: array_expr,
+                final_expr: utils::lvalue_to_rvalue(array_expr),
             })),
         })
     }
