@@ -119,8 +119,8 @@ fn main() {
     // println!("{:#?}", program);
     let ir_prog = continue_or_exit(path, &codemap, ir_translator::translate_program(program));
     {
-        let mut stdout = std::io::stdout();
-        let mut pp = ir_pp::PrettyPrinter::new(&mut stdout);
+        let mut w = std::io::stderr();
+        let mut pp = ir_pp::PrettyPrinter::new(&mut w);
         pp.pp_program(&ir_prog).expect("ir_pp error");
     }
 

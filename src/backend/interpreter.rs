@@ -358,27 +358,20 @@ impl<'p> Interpreter<'p> {
                     .collect();
                 self.interpret_function_by_name(function, &(args?))
             }
-            Expression::NewArray { .. } => unimplemented!(),
+            Expression::NewArray { ref size, .. } => {
+                let size = self.interpret_expression(size)?;
+                let size = extract_pattern!(size; Value::Int(i) => i as usize);
+                let values: Vec<_> = (0..size)
+                    .map(|_| self.memory.set_new_unnamed(Value::Null))
+                    .collect();
+                let id = self.new_array(values);
+                Ok(Value::Array(id))
+            }
             Expression::ArrayLength(ref array) => {
                 let array = self.interpret_expression(array)?;
                 let array_index = extract_pattern!(array; Value::Array(ArrayId(id)) => id);
                 Ok(Value::Int(self.arrays[array_index].len() as _))
             }
-        }
-    }
-
-    fn create_array(&mut self, base_ty: &ty::Type, sizes: &[usize]) -> Value {
-        if !sizes.is_empty() {
-            let size = *sizes.first().unwrap();
-            let mut values = Vec::with_capacity(size);
-            for _ in 0..size {
-                let expr = self.create_array(base_ty, &sizes[1..]);
-                values.push(self.memory.set_new_unnamed(expr));
-            }
-            let id = self.new_array(values);
-            Value::Array(id)
-        } else {
-            default_value(base_ty)
         }
     }
 }

@@ -659,7 +659,8 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         }
         let sub_ty = sub_ty.unwrap();
 
-        let current_size = sizes.pop().unwrap();
+        let next_sizes = sizes.split_off(1);
+        let current_size = sizes.into_iter().next().unwrap();
         let size_span = current_size.span;
         let current_size = self.translate_expression(current_size)?;
         let current_size = utils::lvalue_to_rvalue(current_size);
@@ -673,10 +674,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             },
         };
 
-        let default_value = if sizes.is_empty() {
+        let default_value = if next_sizes.is_empty() {
             utils::default_value_for_ty(&sub_ty)
         } else {
-            self.translate_new_array(base_ty, sizes)?
+            self.translate_new_array(base_ty, next_sizes)?
         };
 
         let (array_expr, block) = self.create_loop(sub_ty, array, |expr| {
