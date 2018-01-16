@@ -715,13 +715,13 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         };
 
         // translation of current loop value
-        let array_indexed = utils::lvalue_to_rvalue(ir::TypedExpression {
+        let array_indexed = ir::TypedExpression {
             ty: ty::Type::LValue(Box::new(ty.clone())),
             expr: ir::Expression::Subscript {
                 array: Box::new(array_rvalue.clone()),
                 index: Box::new(index_rvalue.clone()),
             },
-        });
+        };
 
         // translation of index++
         let index_inc = ir::TypedExpression {

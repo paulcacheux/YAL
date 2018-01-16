@@ -96,7 +96,7 @@ fn main() {
         )
         .arg(
             Arg::with_name("BACKEND")
-                .help("Choose backend. LLVM by default.")
+                .help("Choose backend. Only check by default.")
                 .long("backend")
                 .takes_value(true)
                 .possible_values(&["LLVM", "interpreter", "check"]),
@@ -118,7 +118,11 @@ fn main() {
     let program = continue_or_exit(path, &codemap, parser::parse_program(lexer));
     // println!("{:#?}", program);
     let ir_prog = continue_or_exit(path, &codemap, ir_translator::translate_program(program));
-    println!("{:#?}", ir_prog);
+    {
+        let mut stdout = std::io::stdout();
+        let mut pp = ir_pp::PrettyPrinter::new(&mut stdout);
+        pp.pp_program(&ir_prog).expect("ir_pp error");
+    }
 
     match backend {
         Backend::Check => {}
