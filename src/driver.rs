@@ -121,7 +121,7 @@ fn main() {
     println!("{:#?}", ir_prog);
 
     match backend {
-        Backend::Check => {},
+        Backend::Check => {}
         Backend::LLVM => {
             let mut llvm_exec = backend::llvm::llvm_gen_program(ir_prog).unwrap();
             // llvm_exec.print_module();

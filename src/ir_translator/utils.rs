@@ -58,7 +58,7 @@ pub fn default_value_for_ty(ty: &ty::Type) -> ir::TypedExpression {
         ty::Type::Int => ir::Literal::IntLiteral(0),
         ty::Type::Double => ir::Literal::DoubleLiteral(0.0),
         ty::Type::Boolean => ir::Literal::BooleanLiteral(false),
-        _ => panic!("This type doesn't have a default value")
+        _ => panic!("This type doesn't have a default value"),
     };
     literal_to_texpr(lit)
 }

@@ -679,8 +679,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             self.translate_new_array(base_ty, sizes)?
         };
 
-        let (array_expr, block) = self.create_loop(sub_ty, array,|expr| {
-            Ok(vec![ir::Statement::Expression(utils::build_assign(expr, default_value))])
+        let (array_expr, block) = self.create_loop(sub_ty, array, |expr| {
+            Ok(vec![
+                ir::Statement::Expression(utils::build_assign(expr, default_value)),
+            ])
         })?;
 
         Ok(ir::TypedExpression {
@@ -688,7 +690,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             expr: ir::Expression::Block(Box::new(ir::BlockExpression {
                 stmts: block,
                 final_expr: array_expr,
-            }))
+            })),
         })
     }
 
@@ -732,29 +734,32 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         body.push(ir::Statement::Expression(index_inc));
 
         // finalization
-        Ok((array_expr, vec![
-            ir::Statement::VarDecl {
-                ty: array_rvalue.ty.clone(),
-                id: array_id,
-                init: Some(array),
-            },
-            ir::Statement::VarDecl {
-                ty: ty::Type::Int,
-                id: index_id,
-                init: Some(const0),
-            },
-            ir::Statement::While {
-                condition: ir::TypedExpression {
-                    ty: ty::Type::Boolean,
-                    expr: ir::Expression::BinaryOperator {
-                        binop: ir::BinaryOperatorKind::IntLess,
-                        lhs: Box::new(index_rvalue.clone()),
-                        rhs: Box::new(array_len_expr),
-                    },
+        Ok((
+            array_expr,
+            vec![
+                ir::Statement::VarDecl {
+                    ty: array_rvalue.ty.clone(),
+                    id: array_id,
+                    init: Some(array),
                 },
-                body,
-            },
-        ]))
+                ir::Statement::VarDecl {
+                    ty: ty::Type::Int,
+                    id: index_id,
+                    init: Some(const0),
+                },
+                ir::Statement::While {
+                    condition: ir::TypedExpression {
+                        ty: ty::Type::Boolean,
+                        expr: ir::Expression::BinaryOperator {
+                            binop: ir::BinaryOperatorKind::IntLess,
+                            lhs: Box::new(index_rvalue.clone()),
+                            rhs: Box::new(array_len_expr),
+                        },
+                    },
+                    body,
+                },
+            ],
+        ))
     }
 }
 
