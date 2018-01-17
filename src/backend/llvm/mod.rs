@@ -533,15 +533,18 @@ impl LLVMExecutionModule {
     }
 
     pub fn optimize(&mut self) {
+        use llvm::transforms::pass_manager_builder::*;
         unsafe {
-            let pass = LLVMCreatePassManager();
-            llvm::transforms::scalar::LLVMAddConstantPropagationPass(pass);
-            llvm::transforms::scalar::LLVMAddInstructionCombiningPass(pass);
-            llvm::transforms::scalar::LLVMAddPromoteMemoryToRegisterPass(pass);
-            llvm::transforms::scalar::LLVMAddGVNPass(pass);
-            llvm::transforms::scalar::LLVMAddCFGSimplificationPass(pass);
-            LLVMRunPassManager(pass, self.backend.module);
-            LLVMDisposePassManager(pass);
+            let builder = LLVMPassManagerBuilderCreate();
+            LLVMPassManagerBuilderSetOptLevel(builder, 2 as _); // TODO make it configurable
+            let pass_manager = LLVMCreatePassManager();
+            LLVMPassManagerBuilderPopulateModulePassManager(builder, pass_manager);
+            LLVMPassManagerBuilderDispose(builder);
+
+            LLVMRunPassManager(pass_manager, self.backend.module);
+            LLVMRunPassManager(pass_manager, self.backend.module);
+
+            LLVMDisposePassManager(pass_manager);
         }
     }
 

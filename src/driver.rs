@@ -99,7 +99,7 @@ fn main() {
                 .help("Choose backend. Only check by default.")
                 .long("backend")
                 .takes_value(true)
-                .possible_values(&["LLVM", "interpreter", "check"]),
+                .possible_values(&["llvm", "interpreter", "check"]),
         )
         .get_matches();
 
