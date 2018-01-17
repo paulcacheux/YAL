@@ -101,10 +101,31 @@ fn main() {
                 .takes_value(true)
                 .possible_values(&["llvm", "interpreter", "check"]),
         )
+        .arg(
+            Arg::with_name("DEBUG")
+                .help("Print debug information to stderr.")
+                .long("debug")
+                .takes_value(true)
+                .possible_values(&["ir", "ast", "llvm"]),
+        )
         .get_matches();
 
     let path = matches.value_of("INPUT").unwrap();
     let opt = matches.is_present("OPT");
+    let mut print_ast = false;
+    let mut print_ir = false;
+    let mut print_llvm = false;
+    if let Some(values) = matches.values_of("DEBUG") {
+        for value in values {
+            match value {
+                "ir" => print_ir = true,
+                "ast" => print_ast = true,
+                "llvm" => print_llvm = true,
+                _ => {}
+            }
+        }
+    }
+
     let backend = match matches.value_of("BACKEND") {
         Some("llvm") => Backend::LLVM,
         Some("interpreter") => Backend::Interpreter,
@@ -115,10 +136,13 @@ fn main() {
     let codemap = codemap::CodeMap::new(&path, &input);
 
     let lexer = lexer::Lexer::new(&input);
-    let program = continue_or_exit(path, &codemap, parser::parse_program(lexer));
-    // println!("{:#?}", program);
-    let ir_prog = continue_or_exit(path, &codemap, ir_translator::translate_program(program));
-    {
+    let ast = continue_or_exit(path, &codemap, parser::parse_program(lexer));
+    if print_ast {
+        eprintln!("{:#?}", ast);
+    }
+
+    let ir_prog = continue_or_exit(path, &codemap, ir_translator::translate_program(ast));
+    if print_ir {
         let mut w = std::io::stderr();
         let mut pp = ir::prettyprinter::PrettyPrinter::new(&mut w);
         pp.pp_program(&ir_prog).expect("ir_pp error");
@@ -128,10 +152,12 @@ fn main() {
         Backend::Check => {}
         Backend::LLVM => {
             let mut llvm_exec = backend::llvm::llvm_gen_program(ir_prog).unwrap();
-            // llvm_exec.print_module();
             llvm_exec.verify_module();
             if opt {
                 llvm_exec.optimize();
+            }
+            if print_llvm {
+                llvm_exec.print_module();
             }
             llvm_exec.call_main();
         }
