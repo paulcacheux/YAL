@@ -120,7 +120,7 @@ fn main() {
     let ir_prog = continue_or_exit(path, &codemap, ir_translator::translate_program(program));
     {
         let mut w = std::io::stderr();
-        let mut pp = ir_pp::PrettyPrinter::new(&mut w);
+        let mut pp = ir::prettyprinter::PrettyPrinter::new(&mut w);
         pp.pp_program(&ir_prog).expect("ir_pp error");
     }
 

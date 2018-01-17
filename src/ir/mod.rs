@@ -2,6 +2,8 @@ use ty::*;
 use interner::{Interner, InternerId};
 use codemap::Span;
 
+pub mod prettyprinter;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IdentifierId(pub usize);
 

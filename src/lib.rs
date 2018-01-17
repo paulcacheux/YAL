@@ -14,6 +14,5 @@ pub mod ast;
 pub mod parser;
 pub mod ty;
 pub mod ir;
-pub mod ir_pp;
 pub mod ir_translator;
 pub mod backend;
