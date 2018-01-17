@@ -661,6 +661,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
         let next_sizes = sizes.split_off(1);
         let current_size = sizes.into_iter().next().unwrap();
+
         let size_span = current_size.span;
         let current_size = self.translate_expression(current_size)?;
         let current_size = utils::lvalue_to_rvalue(current_size);
