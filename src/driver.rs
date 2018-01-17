@@ -78,6 +78,51 @@ enum Backend {
     Interpreter,
 }
 
+#[derive(Debug, Clone)]
+struct Options<'a> {
+    input_path: &'a str,
+    backend: Backend,
+    opt: bool,
+    print_ir: bool,
+    print_ast: bool,
+    print_llvm: bool,
+}
+
+impl<'a> Options<'a> {
+    fn from_matches(matches: &'a clap::ArgMatches) -> Self {
+        let input_path = matches.value_of("INPUT").unwrap();
+        let opt = matches.is_present("OPT");
+        let mut print_ast = false;
+        let mut print_ir = false;
+        let mut print_llvm = false;
+        if let Some(values) = matches.values_of("DEBUG") {
+            for value in values {
+                match value {
+                    "ir" => print_ir = true,
+                    "ast" => print_ast = true,
+                    "llvm" => print_llvm = true,
+                    _ => {}
+                }
+            }
+        }
+
+        let backend = match matches.value_of("BACKEND") {
+            Some("llvm") => Backend::LLVM,
+            Some("interpreter") => Backend::Interpreter,
+            _ => Backend::Check,
+        };
+
+        Options {
+            input_path,
+            backend,
+            opt,
+            print_ir,
+            print_ast,
+            print_llvm,
+        }
+    }
+}
+
 fn main() {
     let matches = App::new("Javalette interpreter")
         .version("0.1")
@@ -106,57 +151,42 @@ fn main() {
                 .help("Print debug information to stderr.")
                 .long("debug")
                 .takes_value(true)
+                .multiple(true)
                 .possible_values(&["ir", "ast", "llvm"]),
         )
         .get_matches();
 
-    let path = matches.value_of("INPUT").unwrap();
-    let opt = matches.is_present("OPT");
-    let mut print_ast = false;
-    let mut print_ir = false;
-    let mut print_llvm = false;
-    if let Some(values) = matches.values_of("DEBUG") {
-        for value in values {
-            match value {
-                "ir" => print_ir = true,
-                "ast" => print_ast = true,
-                "llvm" => print_llvm = true,
-                _ => {}
-            }
-        }
-    }
+    let options = Options::from_matches(&matches);
 
-    let backend = match matches.value_of("BACKEND") {
-        Some("llvm") => Backend::LLVM,
-        Some("interpreter") => Backend::Interpreter,
-        _ => Backend::Check,
-    };
-
-    let input = slurp_file(&path).unwrap();
-    let codemap = codemap::CodeMap::new(&path, &input);
+    let input = slurp_file(options.input_path).unwrap();
+    let codemap = codemap::CodeMap::new(options.input_path, &input);
 
     let lexer = lexer::Lexer::new(&input);
-    let ast = continue_or_exit(path, &codemap, parser::parse_program(lexer));
-    if print_ast {
+    let ast = continue_or_exit(options.input_path, &codemap, parser::parse_program(lexer));
+    if options.print_ast {
         eprintln!("{:#?}", ast);
     }
 
-    let ir_prog = continue_or_exit(path, &codemap, ir_translator::translate_program(ast));
-    if print_ir {
+    let ir_prog = continue_or_exit(
+        options.input_path,
+        &codemap,
+        ir_translator::translate_program(ast),
+    );
+    if options.print_ir {
         let mut w = std::io::stderr();
         let mut pp = ir::prettyprinter::PrettyPrinter::new(&mut w);
         pp.pp_program(&ir_prog).expect("ir_pp error");
     }
 
-    match backend {
+    match options.backend {
         Backend::Check => {}
         Backend::LLVM => {
             let mut llvm_exec = backend::llvm::llvm_gen_program(ir_prog).unwrap();
             llvm_exec.verify_module();
-            if opt {
+            if options.opt {
                 llvm_exec.optimize();
             }
-            if print_llvm {
+            if options.print_llvm {
                 llvm_exec.print_module();
             }
             llvm_exec.call_main();
