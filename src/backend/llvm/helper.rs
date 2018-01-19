@@ -10,6 +10,7 @@ pub mod utils {
     use libc;
     use llvm::core::*;
     use llvm::prelude::*;
+    use ty;
 
     pub fn c_str(b: &[u8]) -> *const libc::c_char {
         b.as_ptr() as *const _
@@ -39,6 +40,19 @@ pub mod utils {
 
     pub fn const_real(ty: LLVMTypeRef, r: f64) -> LLVMValueRef {
         unsafe { LLVMConstReal(ty, r as _) }
+    }
+
+    pub fn ty_to_string(ty: &ty::Type) -> String {
+        match *ty {
+            ty::Type::Int => "int".to_string(),
+            ty::Type::Double => "double".to_string(),
+            ty::Type::Boolean => "boolean".to_string(),
+            ty::Type::String => "string".to_string(),
+            ty::Type::Void => "void".to_string(),
+            ty::Type::LValue(ref sub) => format!("lvalue.{}", ty_to_string(sub)),
+            ty::Type::Array(ref sub) => format!("array.{}", ty_to_string(sub)),
+            _ => unimplemented!(),
+        }
     }
 }
 
@@ -76,8 +90,22 @@ impl Context {
         unsafe { LLVMInt32TypeInContext(self.context) }
     }
 
+    pub fn i64_ty(&self) -> LLVMTypeRef {
+        unsafe { LLVMInt64TypeInContext(self.context) }
+    }
+
     pub fn double_ty(&self) -> LLVMTypeRef {
         unsafe { LLVMDoubleTypeInContext(self.context) }
+    }
+
+    pub fn raw_array_ty(&self, sub: LLVMTypeRef, index: LLVMTypeRef) -> LLVMTypeRef {
+        let mut fields = [utils::pointer_ty(sub), index];
+        unsafe { LLVMStructTypeInContext(self.context, fields.as_mut_ptr(), 2, 0 as _) }
+    }
+
+    pub fn array_ty(&self, sub: LLVMTypeRef, index: LLVMTypeRef) -> LLVMTypeRef {
+        let raw_array = self.raw_array_ty(sub, index);
+        utils::pointer_ty(raw_array)
     }
 
     pub fn append_bb_to_func(&self, func: LLVMValueRef, name: &[u8]) -> LLVMBasicBlockRef {
@@ -93,7 +121,7 @@ impl Drop for Context {
 
 #[derive(Debug, Clone)]
 pub struct IRBuilder {
-    builder: LLVMBuilderRef,
+    pub builder: LLVMBuilderRef,
 }
 
 impl IRBuilder {

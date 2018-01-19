@@ -40,6 +40,7 @@ pub struct Backend {
     builder: IRBuilder,
     functions: HashMap<String, LLVMValueRef>,
     ids: HashMap<ir::IdentifierId, LLVMValueRef>,
+    new_arrays: HashMap<ty::Type, LLVMValueRef>,
     strings: Interner<String>,
     current_func: LLVMValueRef,
     current_break: LLVMBasicBlockRef,
@@ -58,11 +59,17 @@ impl Backend {
             builder,
             functions: HashMap::new(),
             ids: HashMap::new(),
+            new_arrays: HashMap::new(),
             strings,
             current_func: ptr::null_mut(),
             current_break: ptr::null_mut(),
             current_continue: ptr::null_mut(),
         }
+    }
+
+    fn gen_raw_array_type(&self, sub: &ty::Type) -> LLVMTypeRef {
+        self.context
+            .raw_array_ty(self.gen_type(sub), self.context.i32_ty())
     }
 
     fn gen_type(&self, ty: &ty::Type) -> LLVMTypeRef {
@@ -73,7 +80,56 @@ impl Backend {
             ty::Type::Boolean => self.context.i1_ty(),
             ty::Type::String => utils::pointer_ty(self.context.i8_ty()),
             ty::Type::LValue(ref sub) => utils::pointer_ty(self.gen_type(sub)),
+            ty::Type::Array(ref sub) => self.context
+                .array_ty(self.gen_type(sub), self.context.i32_ty()),
             _ => unimplemented!(),
+        }
+    }
+
+    fn generate_new_array_func(&mut self, ty: &ty::Type) -> LLVMValueRef {
+        let raw_array_llvm_ty = self.gen_raw_array_type(ty);
+        let array_llvm_ty = utils::pointer_ty(raw_array_llvm_ty);
+        let sub_llvm_ty = self.gen_type(ty);
+        let func_ty = utils::function_ty(array_llvm_ty, vec![self.context.i32_ty()]);
+
+        let func_name = format!("builtin.new_array.{}", utils::ty_to_string(ty));
+        let c_name = CString::new(func_name).unwrap();
+
+        let func_ref = unsafe { LLVMAddFunction(self.module, c_name.as_ptr(), func_ty) };
+        let builder = IRBuilder::new_in_context(&self.context);
+        let entry_bb = self.context.append_bb_to_func(func_ref, b"entry\0");
+        builder.position_at_end(entry_bb);
+
+        unsafe {
+            let size = LLVMBuildZExt(
+                builder.builder,
+                utils::get_func_param(func_ref, 0),
+                self.context.i64_ty(),
+                c_str(b"\0"),
+            );
+
+            let array_ptr = LLVMBuildMalloc(builder.builder, raw_array_llvm_ty, c_str(b"\0"));
+
+            let sub_array_ptr =
+                LLVMBuildArrayMalloc(builder.builder, sub_llvm_ty, size, c_str(b"\0"));
+
+            let ptr_field = LLVMBuildStructGEP(builder.builder, array_ptr, 0 as _, c_str(b"\0"));
+            let size_field = LLVMBuildStructGEP(builder.builder, array_ptr, 1 as _, c_str(b"\0"));
+
+            builder.build_store(sub_array_ptr, ptr_field);
+            builder.build_store(utils::get_func_param(func_ref, 0), size_field);
+            builder.build_ret(array_ptr);
+        }
+        func_ref
+    }
+
+    fn get_new_array_func(&mut self, ty: &ty::Type) -> LLVMValueRef {
+        if let Some(&value) = self.new_arrays.get(ty) {
+            value
+        } else {
+            let new_func = self.generate_new_array_func(ty);
+            self.new_arrays.insert(ty.clone(), new_func);
+            new_func
         }
     }
 
@@ -110,6 +166,7 @@ impl Backend {
         self.register_named_func("printString".to_string());
         self.register_named_func("readInt".to_string());
         self.register_named_func("readDouble".to_string());
+        self.register_named_func("malloc".to_string());
     }
 
     fn register_named_func(&mut self, name: String) {
@@ -308,8 +365,10 @@ impl Backend {
             ir::Expression::UnaryOperator { unop, sub } => self.gen_unop(unop, *sub),
             ir::Expression::Increment(sub) => self.gen_incdecrement(*sub, true),
             ir::Expression::Decrement(sub) => self.gen_incdecrement(*sub, false),
+            ir::Expression::Subscript { array, index } => self.gen_subscript(*array, *index),
             ir::Expression::FunctionCall { function, args } => self.gen_funccall(&function, args),
-            _ => unimplemented!(),
+            ir::Expression::NewArray { sub_ty, size } => self.gen_new_array(sub_ty, *size),
+            ir::Expression::ArrayLength(sub) => self.gen_array_len(*sub),
         }
     }
 
@@ -459,11 +518,46 @@ impl Backend {
         ptr
     }
 
+    fn gen_subscript(
+        &mut self,
+        array: ir::TypedExpression,
+        index: ir::TypedExpression,
+    ) -> LLVMValueRef {
+        let array = self.gen_expression(array);
+        let index = self.gen_expression(index);
+
+        let ptr_ptr = unsafe { LLVMBuildStructGEP(self.builder.builder, array, 0, c_str(b"\0")) };
+        let ptr = self.builder.build_load(ptr_ptr, b"\0");
+        let mut indices = [index];
+
+        unsafe {
+            LLVMBuildGEP(
+                self.builder.builder,
+                ptr,
+                indices.as_mut_ptr(),
+                indices.len() as _,
+                c_str(b"\0"),
+            )
+        }
+    }
+
     fn gen_funccall(&mut self, func: &str, args: Vec<ir::TypedExpression>) -> LLVMValueRef {
         let func = self.functions[func];
         let args: Vec<_> = args.into_iter().map(|e| self.gen_expression(e)).collect();
 
         self.builder.build_call(func, args, b"\0")
+    }
+
+    fn gen_new_array(&mut self, sub_ty: ty::Type, size: ir::TypedExpression) -> LLVMValueRef {
+        let size = self.gen_expression(size);
+        let na_func = self.get_new_array_func(&sub_ty);
+        self.builder.build_call(na_func, vec![size], b"\0")
+    }
+
+    fn gen_array_len(&mut self, sub: ir::TypedExpression) -> LLVMValueRef {
+        let array = self.gen_expression(sub);
+        let size_ptr = unsafe { LLVMBuildStructGEP(self.builder.builder, array, 1, c_str(b"\0")) };
+        self.builder.build_load(size_ptr, b"\0")
     }
 
     fn into_exec_module(self) -> Result<LLVMExecutionModule, CString> {
