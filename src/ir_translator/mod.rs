@@ -277,7 +277,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let condition_span = condition.span;
                 let condition = self.translate_expression(condition)?;
                 let condition = utils::lvalue_to_rvalue(condition);
-                utils::check_eq_types(&condition.ty, &ty::Type::Boolean, condition_span)?;
+                utils::check_expect_type(&ty::Type::Boolean, &condition.ty, condition_span)?;
 
                 let body = self.translate_statement_as_block(*body)?;
 
@@ -297,7 +297,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let condition_span = condition.span;
                 let condition = self.translate_expression(condition)?;
                 let condition = utils::lvalue_to_rvalue(condition);
-                utils::check_eq_types(&condition.ty, &ty::Type::Boolean, condition_span)?;
+                utils::check_expect_type(&ty::Type::Boolean, &condition.ty, condition_span)?;
 
                 let old_in_loop = self.func_infos.in_loop;
                 self.func_infos.in_loop = true;
@@ -596,7 +596,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     let mut args_translated = Vec::with_capacity(args.len());
                     if func_ty.parameters_ty.len() != args.len() {
                         return error!(
-                            TranslationError::FunctionCallArity(
+                            TranslationError::FunctionCallArityMismatch(
                                 func_ty.parameters_ty.len(),
                                 args.len(),
                             ),

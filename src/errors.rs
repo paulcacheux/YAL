@@ -23,12 +23,13 @@ pub enum TranslationError {
     ParameterAlreadyDefined(String),
     LocalAlreadyDefined(String),
     MismatchingTypes(ty::Type, ty::Type),
+    UnexpectedType(ty::Type, ty::Type), // expected, given
     UndefinedLocal(String),
     NonLValueAssign,
     BinOpUndefined(ast::BinaryOperatorKind, ty::Type, ty::Type),
     LazyOpUndefined(ast::LazyOperatorKind, ty::Type, ty::Type),
     UnOpUndefined(ast::UnaryOperatorKind, ty::Type),
-    FunctionCallArity(usize, usize),
+    FunctionCallArityMismatch(usize, usize),
     FunctionUndefined(String),
     IncDecNonLValue,
     BreakContinueOutOfLoop,
@@ -98,6 +99,11 @@ impl fmt::Display for TranslationError {
             TranslationError::MismatchingTypes(ref a, ref b) => {
                 write!(f, "Mismatching types between '{:?}' and '{:?}'", a, b)
             }
+            TranslationError::UnexpectedType(ref expected, ref given) => write!(
+                f,
+                "Unexpected type '{:?}' ('{:?}' expected).",
+                given, expected
+            ),
             TranslationError::UndefinedLocal(ref local) => {
                 write!(f, "The local '{}' is undefined here", local)
             }
@@ -119,7 +125,7 @@ impl fmt::Display for TranslationError {
                 "The unary operator '{:?}' can't be applied to '{:?}'",
                 unop, a
             ),
-            TranslationError::FunctionCallArity(a, b) => write!(
+            TranslationError::FunctionCallArityMismatch(a, b) => write!(
                 f,
                 "Mismatching arities in function call between {} and {}",
                 a, b

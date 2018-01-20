@@ -40,6 +40,21 @@ pub fn check_eq_types(a: &ty::Type, b: &ty::Type, error_span: Span) -> Translati
     }
 }
 
+pub fn check_expect_type(
+    expected: &ty::Type,
+    given: &ty::Type,
+    error_span: Span,
+) -> TranslationResult<()> {
+    if expected != given {
+        error!(
+            TranslationError::UnexpectedType(expected.clone(), given.clone(),),
+            error_span
+        )
+    } else {
+        Ok(())
+    }
+}
+
 pub fn lvalue_to_rvalue(expression: ir::TypedExpression) -> ir::TypedExpression {
     match expression.ty.clone() {
         ty::Type::LValue(sub) => ir::TypedExpression {
