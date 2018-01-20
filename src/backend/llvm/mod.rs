@@ -14,6 +14,8 @@ use ty;
 use interner::{Interner, InternerId};
 
 pub mod helper;
+mod utils;
+use self::utils::c_str;
 use self::helper::*;
 
 pub fn llvm_gen_program(program: ir::Program) -> Result<LLVMExecutionModule, CString> {
@@ -100,26 +102,22 @@ impl Backend {
         let entry_bb = self.context.append_bb_to_func(func_ref, b"entry\0");
         builder.position_at_end(entry_bb);
 
-        unsafe {
-            let size = LLVMBuildZExt(
-                builder.builder,
-                utils::get_func_param(func_ref, 0),
-                self.context.i64_ty(),
-                c_str(b"\0"),
-            );
+        let size = builder.build_zext(
+            utils::get_func_param(func_ref, 0),
+            self.context.i64_ty(),
+            b"\0",
+        );
 
-            let array_ptr = LLVMBuildMalloc(builder.builder, raw_array_llvm_ty, c_str(b"\0"));
+        let array_ptr = builder.build_malloc(raw_array_llvm_ty, b"\0");
+        let sub_array_ptr = builder.build_array_malloc(sub_llvm_ty, size, b"\0");
 
-            let sub_array_ptr =
-                LLVMBuildArrayMalloc(builder.builder, sub_llvm_ty, size, c_str(b"\0"));
+        let ptr_field = builder.build_struct_gep(array_ptr, 0, b"\0");
+        let size_field = builder.build_struct_gep(array_ptr, 1, b"\0");
 
-            let ptr_field = LLVMBuildStructGEP(builder.builder, array_ptr, 0 as _, c_str(b"\0"));
-            let size_field = LLVMBuildStructGEP(builder.builder, array_ptr, 1 as _, c_str(b"\0"));
+        builder.build_store(sub_array_ptr, ptr_field);
+        builder.build_store(utils::get_func_param(func_ref, 0), size_field);
+        builder.build_ret(array_ptr);
 
-            builder.build_store(sub_array_ptr, ptr_field);
-            builder.build_store(utils::get_func_param(func_ref, 0), size_field);
-            builder.build_ret(array_ptr);
-        }
         func_ref
     }
 
@@ -526,19 +524,9 @@ impl Backend {
         let array = self.gen_expression(array);
         let index = self.gen_expression(index);
 
-        let ptr_ptr = unsafe { LLVMBuildStructGEP(self.builder.builder, array, 0, c_str(b"\0")) };
+        let ptr_ptr = self.builder.build_struct_gep(array, 0, b"\0");
         let ptr = self.builder.build_load(ptr_ptr, b"\0");
-        let mut indices = [index];
-
-        unsafe {
-            LLVMBuildGEP(
-                self.builder.builder,
-                ptr,
-                indices.as_mut_ptr(),
-                indices.len() as _,
-                c_str(b"\0"),
-            )
-        }
+        self.builder.build_gep(ptr, vec![index], b"\0")
     }
 
     fn gen_funccall(&mut self, func: &str, args: Vec<ir::TypedExpression>) -> LLVMValueRef {
@@ -556,7 +544,7 @@ impl Backend {
 
     fn gen_array_len(&mut self, sub: ir::TypedExpression) -> LLVMValueRef {
         let array = self.gen_expression(sub);
-        let size_ptr = unsafe { LLVMBuildStructGEP(self.builder.builder, array, 1, c_str(b"\0")) };
+        let size_ptr = self.builder.build_struct_gep(array, 1, b"\0");
         self.builder.build_load(size_ptr, b"\0")
     }
 
