@@ -1,6 +1,6 @@
 use std::ops::Drop;
 
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 
 use llvm;
 use llvm::core::*;
@@ -17,12 +17,7 @@ pub struct Context {
 impl Context {
     pub fn new() -> Context {
         let context = unsafe { LLVMContextCreate() };
-
         Context { context }
-    }
-
-    pub fn create_module(&self, name: &[u8]) -> LLVMModuleRef {
-        unsafe { LLVMModuleCreateWithNameInContext(c_str(name), self.context) }
     }
 
     pub fn void_ty(&self) -> LLVMTypeRef {
@@ -67,6 +62,27 @@ impl Context {
 impl Drop for Context {
     fn drop(&mut self) {
         unsafe { LLVMContextDispose(self.context) };
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Module {
+    pub module: LLVMModuleRef,
+}
+
+impl Module {
+    pub fn new_in_context(context: &Context, name: &[u8]) -> Module {
+        Module {
+            module: unsafe { LLVMModuleCreateWithNameInContext(c_str(name), context.context) },
+        }
+    }
+
+    pub fn add_function(&self, name: &CStr, ty: LLVMTypeRef) -> LLVMValueRef {
+        unsafe { LLVMAddFunction(self.module, name.as_ptr(), ty) }
+    }
+
+    pub fn get_named_function(&self, name: &CStr) -> LLVMValueRef {
+        unsafe { LLVMGetNamedFunction(self.module, name.as_ptr()) }
     }
 }
 

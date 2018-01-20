@@ -38,7 +38,7 @@ pub fn llvm_gen_program(program: ir::Program) -> Result<LLVMExecutionModule, CSt
 #[derive(Debug, Clone)]
 pub struct Backend {
     context: Context,
-    module: LLVMModuleRef,
+    module: Module,
     builder: IRBuilder,
     functions: HashMap<String, LLVMValueRef>,
     ids: HashMap<ir::IdentifierId, LLVMValueRef>,
@@ -52,7 +52,7 @@ pub struct Backend {
 impl Backend {
     pub fn new(strings: Interner<String>) -> Backend {
         let context = Context::new();
-        let module = context.create_module(b"main\0");
+        let module = Module::new_in_context(&context, b"main\0");
         let builder = IRBuilder::new_in_context(&context);
 
         Backend {
@@ -97,7 +97,7 @@ impl Backend {
         let func_name = format!("builtin.new_array.{}", utils::ty_to_string(ty));
         let c_name = CString::new(func_name).unwrap();
 
-        let func_ref = unsafe { LLVMAddFunction(self.module, c_name.as_ptr(), func_ty) };
+        let func_ref = self.module.add_function(&c_name, func_ty);
         let builder = IRBuilder::new_in_context(&self.context);
         let entry_bb = self.context.append_bb_to_func(func_ref, b"entry\0");
         builder.position_at_end(entry_bb);
@@ -156,7 +156,7 @@ impl Backend {
                 panic!("{}", CStr::from_ptr(err_msg).to_string_lossy().into_owned())
             }
 
-            llvm::linker::LLVMLinkModules2(self.module, runtime_module);
+            llvm::linker::LLVMLinkModules2(self.module.module, runtime_module);
         }
 
         self.register_named_func("printInt".to_string());
@@ -169,7 +169,7 @@ impl Backend {
 
     fn register_named_func(&mut self, name: String) {
         let c_name = CString::new(name.clone()).unwrap();
-        let func = unsafe { LLVMGetNamedFunction(self.module, c_name.as_ptr()) };
+        let func = self.module.get_named_function(&c_name);
         self.functions.insert(name, func);
     }
 
@@ -184,10 +184,8 @@ impl Backend {
         let func_ty = utils::function_ty(ret_ty, param_types);
         let c_name = CString::new(function.name.clone()).unwrap();
 
-        unsafe {
-            let func = LLVMAddFunction(self.module, c_name.as_ptr(), func_ty);
-            self.functions.insert(function.name.clone(), func);
-        }
+        let func = self.module.add_function(&c_name, func_ty);
+        self.functions.insert(function.name.clone(), func);
     }
 
     fn gen_function(&mut self, function: ir::Function) {
@@ -578,7 +576,7 @@ impl LLVMExecutionModule {
             llvm::execution_engine::LLVMLinkInMCJIT();
             if llvm::execution_engine::LLVMCreateMCJITCompilerForModule(
                 &mut exec_engine,
-                backend.module,
+                backend.module.module,
                 &mut options,
                 options_size,
                 &mut error,
@@ -588,7 +586,9 @@ impl LLVMExecutionModule {
             }
         }
 
-        let main_func = unsafe { LLVMGetNamedFunction(backend.module, c_str(b"main\0")) };
+        let main_func = backend
+            .module
+            .get_named_function(&CString::new("main").unwrap());
 
         Ok(LLVMExecutionModule {
             backend,
@@ -601,7 +601,7 @@ impl LLVMExecutionModule {
         unsafe {
             use llvm::analysis::{LLVMVerifierFailureAction, LLVMVerifyModule};
             LLVMVerifyModule(
-                self.backend.module,
+                self.backend.module.module,
                 LLVMVerifierFailureAction::LLVMPrintMessageAction,
                 ptr::null_mut(),
             );
@@ -610,7 +610,7 @@ impl LLVMExecutionModule {
 
     pub fn print_module(&self) {
         unsafe {
-            LLVMDumpModule(self.backend.module);
+            LLVMDumpModule(self.backend.module.module);
         }
     }
 
@@ -623,8 +623,8 @@ impl LLVMExecutionModule {
             LLVMPassManagerBuilderPopulateModulePassManager(builder, pass_manager);
             LLVMPassManagerBuilderDispose(builder);
 
-            LLVMRunPassManager(pass_manager, self.backend.module);
-            LLVMRunPassManager(pass_manager, self.backend.module);
+            LLVMRunPassManager(pass_manager, self.backend.module.module);
+            LLVMRunPassManager(pass_manager, self.backend.module.module);
 
             LLVMDisposePassManager(pass_manager);
         }
