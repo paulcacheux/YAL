@@ -90,3 +90,33 @@ pub fn literal_to_texpr(lit: ir::Literal) -> ir::TypedExpression {
         expr: ir::Expression::Literal(lit),
     }
 }
+
+pub fn check_return_paths(block: &[ir::Statement]) -> bool {
+    block.iter().map(check_return_paths_stmt).any(|b| b)
+}
+
+pub fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
+    match *stmt {
+        ir::Statement::Block(ref b) => check_return_paths(b),
+        ir::Statement::If {
+            ref condition,
+            ref body,
+            ref else_clause,
+        } => match condition.expr {
+            ir::Expression::Literal(ir::Literal::BooleanLiteral(true)) => check_return_paths(body),
+            ir::Expression::Literal(ir::Literal::BooleanLiteral(false)) => {
+                check_return_paths(else_clause)
+            }
+            _ => check_return_paths(body) && check_return_paths(else_clause),
+        },
+        ir::Statement::While { ref condition, .. } => {
+            if let ir::Expression::Literal(ir::Literal::BooleanLiteral(true)) = condition.expr {
+                true
+            } else {
+                false
+            }
+        }
+        ir::Statement::Return(_) => true,
+        _ => false,
+    }
+}

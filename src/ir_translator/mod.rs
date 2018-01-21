@@ -7,6 +7,7 @@ use errors::TranslationError;
 mod symbol_table;
 #[macro_use]
 mod utils;
+mod typeck;
 use self::symbol_table::{GlobalsTable, SymbolTable};
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
@@ -121,7 +122,7 @@ fn translate_function(
     let mut func_infos = FunctionInfos::new(function.return_ty.clone());
     let mut body = translate_block_statement(&mut symbol_table, function.body, &mut func_infos)?;
 
-    if !check_return_paths(&body) {
+    if !utils::check_return_paths(&body) {
         if function.return_ty != ty::Type::Void {
             return error!(TranslationError::NotAllPathsReturn, function.span);
         } else {
@@ -307,51 +308,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 self.statements
                     .push(ir::Statement::While { condition, body })
             }
-            ast::Statement::For(ast::ForStatement {
-                ty,
-                name,
-                array,
-                body,
-            }) => {
-                let array_span = array.span;
-                let array = self.translate_expression(array)?;
-                let array = utils::lvalue_to_rvalue(array);
-
-                if let ty::Type::Array(sub_ty) = array.ty.clone() {
-                    utils::check_eq_types(&sub_ty, &ty, array_span)?;
-                } else {
-                    return error!(TranslationError::SubscriptNotArray(array.ty), array_span);
-                }
-
-                // translation of stmt
-                self.symbol_table.begin_scope();
-                let current_id =
-                    if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
-                        id
-                    } else {
-                        unreachable!()
-                    };
-
-                let old_in_loop = self.func_infos.in_loop;
-                self.func_infos.in_loop = true;
-                let body = self.translate_statement_as_block(*body)?;
-                self.func_infos.in_loop = old_in_loop;
-                self.symbol_table.end_scope();
-
-                // loop building
-                let (_, loop_block) = self.create_loop(ty.clone(), array, |array_indexed| {
-                    let array_indexed = utils::lvalue_to_rvalue(array_indexed);
-                    Ok(vec![
-                        ir::Statement::VarDecl {
-                            ty: ty,
-                            id: current_id,
-                            init: Some(array_indexed),
-                        },
-                        ir::Statement::Block(body),
-                    ])
-                })?;
-                self.statements.push(ir::Statement::Block(loop_block))
-            }
+            ast::Statement::For(for_stmt) => self.translate_for_statement(for_stmt)?,
             ast::Statement::Return(maybe_expr) => {
                 let expr = if let Some(expr) = maybe_expr {
                     let expr_span = expr.span;
@@ -387,6 +344,55 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn translate_for_statement(&mut self, for_stmt: ast::ForStatement) -> TranslationResult<()> {
+        let ast::ForStatement {
+            ty,
+            name,
+            array,
+            body,
+        } = for_stmt;
+
+        let array_span = array.span;
+        let array = self.translate_expression(array)?;
+        let array = utils::lvalue_to_rvalue(array);
+
+        if let ty::Type::Array(sub_ty) = array.ty.clone() {
+            utils::check_eq_types(&sub_ty, &ty, array_span)?;
+        } else {
+            return error!(TranslationError::SubscriptNotArray(array.ty), array_span);
+        }
+
+        // translation of stmt
+        self.symbol_table.begin_scope();
+        let current_id =
+            if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
+                id
+            } else {
+                unreachable!()
+            };
+
+        let old_in_loop = self.func_infos.in_loop;
+        self.func_infos.in_loop = true;
+        let body = self.translate_statement_as_block(*body)?;
+        self.func_infos.in_loop = old_in_loop;
+        self.symbol_table.end_scope();
+
+        // loop building
+        let (_, loop_block) = self.create_loop(ty.clone(), array, |array_indexed| {
+            let array_indexed = utils::lvalue_to_rvalue(array_indexed);
+            Ok(vec![
+                ir::Statement::VarDecl {
+                    ty: ty,
+                    id: current_id,
+                    init: Some(array_indexed),
+                },
+                ir::Statement::Block(body),
+            ])
+        })?;
+        self.statements.push(ir::Statement::Block(loop_block));
         Ok(())
     }
 
@@ -447,7 +453,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let rhs = self.translate_expression(*rhs)?;
                 let rhs = utils::lvalue_to_rvalue(rhs);
 
-                if let Some((ty, op)) = binop_typeck(binop, &lhs.ty, &rhs.ty) {
+                if let Some((ty, op)) = typeck::binop_typeck(binop, &lhs.ty, &rhs.ty) {
                     let expr = ir::Expression::BinaryOperator {
                         binop: op,
                         lhs: Box::new(lhs),
@@ -462,72 +468,13 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 }
             }
             ast::Expression::LazyOperator { lazyop, lhs, rhs } => {
-                let lhs = self.translate_expression(*lhs)?;
-                let lhs = utils::lvalue_to_rvalue(lhs);
-                let rhs = self.translate_expression(*rhs)?;
-                let rhs = utils::lvalue_to_rvalue(rhs);
-
-                if lhs.ty != ty::Type::Boolean || rhs.ty != ty::Type::Boolean {
-                    return error!(
-                        TranslationError::LazyOpUndefined(lazyop, lhs.ty, rhs.ty),
-                        expr_span
-                    );
-                }
-
-                let (init, cond) = match lazyop {
-                    ast::LazyOperatorKind::LogicalOr => {
-                        let init = utils::literal_to_texpr(ir::Literal::BooleanLiteral(true));
-
-                        let cond = ir::TypedExpression {
-                            ty: ty::Type::Boolean,
-                            expr: ir::Expression::UnaryOperator {
-                                unop: ir::UnaryOperatorKind::BooleanNot,
-                                sub: Box::new(lhs),
-                            },
-                        };
-
-                        (init, cond)
-                    }
-                    ast::LazyOperatorKind::LogicalAnd => {
-                        let init = utils::literal_to_texpr(ir::Literal::BooleanLiteral(false));
-                        (init, lhs)
-                    }
-                };
-
-                let res_id = self.symbol_table.new_identifier_id();
-                let res_id_expr = utils::build_texpr_from_id(ty::Type::Boolean, res_id);
-
-                let stmts = vec![
-                    ir::Statement::VarDecl {
-                        ty: ty::Type::Boolean,
-                        id: res_id,
-                        init: Some(init),
-                    },
-                    ir::Statement::If {
-                        condition: cond,
-                        body: vec![
-                            ir::Statement::Expression(utils::build_assign(
-                                res_id_expr.clone(),
-                                rhs,
-                            )),
-                        ],
-                        else_clause: vec![],
-                    },
-                ];
-
-                Ok(ir::TypedExpression {
-                    ty: ty::Type::Boolean,
-                    expr: ir::Expression::Block(Box::new(ir::BlockExpression {
-                        stmts,
-                        final_expr: utils::lvalue_to_rvalue(res_id_expr),
-                    })),
-                })
+                self.translate_lazyop(lazyop, *lhs, *rhs, expr_span)
             }
             ast::Expression::UnaryOperator { unop, sub } => {
                 let sub = self.translate_expression(*sub)?;
                 let sub = utils::lvalue_to_rvalue(sub);
 
-                if let Some((ty, op)) = unop_typeck(unop, &sub.ty) {
+                if let Some((ty, op)) = typeck::unop_typeck(unop, &sub.ty) {
                     let expr = ir::Expression::UnaryOperator {
                         unop: op,
                         sub: Box::new(sub),
@@ -646,7 +593,73 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         }
     }
 
-    pub fn translate_new_array(
+    fn translate_lazyop(
+        &mut self,
+        lazyop: ast::LazyOperatorKind,
+        lhs: Spanned<ast::Expression>,
+        rhs: Spanned<ast::Expression>,
+        expr_span: Span,
+    ) -> TranslationResult<ir::TypedExpression> {
+        let lhs = self.translate_expression(lhs)?;
+        let lhs = utils::lvalue_to_rvalue(lhs);
+        let rhs = self.translate_expression(rhs)?;
+        let rhs = utils::lvalue_to_rvalue(rhs);
+
+        if lhs.ty != ty::Type::Boolean || rhs.ty != ty::Type::Boolean {
+            return error!(
+                TranslationError::LazyOpUndefined(lazyop, lhs.ty, rhs.ty),
+                expr_span
+            );
+        }
+
+        let (init, cond) = match lazyop {
+            ast::LazyOperatorKind::LogicalOr => {
+                let init = utils::literal_to_texpr(ir::Literal::BooleanLiteral(true));
+
+                let cond = ir::TypedExpression {
+                    ty: ty::Type::Boolean,
+                    expr: ir::Expression::UnaryOperator {
+                        unop: ir::UnaryOperatorKind::BooleanNot,
+                        sub: Box::new(lhs),
+                    },
+                };
+
+                (init, cond)
+            }
+            ast::LazyOperatorKind::LogicalAnd => {
+                let init = utils::literal_to_texpr(ir::Literal::BooleanLiteral(false));
+                (init, lhs)
+            }
+        };
+
+        let res_id = self.symbol_table.new_identifier_id();
+        let res_id_expr = utils::build_texpr_from_id(ty::Type::Boolean, res_id);
+
+        let stmts = vec![
+            ir::Statement::VarDecl {
+                ty: ty::Type::Boolean,
+                id: res_id,
+                init: Some(init),
+            },
+            ir::Statement::If {
+                condition: cond,
+                body: vec![
+                    ir::Statement::Expression(utils::build_assign(res_id_expr.clone(), rhs)),
+                ],
+                else_clause: vec![],
+            },
+        ];
+
+        Ok(ir::TypedExpression {
+            ty: ty::Type::Boolean,
+            expr: ir::Expression::Block(Box::new(ir::BlockExpression {
+                stmts,
+                final_expr: utils::lvalue_to_rvalue(res_id_expr),
+            })),
+        })
+    }
+
+    fn translate_new_array(
         &mut self,
         base_ty: ty::Type,
         mut sizes: Vec<Spanned<ast::Expression>>,
@@ -762,139 +775,5 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 },
             ],
         ))
-    }
-}
-
-fn binop_typeck(
-    binop: ast::BinaryOperatorKind,
-    lhs: &ty::Type,
-    rhs: &ty::Type,
-) -> Option<(ty::Type, ir::BinaryOperatorKind)> {
-    use ast::BinaryOperatorKind::*;
-    match (binop, lhs, rhs) {
-        (Plus, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Int, ir::BinaryOperatorKind::IntPlus))
-        }
-        (Plus, &ty::Type::Double, &ty::Type::Double) => {
-            Some((ty::Type::Double, ir::BinaryOperatorKind::DoublePlus))
-        }
-        (Minus, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Int, ir::BinaryOperatorKind::IntMinus))
-        }
-        (Minus, &ty::Type::Double, &ty::Type::Double) => {
-            Some((ty::Type::Double, ir::BinaryOperatorKind::DoubleMinus))
-        }
-        (Multiply, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Int, ir::BinaryOperatorKind::IntMultiply))
-        }
-        (Multiply, &ty::Type::Double, &ty::Type::Double) => {
-            Some((ty::Type::Double, ir::BinaryOperatorKind::DoubleMultiply))
-        }
-        (Divide, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Int, ir::BinaryOperatorKind::IntDivide))
-        }
-        (Divide, &ty::Type::Double, &ty::Type::Double) => {
-            Some((ty::Type::Double, ir::BinaryOperatorKind::DoubleDivide))
-        }
-        (Modulo, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Int, ir::BinaryOperatorKind::IntModulo))
-        }
-
-        (Equal, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntEqual))
-        }
-        (Equal, &ty::Type::Double, &ty::Type::Double) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleEqual))
-        }
-        (Equal, &ty::Type::Boolean, &ty::Type::Boolean) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::BooleanEqual))
-        }
-
-        (NotEqual, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntNotEqual))
-        }
-        (NotEqual, &ty::Type::Double, &ty::Type::Double) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleNotEqual))
-        }
-        (NotEqual, &ty::Type::Boolean, &ty::Type::Boolean) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::BooleanNotEqual))
-        }
-
-        (Less, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntLess))
-        }
-        (Less, &ty::Type::Double, &ty::Type::Double) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleLess))
-        }
-
-        (LessEqual, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntLessEqual))
-        }
-        (LessEqual, &ty::Type::Double, &ty::Type::Double) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleLessEqual))
-        }
-
-        (Greater, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntGreater))
-        }
-        (Greater, &ty::Type::Double, &ty::Type::Double) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::DoubleGreater))
-        }
-
-        (GreaterEqual, &ty::Type::Int, &ty::Type::Int) => {
-            Some((ty::Type::Boolean, ir::BinaryOperatorKind::IntGreaterEqual))
-        }
-        (GreaterEqual, &ty::Type::Double, &ty::Type::Double) => Some((
-            ty::Type::Boolean,
-            ir::BinaryOperatorKind::DoubleGreaterEqual,
-        )),
-
-        _ => None,
-    }
-}
-
-fn unop_typeck(
-    unop: ast::UnaryOperatorKind,
-    sub: &ty::Type,
-) -> Option<(ty::Type, ir::UnaryOperatorKind)> {
-    use ast::UnaryOperatorKind::*;
-
-    match (unop, sub) {
-        (Minus, &ty::Type::Int) => Some((ty::Type::Int, ir::UnaryOperatorKind::IntMinus)),
-        (Minus, &ty::Type::Double) => Some((ty::Type::Double, ir::UnaryOperatorKind::DoubleMinus)),
-        (LogicalNot, &ty::Type::Boolean) => {
-            Some((ty::Type::Boolean, ir::UnaryOperatorKind::BooleanNot))
-        }
-        _ => None,
-    }
-}
-
-fn check_return_paths(block: &[ir::Statement]) -> bool {
-    block.iter().map(check_return_paths_stmt).any(|b| b)
-}
-
-fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
-    match *stmt {
-        ir::Statement::Block(ref b) => check_return_paths(b),
-        ir::Statement::If {
-            ref condition,
-            ref body,
-            ref else_clause,
-        } => match condition.expr {
-            ir::Expression::Literal(ir::Literal::BooleanLiteral(true)) => check_return_paths(body),
-            ir::Expression::Literal(ir::Literal::BooleanLiteral(false)) => {
-                check_return_paths(else_clause)
-            }
-            _ => check_return_paths(body) && check_return_paths(else_clause),
-        },
-        ir::Statement::While { ref condition, .. } => {
-            if let ir::Expression::Literal(ir::Literal::BooleanLiteral(true)) = condition.expr {
-                true
-            } else {
-                false
-            }
-        }
-        ir::Statement::Return(_) => true,
-        _ => false,
     }
 }
