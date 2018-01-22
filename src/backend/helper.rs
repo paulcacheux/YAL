@@ -6,7 +6,7 @@ use llvm;
 use llvm::core::*;
 use llvm::prelude::*;
 
-use backend::llvm::utils;
+use backend::utils;
 use self::utils::c_str;
 
 #[derive(Debug, Clone)]

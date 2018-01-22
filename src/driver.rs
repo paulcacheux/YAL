@@ -71,17 +71,17 @@ fn continue_or_exit<T, E: std::fmt::Display>(
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Backend {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BackendType {
     Check,
-    LLVM,
+    JIT,
     Interpreter,
 }
 
 #[derive(Debug, Clone)]
 struct Options<'a> {
     input_path: &'a str,
-    backend: Backend,
+    backend: BackendType,
     opt: bool,
     print_ir: bool,
     print_ast: bool,
@@ -107,9 +107,9 @@ impl<'a> Options<'a> {
         }
 
         let backend = match matches.value_of("BACKEND") {
-            Some("llvm") => Backend::LLVM,
-            Some("interpreter") => Backend::Interpreter,
-            _ => Backend::Check,
+            Some("jit") => BackendType::JIT,
+            Some("interpreter") => BackendType::Interpreter,
+            _ => BackendType::Check,
         };
 
         Options {
@@ -144,7 +144,7 @@ fn main() {
                 .help("Choose backend. Only check by default.")
                 .long("backend")
                 .takes_value(true)
-                .possible_values(&["llvm", "interpreter", "check"]),
+                .possible_values(&["jit", "interpreter", "check"]),
         )
         .arg(
             Arg::with_name("DEBUG")
@@ -178,21 +178,22 @@ fn main() {
         pp.pp_program(&ir_prog).expect("ir_pp error");
     }
 
+    if options.backend == BackendType::Check {
+        return;
+    }
+
+    let mut llvm_exec = backend::llvm_gen_program(ir_prog);
+    llvm_exec.verify_module();
+    if options.opt {
+        llvm_exec.optimize();
+    }
+    if options.print_llvm {
+        llvm_exec.print_module();
+    }
+
     match options.backend {
-        Backend::Check => {}
-        Backend::LLVM => {
-            let mut llvm_exec = backend::llvm::llvm_gen_program(ir_prog).unwrap();
-            llvm_exec.verify_module();
-            if options.opt {
-                llvm_exec.optimize();
-            }
-            if options.print_llvm {
-                llvm_exec.print_module();
-            }
-            llvm_exec.call_main();
-        }
-        Backend::Interpreter => {
-            backend::interpreter::interpret_program(&ir_prog).expect("Interpreter error");
-        }
+        BackendType::Check => {}
+        BackendType::JIT => llvm_exec.jit_main().expect("run jit error"),
+        BackendType::Interpreter => llvm_exec.interpret_main().expect("run interpreter error"),
     }
 }
