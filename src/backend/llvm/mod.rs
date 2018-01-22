@@ -363,7 +363,7 @@ impl Backend {
             ir::Expression::Decrement(sub) => self.gen_incdecrement(*sub, false),
             ir::Expression::Subscript { array, index } => self.gen_subscript(*array, *index),
             ir::Expression::FunctionCall { function, args } => self.gen_funccall(&function, args),
-            ir::Expression::NewArray { sub_ty, size } => self.gen_new_array(sub_ty, *size),
+            ir::Expression::NewArray { sub_ty, size } => self.gen_new_array(&sub_ty, *size),
             ir::Expression::ArrayLength(sub) => self.gen_array_len(*sub),
         }
     }
@@ -534,9 +534,9 @@ impl Backend {
         self.builder.build_call(func, args, b"\0")
     }
 
-    fn gen_new_array(&mut self, sub_ty: ty::Type, size: ir::TypedExpression) -> LLVMValueRef {
+    fn gen_new_array(&mut self, sub_ty: &ty::Type, size: ir::TypedExpression) -> LLVMValueRef {
         let size = self.gen_expression(size);
-        let na_func = self.get_new_array_func(&sub_ty);
+        let na_func = self.get_new_array_func(sub_ty);
         self.builder.build_call(na_func, vec![size], b"\0")
     }
 

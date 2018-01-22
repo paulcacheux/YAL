@@ -243,7 +243,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
         if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
             self.statements.push(ir::Statement::VarDecl {
-                ty: ty.clone(),
+                ty,
                 id,
                 init: Some(rhs),
             });
@@ -731,7 +731,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
         // translation of current loop value
         let array_indexed = ir::TypedExpression {
-            ty: ty::Type::LValue(Box::new(ty.clone())),
+            ty: ty::Type::LValue(Box::new(ty)),
             expr: ir::Expression::Subscript {
                 array: Box::new(array_rvalue.clone()),
                 index: Box::new(index_rvalue.clone()),
