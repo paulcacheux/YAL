@@ -1,6 +1,6 @@
 use std::ops::Drop;
-
 use std::ffi::{CStr, CString};
+use std::ptr;
 
 use llvm;
 use llvm::core::*;
@@ -83,6 +83,35 @@ impl Module {
 
     pub fn get_named_function(&self, name: &CStr) -> LLVMValueRef {
         unsafe { LLVMGetNamedFunction(self.module, name.as_ptr()) }
+    }
+
+    pub fn load_runtime(&self, context: &Context) {
+        let mut bytes: Vec<_> = include_bytes!("./runtime.ll").as_ref().into();
+        bytes.push(0);
+
+        unsafe {
+            let buf = LLVMCreateMemoryBufferWithMemoryRange(
+                bytes.as_ptr() as *const _,
+                (bytes.len() - 1) as _,
+                c_str(b"\0"),
+                1,
+            );
+            let mut runtime_module = ptr::null_mut();
+            let mut err_msg = ptr::null_mut();
+
+            let result = llvm::ir_reader::LLVMParseIRInContext(
+                context.context,
+                buf,
+                &mut runtime_module,
+                &mut err_msg,
+            );
+
+            if result != 0 {
+                panic!("{}", CStr::from_ptr(err_msg).to_string_lossy().into_owned())
+            }
+
+            llvm::linker::LLVMLinkModules2(self.module, runtime_module);
+        }
     }
 }
 

@@ -1,9 +1,7 @@
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::collections::HashMap;
 use std::ptr;
 
-use llvm;
-use llvm::core::*;
 use llvm::prelude::*;
 
 use ir;
@@ -13,7 +11,6 @@ use interner::{Interner, InternerId};
 pub mod helper;
 pub mod execution_module;
 mod utils;
-use self::utils::c_str;
 use self::helper::*;
 use self::execution_module::ExecutionModule;
 
@@ -39,7 +36,6 @@ pub struct Backend {
     context: Context,
     module: Module,
     builder: IRBuilder,
-    functions: HashMap<String, LLVMValueRef>,
     ids: HashMap<ir::IdentifierId, LLVMValueRef>,
     new_arrays: HashMap<ty::Type, LLVMValueRef>,
     strings: Interner<String>,
@@ -58,7 +54,6 @@ impl Backend {
             context,
             module,
             builder,
-            functions: HashMap::new(),
             ids: HashMap::new(),
             new_arrays: HashMap::new(),
             strings,
@@ -66,6 +61,10 @@ impl Backend {
             current_break: ptr::null_mut(),
             current_continue: ptr::null_mut(),
         }
+    }
+
+    fn load_runtime(&self) {
+        self.module.load_runtime(&self.context);
     }
 
     fn gen_raw_array_type(&self, sub: &ty::Type) -> LLVMTypeRef {
@@ -130,48 +129,6 @@ impl Backend {
         }
     }
 
-    fn load_runtime(&mut self) {
-        let mut bytes: Vec<_> = include_bytes!("./runtime.ll").as_ref().into();
-        bytes.push(0);
-
-        unsafe {
-            let buf = LLVMCreateMemoryBufferWithMemoryRange(
-                bytes.as_ptr() as *const _,
-                (bytes.len() - 1) as _,
-                c_str(b"\0"),
-                1,
-            );
-            let mut runtime_module = ptr::null_mut();
-            let mut err_msg = ptr::null_mut();
-
-            let result = llvm::ir_reader::LLVMParseIRInContext(
-                self.context.context,
-                buf,
-                &mut runtime_module,
-                &mut err_msg,
-            );
-
-            if result != 0 {
-                panic!("{}", CStr::from_ptr(err_msg).to_string_lossy().into_owned())
-            }
-
-            llvm::linker::LLVMLinkModules2(self.module.module, runtime_module);
-        }
-
-        self.register_named_func("printInt".to_string());
-        self.register_named_func("printDouble".to_string());
-        self.register_named_func("printString".to_string());
-        self.register_named_func("readInt".to_string());
-        self.register_named_func("readDouble".to_string());
-        self.register_named_func("malloc".to_string());
-    }
-
-    fn register_named_func(&mut self, name: String) {
-        let c_name = CString::new(name.clone()).unwrap();
-        let func = self.module.get_named_function(&c_name);
-        self.functions.insert(name, func);
-    }
-
     fn pre_gen_function(&mut self, function: &ir::Function) {
         let ret_ty = self.gen_type(&function.return_ty);
         let param_types: Vec<_> = function
@@ -183,12 +140,12 @@ impl Backend {
         let func_ty = utils::function_ty(ret_ty, param_types);
         let c_name = CString::new(function.name.clone()).unwrap();
 
-        let func = self.module.add_function(&c_name, func_ty);
-        self.functions.insert(function.name.clone(), func);
+        self.module.add_function(&c_name, func_ty);
     }
 
     fn gen_function(&mut self, function: ir::Function) {
-        let func_ref = self.functions[&function.name];
+        let func_ref = self.module
+            .get_named_function(&CString::new(function.name).unwrap());
         let entry_bb = self.context.append_bb_to_func(func_ref, b"entry\0");
         self.builder.position_at_end(entry_bb);
 
@@ -527,7 +484,8 @@ impl Backend {
     }
 
     fn gen_funccall(&mut self, func: &str, args: Vec<ir::TypedExpression>) -> LLVMValueRef {
-        let func = self.functions[func];
+        let func = self.module
+            .get_named_function(&CString::new(func.to_string()).unwrap());
         let args: Vec<_> = args.into_iter().map(|e| self.gen_expression(e)).collect();
 
         self.builder.build_call(func, args, b"\0")
