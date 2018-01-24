@@ -3,6 +3,7 @@ use std::io::Write;
 
 use ir;
 use ty;
+use codemap::Span;
 
 #[derive(Debug)]
 pub struct PrettyPrinter<'w, W: Write + 'w> {
@@ -46,20 +47,55 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
         Ok(())
     }
 
-    pub fn pp_declaration(&mut self, decl: &ir::Function) -> io::Result<()> {
-        let params: Vec<_> = decl.parameters
+    pub fn pp_declaration(&mut self, decl: &ir::Declaration) -> io::Result<()> {
+        match *decl {
+            ir::Declaration::ExternFunction(ref exfunc) => self.pp_ex_function(exfunc),
+            ir::Declaration::Function(ref func) => self.pp_function(func),
+        }
+    }
+
+    fn pp_func_header(
+        &mut self,
+        ret_ty: &ty::Type,
+        params: &[String],
+        name: &str,
+        span: Span,
+        is_extern: bool,
+    ) -> io::Result<()> {
+        writeln_pp!(
+            self,
+            "{}{} {}({}) // {:?}",
+            if is_extern { "extern " } else { "" },
+            ty_to_string(&ret_ty),
+            name,
+            params.join(", "),
+            span
+        )
+    }
+
+    pub fn pp_ex_function(&mut self, exfunc: &ir::ExternFunction) -> io::Result<()> {
+        let params: Vec<_> = exfunc
+            .ty
+            .parameters_ty
+            .iter()
+            .map(|ty| ty_to_string(ty))
+            .collect();
+        self.pp_func_header(
+            &exfunc.ty.return_ty,
+            &params,
+            &exfunc.name,
+            exfunc.span,
+            true,
+        )
+    }
+
+    pub fn pp_function(&mut self, func: &ir::Function) -> io::Result<()> {
+        let params: Vec<_> = func.parameters
             .iter()
             .map(|&(ref ty, id)| ty_to_string(ty) + " " + &idid_to_string(id))
             .collect();
-        writeln_pp!(
-            self,
-            "{} {}({}) // {:?}",
-            ty_to_string(&decl.return_ty),
-            decl.name,
-            params.join(", "),
-            decl.span
-        )?;
-        self.pp_block_statement(&decl.body)?;
+        self.pp_func_header(&func.return_ty, &params, &func.name, func.span, false)?;
+        self.pp_block_statement(&func.body)?;
         writeln_pp!(self)
     }
 

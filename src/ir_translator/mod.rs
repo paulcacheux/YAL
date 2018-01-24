@@ -20,6 +20,7 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
         ty::FunctionType {
             return_ty: ty::Type::Void,
             parameters_ty: vec![ty::Type::Int],
+            is_vararg: false,
         },
     );
     globals_table.register_function(
@@ -27,6 +28,7 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
         ty::FunctionType {
             return_ty: ty::Type::Void,
             parameters_ty: vec![ty::Type::Double],
+            is_vararg: false,
         },
     );
     globals_table.register_function(
@@ -34,6 +36,7 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
         ty::FunctionType {
             return_ty: ty::Type::Void,
             parameters_ty: vec![ty::Type::String],
+            is_vararg: false,
         },
     );
 
@@ -42,6 +45,7 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
         ty::FunctionType {
             return_ty: ty::Type::Int,
             parameters_ty: Vec::new(),
+            is_vararg: false,
         },
     );
     globals_table.register_function(
@@ -49,8 +53,11 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
         ty::FunctionType {
             return_ty: ty::Type::Double,
             parameters_ty: Vec::new(),
+            is_vararg: false,
         },
     );
+
+    let mut declarations = Vec::with_capacity(program.declarations.len());
 
     // pre translation
     let mut is_main_present = false;
@@ -58,6 +65,21 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
         match *decl {
             ast::Declaration::Typedef(_) => unimplemented!(),
             ast::Declaration::Struct(_) => unimplemented!(),
+            ast::Declaration::ExternFunction(ref exfunc) => {
+                let func_ty = exfunc.get_type();
+                if globals_table.register_function(exfunc.name.clone(), func_ty.clone()) {
+                    return error!(
+                        TranslationError::FunctionAlreadyDefined(exfunc.name.clone()),
+                        exfunc.span
+                    );
+                }
+
+                declarations.push(ir::Declaration::ExternFunction(ir::ExternFunction {
+                    ty: func_ty,
+                    name: exfunc.name.clone(),
+                    span: exfunc.span,
+                }));
+            }
             ast::Declaration::Function(ref func) => {
                 if globals_table.register_function(func.name.clone(), func.get_type()) {
                     return error!(
@@ -81,14 +103,14 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
         return error!(TranslationError::NoMain, Span::dummy());
     }
 
-    let mut declarations = Vec::with_capacity(program.declarations.len());
     for decl in program.declarations {
         match decl {
             ast::Declaration::Typedef(_) => unimplemented!(),
             ast::Declaration::Struct(_) => unimplemented!(),
-            ast::Declaration::Function(func) => {
-                declarations.push(translate_function(&globals_table, func)?)
-            }
+            ast::Declaration::ExternFunction(_) => {} // already done
+            ast::Declaration::Function(func) => declarations.push(ir::Declaration::Function(
+                translate_function(&globals_table, func)?,
+            )),
         }
     }
 

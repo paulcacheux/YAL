@@ -20,12 +20,17 @@ pub fn llvm_gen_program(program: ir::Program) -> ExecutionModule {
     //self.register_builtins();
     backend.load_runtime();
 
-    for function in &program.declarations {
-        backend.pre_gen_function(function);
+    for decl in &program.declarations {
+        match *decl {
+            ir::Declaration::ExternFunction(ref exfunc) => backend.pre_gen_extern_function(exfunc),
+            ir::Declaration::Function(ref func) => backend.pre_gen_function(func),
+        }
     }
 
-    for function in program.declarations {
-        backend.gen_function(function);
+    for decl in program.declarations {
+        if let ir::Declaration::Function(function) = decl {
+            backend.gen_function(function);
+        }
     }
 
     backend.into_exec_module()
@@ -90,7 +95,7 @@ impl Backend {
         let raw_array_llvm_ty = self.gen_raw_array_type(ty);
         let array_llvm_ty = utils::pointer_ty(raw_array_llvm_ty);
         let sub_llvm_ty = self.gen_type(ty);
-        let func_ty = utils::function_ty(array_llvm_ty, vec![self.context.i32_ty()]);
+        let func_ty = utils::function_ty(array_llvm_ty, vec![self.context.i32_ty()], false);
 
         let func_name = format!("builtin.new_array.{}", utils::ty_to_string(ty));
         let c_name = CString::new(func_name).unwrap();
@@ -129,6 +134,21 @@ impl Backend {
         }
     }
 
+    fn pre_gen_extern_function(&mut self, exfunc: &ir::ExternFunction) {
+        let ret_ty = self.gen_type(&exfunc.ty.return_ty);
+        let param_types: Vec<_> = exfunc
+            .ty
+            .parameters_ty
+            .iter()
+            .map(|ty| self.gen_type(ty))
+            .collect();
+
+        let func_ty = utils::function_ty(ret_ty, param_types, exfunc.ty.is_vararg);
+        let c_name = CString::new(exfunc.name.clone()).unwrap();
+
+        self.module.add_function(&c_name, func_ty);
+    }
+
     fn pre_gen_function(&mut self, function: &ir::Function) {
         let ret_ty = self.gen_type(&function.return_ty);
         let param_types: Vec<_> = function
@@ -137,7 +157,7 @@ impl Backend {
             .map(|&(ref ty, _)| self.gen_type(ty))
             .collect();
 
-        let func_ty = utils::function_ty(ret_ty, param_types);
+        let func_ty = utils::function_ty(ret_ty, param_types, false);
         let c_name = CString::new(function.name.clone()).unwrap();
 
         self.module.add_function(&c_name, func_ty);

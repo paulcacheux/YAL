@@ -12,6 +12,7 @@ pub struct Program {
 pub enum Declaration {
     Typedef(Typedef),
     Struct(Struct),
+    ExternFunction(ExternFunction),
     Function(Function),
 }
 
@@ -26,6 +27,30 @@ pub struct Struct {
     pub name: String,
     pub fields: Vec<(Type, String)>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExternFunction {
+    pub return_ty: Type,
+    pub name: String,
+    pub parameters: Vec<(Type, String)>,
+    pub is_vararg: bool,
+    pub span: Span,
+}
+
+impl ExternFunction {
+    pub fn get_type(&self) -> FunctionType {
+        let return_ty = self.return_ty.clone();
+        let parameters_ty = self.parameters
+            .iter()
+            .map(|&(ref a, _)| a.clone())
+            .collect();
+        FunctionType {
+            return_ty,
+            parameters_ty,
+            is_vararg: self.is_vararg,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +72,7 @@ impl Function {
         FunctionType {
             return_ty,
             parameters_ty,
+            is_vararg: false,
         }
     }
 }

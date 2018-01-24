@@ -11,8 +11,19 @@ pub fn pointer_ty(sub_ty: LLVMTypeRef) -> LLVMTypeRef {
     unsafe { LLVMPointerType(sub_ty, 0) }
 }
 
-pub fn function_ty(ret_ty: LLVMTypeRef, mut param_types: Vec<LLVMTypeRef>) -> LLVMTypeRef {
-    unsafe { LLVMFunctionType(ret_ty, param_types.as_mut_ptr(), param_types.len() as _, 0) }
+pub fn function_ty(
+    ret_ty: LLVMTypeRef,
+    mut param_types: Vec<LLVMTypeRef>,
+    is_vararg: bool,
+) -> LLVMTypeRef {
+    unsafe {
+        LLVMFunctionType(
+            ret_ty,
+            param_types.as_mut_ptr(),
+            param_types.len() as _,
+            is_vararg as _,
+        )
+    }
 }
 
 pub fn get_func_param(func: LLVMValueRef, index: usize) -> LLVMValueRef {

@@ -10,7 +10,20 @@ pub struct IdentifierId(pub usize);
 #[derive(Debug, Clone)]
 pub struct Program {
     pub strings: Interner<String>,
-    pub declarations: Vec<Function>,
+    pub declarations: Vec<Declaration>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Declaration {
+    ExternFunction(ExternFunction),
+    Function(Function),
+}
+
+#[derive(Debug, Clone)]
+pub struct ExternFunction {
+    pub ty: FunctionType,
+    pub name: String,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

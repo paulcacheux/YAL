@@ -23,4 +23,5 @@ impl Type {
 pub struct FunctionType {
     pub return_ty: Type,
     pub parameters_ty: Vec<Type>,
+    pub is_vararg: bool,
 }
