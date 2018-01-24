@@ -14,6 +14,7 @@ pub enum Token<'input> {
     SemiColon,
     Comma,
     Colon,
+    DotDotDot,
     // operators
     Equal,
     Plus,
@@ -33,6 +34,7 @@ pub enum Token<'input> {
     AmpAmp,
     Bang,
     //keywords
+    ExternKeyword,
     StructKeyword,
     TypedefKeyword,
     WhileKeyword,

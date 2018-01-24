@@ -110,6 +110,7 @@ impl<'input> Lexer<'input> {
             return Ok(TokenAndSpan::new_with_len(Token::EOF, self.input.len(), 1));
         }
 
+        match_literal!(self; "..." => Token::DotDotDot);
         match_literal!(self; "(" => Token::LeftParenthesis);
         match_literal!(self; ")" => Token::RightParenthesis);
         match_literal!(self; "{" => Token::LeftBracket);
@@ -144,6 +145,7 @@ impl<'input> Lexer<'input> {
         if let Some(s) = self.match_regex(&IDENTIFIER_REGEX) {
             let len = s.len();
             let token = match s {
+                "extern" => Token::ExternKeyword,
                 "while" => Token::WhileKeyword,
                 "for" => Token::ForKeyword,
                 "if" => Token::IfKeyword,

@@ -120,6 +120,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         match self.lexer.peek_token()?.token {
             Token::StructKeyword => self.parse_struct_declaration(),
             Token::TypedefKeyword => self.parse_typedef_declaration(),
+            Token::ExternKeyword => self.parse_extern_function_declaration(),
             _ => self.parse_function_declaration(),
         }
     }
@@ -165,6 +166,48 @@ impl<'si, 'input> Parser<'si, 'input> {
         let name = self.parse_identifier()?;
         expect!(self.lexer; Token::SemiColon, ";");
         Ok((ty, name))
+    }
+
+    fn parse_extern_function_declaration(&mut self) -> ParsingResult<ast::Declaration> {
+        let begin_span = expect!(self.lexer; Token::ExternKeyword, "extern");
+        let return_ty = self.parse_type(true)?.inner;
+        let name = self.parse_identifier()?;
+        expect!(self.lexer; Token::LeftParenthesis, "(");
+        let (parameters, is_vararg) = self.parse_extern_parameter_list()?;
+        expect!(self.lexer; Token::RightParenthesis, ")");
+        let end_span = expect!(self.lexer; Token::SemiColon, ";");
+        let span = Span::merge(begin_span, end_span);
+
+        Ok(ast::Declaration::ExternFunction(ast::ExternFunction {
+            return_ty,
+            name,
+            parameters,
+            is_vararg,
+            span,
+        }))
+    }
+
+    fn parse_extern_parameter_list(&mut self) -> ParsingResult<(Vec<ty::Type>, bool)> {
+        let mut result = Vec::new();
+        let mut is_vararg = false;
+
+        if let Token::RightParenthesis = self.lexer.peek_token()?.token {
+            return Ok((result, is_vararg));
+        }
+
+        result.push(self.parse_type(false)?.inner);
+        while let Token::Comma = self.lexer.peek_token()?.token {
+            self.lexer.next_token()?;
+
+            if let Token::DotDotDot = self.lexer.peek_token()?.token {
+                self.lexer.next_token()?;
+                is_vararg = true;
+                break;
+            }
+            result.push(self.parse_type(false)?.inner);
+        }
+
+        Ok((result, is_vararg))
     }
 
     fn parse_function_declaration(&mut self) -> ParsingResult<ast::Declaration> {
