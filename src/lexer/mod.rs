@@ -156,6 +156,7 @@ impl<'input> Lexer<'input> {
                 "int" => Token::IntKeyword,
                 "double" => Token::DoubleKeyword,
                 "boolean" => Token::BooleanKeyword,
+                "string" => Token::StringKeyword,
                 "void" => Token::VoidKeyword,
                 "continue" => Token::ContinueKeyword,
                 "break" => Token::BreakKeyword,

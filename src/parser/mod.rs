@@ -86,6 +86,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             Token::IntKeyword => ty::Type::Int,
             Token::DoubleKeyword => ty::Type::Double,
             Token::BooleanKeyword => ty::Type::Boolean,
+            Token::StringKeyword => ty::Type::String,
             Token::VoidKeyword if void => ty::Type::Void,
             Token::Identifier(id) => ty::Type::StructPointer(id.to_string()),
             _ => {

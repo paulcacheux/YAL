@@ -50,6 +50,7 @@ pub enum Token<'input> {
     DoubleKeyword,
     BooleanKeyword,
     VoidKeyword,
+    StringKeyword,
 
     Identifier(&'input str),
     IntegerLiteral(i64),
