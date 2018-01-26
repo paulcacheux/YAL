@@ -17,9 +17,6 @@ use self::execution_module::ExecutionModule;
 pub fn llvm_gen_program(program: ir::Program, strings: &Interner<String>) -> ExecutionModule {
     let mut backend = Backend::new(strings);
 
-    //self.register_builtins();
-    backend.load_runtime();
-
     for decl in &program.declarations {
         match *decl {
             ir::Declaration::ExternFunction(ref exfunc) => backend.pre_gen_extern_function(exfunc),
@@ -66,10 +63,6 @@ impl<'s> Backend<'s> {
             current_break: ptr::null_mut(),
             current_continue: ptr::null_mut(),
         }
-    }
-
-    fn load_runtime(&self) {
-        self.module.load_runtime(&self.context);
     }
 
     fn gen_raw_array_type(&self, sub: &ty::Type) -> LLVMTypeRef {

@@ -12,6 +12,26 @@ pub struct Program {
     pub declarations: Vec<Declaration>,
 }
 
+impl Program {
+    pub fn is_main_declared(&self) -> bool {
+        for decl in &self.declarations {
+            let (name, ty) = match *decl {
+                Declaration::ExternFunction(ref exfunc) => (&exfunc.name, exfunc.ty.clone()),
+                Declaration::Function(ref func) => (&func.name, func.get_type()),
+            };
+
+            if name == "main" {
+                return FunctionType {
+                    return_ty: Type::Int,
+                    parameters_ty: Vec::new(),
+                    is_vararg: false,
+                } == ty;
+            }
+        }
+        false
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Declaration {
     ExternFunction(ExternFunction),
@@ -32,6 +52,21 @@ pub struct Function {
     pub parameters: Vec<(Type, IdentifierId)>,
     pub body: BlockStatement,
     pub span: Span,
+}
+
+impl Function {
+    pub fn get_type(&self) -> FunctionType {
+        let return_ty = self.return_ty.clone();
+        let parameters_ty = self.parameters
+            .iter()
+            .map(|&(ref a, _)| a.clone())
+            .collect();
+        FunctionType {
+            return_ty,
+            parameters_ty,
+            is_vararg: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

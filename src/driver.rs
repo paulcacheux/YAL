@@ -157,11 +157,17 @@ fn main() {
         .get_matches();
 
     let options = Options::from_matches(&matches);
+    let mut string_interner = interner::Interner::<String>::new();
+
+    // load runtime
+    let runtime_input = include_str!("../runtime/io.jl");
+    let runtime_lexer = lexer::Lexer::new(&runtime_input);
+    let runtime_ast = parser::parse_program(runtime_lexer, &mut string_interner).unwrap();
+    let runtime_ir = ir_translator::translate_program(runtime_ast, None).unwrap();
 
     let input = slurp_file(options.input_path).unwrap();
     let codemap = codemap::CodeMap::new(options.input_path, &input);
 
-    let mut string_interner = interner::Interner::<String>::new();
     let lexer = lexer::Lexer::new(&input);
     let ast = continue_or_exit(
         options.input_path,
@@ -175,8 +181,18 @@ fn main() {
     let ir_prog = continue_or_exit(
         options.input_path,
         &codemap,
-        ir_translator::translate_program(ast),
+        ir_translator::translate_program(ast, Some(runtime_ir)).and_then(|ir_prog| {
+            if !ir_prog.is_main_declared() {
+                Err(Spanned::new(
+                    errors::TranslationError::NoMain,
+                    Span::dummy(),
+                ))
+            } else {
+                Ok(ir_prog)
+            }
+        }),
     );
+
     if options.print_ir {
         let mut w = std::io::stderr();
         let mut pp = ir::prettyprinter::PrettyPrinter::new(&mut w);

@@ -12,55 +12,31 @@ use self::symbol_table::{GlobalsTable, SymbolTable};
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
 
-pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program> {
+pub fn translate_program(
+    program: ast::Program,
+    runtime: Option<ir::Program>,
+) -> TranslationResult<ir::Program> {
     let mut globals_table = GlobalsTable::new();
 
-    globals_table.register_function(
-        "printInt".to_string(),
-        ty::FunctionType {
-            return_ty: ty::Type::Void,
-            parameters_ty: vec![ty::Type::Int],
-            is_vararg: false,
-        },
-    );
-    globals_table.register_function(
-        "printDouble".to_string(),
-        ty::FunctionType {
-            return_ty: ty::Type::Void,
-            parameters_ty: vec![ty::Type::Double],
-            is_vararg: false,
-        },
-    );
-    globals_table.register_function(
-        "printString".to_string(),
-        ty::FunctionType {
-            return_ty: ty::Type::Void,
-            parameters_ty: vec![ty::Type::String],
-            is_vararg: false,
-        },
-    );
+    let mut declarations = if let Some(runtime) = runtime {
+        for decl in &runtime.declarations {
+            let (name, fty) = match *decl {
+                ir::Declaration::ExternFunction(ref exfunc) => {
+                    (exfunc.name.clone(), exfunc.ty.clone())
+                }
+                ir::Declaration::Function(ref func) => (func.name.clone(), func.get_type()),
+            };
+            globals_table.register_function(name, fty);
+        }
 
-    globals_table.register_function(
-        "readInt".to_string(),
-        ty::FunctionType {
-            return_ty: ty::Type::Int,
-            parameters_ty: Vec::new(),
-            is_vararg: false,
-        },
-    );
-    globals_table.register_function(
-        "readDouble".to_string(),
-        ty::FunctionType {
-            return_ty: ty::Type::Double,
-            parameters_ty: Vec::new(),
-            is_vararg: false,
-        },
-    );
+        runtime.declarations
+    } else {
+        Vec::new()
+    };
 
-    let mut declarations = Vec::with_capacity(program.declarations.len());
+    declarations.reserve(program.declarations.len());
 
     // pre translation
-    let mut is_main_present = false;
     for decl in &program.declarations {
         match *decl {
             ast::Declaration::Typedef(_) => unimplemented!(),
@@ -87,20 +63,8 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
                         func.span
                     );
                 }
-
-                if func.name == "main" {
-                    if func.parameters.is_empty() {
-                        is_main_present = true;
-                    } else {
-                        return error!(TranslationError::MainWrongType, func.span);
-                    }
-                }
             }
         }
-    }
-
-    if !is_main_present {
-        return error!(TranslationError::NoMain, Span::dummy());
     }
 
     for decl in program.declarations {
@@ -560,7 +524,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Expression::FunctionCall { function, args } => {
                 if let Some(func_ty) = self.symbol_table.lookup_function(&function).cloned() {
                     let mut args_translated = Vec::with_capacity(args.len());
-                    if func_ty.parameters_ty.len() != args.len() {
+                    if !func_ty.is_vararg && func_ty.parameters_ty.len() != args.len() {
                         return error!(
                             TranslationError::FunctionCallArityMismatch(
                                 func_ty.parameters_ty.len(),
@@ -570,13 +534,30 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         );
                     }
 
-                    for (arg, param_ty) in args.into_iter().zip(func_ty.parameters_ty.iter()) {
+                    if func_ty.is_vararg && func_ty.parameters_ty.len() > args.len() {
+                        return error!(
+                            TranslationError::FunctionCallArityMismatch(
+                                func_ty.parameters_ty.len(),
+                                args.len()
+                            ),
+                            expr_span
+                        );
+                    }
+
+                    for (index, arg) in args.into_iter().enumerate() {
                         let arg_span = arg.span;
                         let arg = self.translate_expression(arg)?;
                         let arg = utils::lvalue_to_rvalue(arg);
-                        utils::check_eq_types(&arg.ty, param_ty, arg_span)?;
+                        if index < func_ty.parameters_ty.len() {
+                            utils::check_eq_types(
+                                &arg.ty,
+                                &func_ty.parameters_ty[index],
+                                arg_span,
+                            )?;
+                        }
                         args_translated.push(arg);
                     }
+
                     let ret_ty = func_ty.return_ty;
                     Ok(ir::TypedExpression {
                         ty: ret_ty,

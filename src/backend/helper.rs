@@ -85,6 +85,7 @@ impl Module {
         unsafe { LLVMGetNamedFunction(self.module, name.as_ptr()) }
     }
 
+    /* currently unused
     pub fn load_runtime(&self, context: &Context) {
         let mut bytes: Vec<_> = include_bytes!("./runtime.ll").as_ref().into();
         bytes.push(0);
@@ -112,7 +113,7 @@ impl Module {
 
             llvm::linker::LLVMLinkModules2(self.module, runtime_module);
         }
-    }
+    }*/
 }
 
 #[derive(Debug, Clone)]
