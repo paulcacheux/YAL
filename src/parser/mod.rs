@@ -510,7 +510,8 @@ impl<'si, 'input> Parser<'si, 'input> {
             Token::StringLiteral(s) => {
                 // TODO parse string (escape, etc)
                 let s = &s[1..s.len() - 1];
-                let sid = self.string_interner.intern(s.to_string());
+                let s = convert_escape_string(s);
+                let sid = self.string_interner.intern(s);
                 let expr = ast::Expression::Literal(ast::Literal::StringLiteral(sid));
                 Ok(Spanned::new(expr, span))
             }
@@ -602,4 +603,29 @@ impl<'si, 'input> Parser<'si, 'input> {
 
         Ok(result)
     }
+}
+
+fn convert_escape_string(s: &str) -> String {
+    let mut iter = s.chars();
+    let mut output = String::new();
+
+    while let Some(c) = iter.next() {
+        if c != '\\' {
+            output.push(c);
+            continue;
+        }
+
+        match iter.next() {
+            Some('b') => output.push('\u{0008}'),
+            Some('f') => output.push('\u{000C}'),
+            Some('n') => output.push('\n'),
+            Some('r') => output.push('\r'),
+            Some('t') => output.push('\t'),
+            Some('\'') => output.push('\''),
+            Some('\"') => output.push('\"'),
+            Some('\\') => output.push('\\'),
+            _ => panic!("Uncatched unterminated escape in string literal"),
+        };
+    }
+    output
 }

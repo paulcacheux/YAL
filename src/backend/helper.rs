@@ -1,6 +1,5 @@
 use std::ops::Drop;
 use std::ffi::{CStr, CString};
-use std::ptr;
 
 use llvm;
 use llvm::core::*;
