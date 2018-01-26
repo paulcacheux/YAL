@@ -14,4 +14,14 @@ void printString(string x) {
     puts(x);
 }
 
-// for the read functions we need pointer types
+int readInt() {
+    int res;
+    scanf("%d", &res);
+    return res;
+}
+
+double readDouble() {
+    double res;
+    scanf("%lf", &res);
+    return res;
+}

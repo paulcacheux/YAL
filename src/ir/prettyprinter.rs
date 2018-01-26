@@ -209,6 +209,10 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
                 let sub = self.pp_expression_percent(sub)?;
                 format!("{}--", sub)
             }
+            ir::Expression::AddressOf(ref sub) => {
+                let sub = self.pp_expression_percent(sub)?;
+                format!("&{}", sub)
+            }
             ir::Expression::FunctionCall {
                 ref function,
                 ref args,

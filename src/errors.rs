@@ -32,6 +32,7 @@ pub enum TranslationError {
     FunctionCallArityMismatch(usize, usize),
     FunctionUndefined(String),
     IncDecNonLValue,
+    AddressOfNonLValue,
     BreakContinueOutOfLoop,
     MainWrongType,
     NoMain,
@@ -137,6 +138,9 @@ impl fmt::Display for TranslationError {
                 f,
                 "Increment or decrement to a value that can't be assigned"
             ),
+            TranslationError::AddressOfNonLValue => {
+                write!(f, "AddressOf to a value that has no address")
+            }
             TranslationError::BreakContinueOutOfLoop => {
                 write!(f, "Break or continue outside a loop")
             }

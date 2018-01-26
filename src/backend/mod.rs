@@ -330,6 +330,7 @@ impl<'s> Backend<'s> {
             ir::Expression::UnaryOperator { unop, sub } => self.gen_unop(unop, *sub),
             ir::Expression::Increment(sub) => self.gen_incdecrement(*sub, true),
             ir::Expression::Decrement(sub) => self.gen_incdecrement(*sub, false),
+            ir::Expression::AddressOf(sub) => self.gen_addressof(*sub),
             ir::Expression::Subscript { array, index } => self.gen_subscript(*array, *index),
             ir::Expression::FunctionCall { function, args } => self.gen_funccall(&function, args),
             ir::Expression::NewArray { sub_ty, size } => self.gen_new_array(&sub_ty, *size),
@@ -463,6 +464,7 @@ impl<'s> Backend<'s> {
                 self.builder.build_fsub(const0, sub, b"\0")
             }
             ir::UnaryOperatorKind::BooleanNot => self.builder.build_not(sub, b"\0"),
+            ir::UnaryOperatorKind::PointerDeref => self.builder.build_load(sub, b"\0"),
         }
     }
 
@@ -481,6 +483,10 @@ impl<'s> Backend<'s> {
         self.builder.build_store(value, ptr);
 
         ptr
+    }
+
+    fn gen_addressof(&mut self, sub: ir::TypedExpression) -> LLVMValueRef {
+        self.gen_expression(sub)
     }
 
     fn gen_subscript(

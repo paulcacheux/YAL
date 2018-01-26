@@ -130,6 +130,7 @@ impl<'input> Lexer<'input> {
         match_literal!(self; ">=" => Token::GreaterEqual);
         match_literal!(self; "||" => Token::PipePipe);
         match_literal!(self; "&&" => Token::AmpAmp);
+        match_literal!(self; "&" => Token::Amp);
 
         match_literal!(self; "=" => Token::Equal);
         match_literal!(self; "+" => Token::Plus);

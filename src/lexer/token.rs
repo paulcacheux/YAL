@@ -31,6 +31,7 @@ pub enum Token<'input> {
     Greater,
     GreaterEqual,
     PipePipe,
+    Amp,
     AmpAmp,
     Bang,
     //keywords

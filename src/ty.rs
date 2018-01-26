@@ -8,6 +8,7 @@ pub enum Type {
     StructPointer(String),
     LValue(Box<Type>),
     Array(Box<Type>),
+    Pointer(Box<Type>),
 }
 
 impl Type {

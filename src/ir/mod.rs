@@ -121,6 +121,7 @@ pub enum Expression {
     },
     Increment(Box<TypedExpression>),
     Decrement(Box<TypedExpression>),
+    AddressOf(Box<TypedExpression>),
     Subscript {
         array: Box<TypedExpression>,
         index: Box<TypedExpression>,
@@ -182,4 +183,5 @@ pub enum UnaryOperatorKind {
     IntMinus,
     DoubleMinus,
     BooleanNot,
+    PointerDeref,
 }

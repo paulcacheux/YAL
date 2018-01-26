@@ -102,11 +102,21 @@ impl<'si, 'input> Parser<'si, 'input> {
             mut span,
         } = self.parse_bottom_type(void)?;
 
-        while let Token::LeftSquare = self.lexer.peek_token()?.token {
-            self.lexer.next_token()?;
-            let end_span = expect!(self.lexer; Token::RightSquare, "]");
-            span = Span::merge(span, end_span);
-            ty = ty::Type::Array(Box::new(ty));
+        loop {
+            match self.lexer.peek_token()?.token {
+                Token::LeftSquare => {
+                    self.lexer.next_token()?;
+                    let end_span = expect!(self.lexer; Token::RightSquare, "]");
+                    span = Span::merge(span, end_span);
+                    ty = ty::Type::Array(Box::new(ty));
+                }
+                Token::Star => {
+                    let end_span = self.lexer.next_token()?.span;
+                    span = Span::merge(span, end_span);
+                    ty = ty::Type::Pointer(Box::new(ty));
+                }
+                _ => break,
+            }
         }
 
         Ok(Spanned::new(ty, span))
@@ -553,6 +563,21 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let span = Span::merge(span, sub.span);
                 let expr = ast::Expression::UnaryOperator {
                     unop: ast::UnaryOperatorKind::LogicalNot,
+                    sub: Box::new(sub),
+                };
+                Ok(Spanned::new(expr, span))
+            }
+            Token::Amp => {
+                let sub = self.parse_mid_expression()?;
+                let span = Span::merge(span, sub.span);
+                let expr = ast::Expression::AddressOf(Box::new(sub));
+                Ok(Spanned::new(expr, span))
+            }
+            Token::Star => {
+                let sub = self.parse_mid_expression()?;
+                let span = Span::merge(span, sub.span);
+                let expr = ast::Expression::UnaryOperator {
+                    unop: ast::UnaryOperatorKind::PtrDeref,
                     sub: Box::new(sub),
                 };
                 Ok(Spanned::new(expr, span))

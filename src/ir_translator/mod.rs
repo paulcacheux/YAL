@@ -501,6 +501,21 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     expr: ir::Expression::Decrement(Box::new(sub)),
                 })
             }
+            ast::Expression::AddressOf(sub) => {
+                let sub_span = sub.span;
+                let sub = self.translate_expression(*sub)?;
+
+                let ptr_ty = if let ty::Type::LValue(ref sub_ty) = sub.ty {
+                    ty::Type::Pointer(sub_ty.clone())
+                } else {
+                    return error!(TranslationError::AddressOfNonLValue, sub_span);
+                };
+
+                Ok(ir::TypedExpression {
+                    ty: ptr_ty,
+                    expr: ir::Expression::AddressOf(Box::new(sub)),
+                })
+            }
             ast::Expression::Subscript { array, index } => {
                 let index_span = index.span;
                 let array = self.translate_expression(*array)?;

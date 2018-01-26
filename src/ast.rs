@@ -150,6 +150,7 @@ pub enum Expression {
     },
     Increment(Box<Spanned<Expression>>),
     Decrement(Box<Spanned<Expression>>),
+    AddressOf(Box<Spanned<Expression>>),
     Subscript {
         array: Box<Spanned<Expression>>,
         index: Box<Spanned<Expression>>,
@@ -201,4 +202,5 @@ pub enum LazyOperatorKind {
 pub enum UnaryOperatorKind {
     Minus,
     LogicalNot,
+    PtrDeref,
 }
