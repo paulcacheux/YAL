@@ -80,6 +80,7 @@ impl<'s> Backend<'s> {
             ty::Type::LValue(ref sub) => utils::pointer_ty(self.gen_type(sub)),
             ty::Type::Array(ref sub) => self.context
                 .array_ty(self.gen_type(sub), self.context.i32_ty()),
+            ty::Type::Pointer(ref sub) => utils::pointer_ty(self.gen_type(sub)),
             _ => unimplemented!(),
         }
     }
@@ -464,7 +465,7 @@ impl<'s> Backend<'s> {
                 self.builder.build_fsub(const0, sub, b"\0")
             }
             ir::UnaryOperatorKind::BooleanNot => self.builder.build_not(sub, b"\0"),
-            ir::UnaryOperatorKind::PointerDeref => self.builder.build_load(sub, b"\0"),
+            ir::UnaryOperatorKind::PointerDeref => sub,
         }
     }
 

@@ -295,6 +295,7 @@ fn ty_to_string(ty: &ty::Type) -> String {
         ty::Type::Void => "void".to_string(),
         ty::Type::LValue(ref sub) => format!("&{}", ty_to_string(sub)),
         ty::Type::Array(ref sub) => format!("{}[]", ty_to_string(sub)),
+        ty::Type::Pointer(ref sub) => format!("{}*", ty_to_string(sub)),
         _ => unimplemented!(),
     }
 }
