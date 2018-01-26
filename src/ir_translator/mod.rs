@@ -114,10 +114,7 @@ pub fn translate_program(program: ast::Program) -> TranslationResult<ir::Program
         }
     }
 
-    Ok(ir::Program {
-        strings: program.strings,
-        declarations,
-    })
+    Ok(ir::Program { declarations })
 }
 
 fn translate_function(

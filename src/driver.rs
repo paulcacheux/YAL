@@ -161,8 +161,13 @@ fn main() {
     let input = slurp_file(options.input_path).unwrap();
     let codemap = codemap::CodeMap::new(options.input_path, &input);
 
+    let mut string_interner = interner::Interner::<String>::new();
     let lexer = lexer::Lexer::new(&input);
-    let ast = continue_or_exit(options.input_path, &codemap, parser::parse_program(lexer));
+    let ast = continue_or_exit(
+        options.input_path,
+        &codemap,
+        parser::parse_program(lexer, &mut string_interner),
+    );
     if options.print_ast {
         eprintln!("{:#?}", ast);
     }
@@ -182,7 +187,7 @@ fn main() {
         return;
     }
 
-    let mut llvm_exec = backend::llvm_gen_program(ir_prog);
+    let mut llvm_exec = backend::llvm_gen_program(ir_prog, &string_interner);
     llvm_exec.verify_module();
     if options.opt {
         llvm_exec.optimize();

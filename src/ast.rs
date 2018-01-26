@@ -1,10 +1,9 @@
 use ty::*;
-use interner::{Interner, InternerId};
+use interner::InternerId;
 use codemap::{Span, Spanned};
 
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub strings: Interner<String>,
     pub declarations: Vec<Declaration>,
 }
 

@@ -1,5 +1,5 @@
 use ty::*;
-use interner::{Interner, InternerId};
+use interner::InternerId;
 use codemap::Span;
 
 pub mod prettyprinter;
@@ -9,7 +9,6 @@ pub struct IdentifierId(pub usize);
 
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub strings: Interner<String>,
     pub declarations: Vec<Declaration>,
 }
 

@@ -11,11 +11,9 @@ use self::expression_parser::*;
 
 pub type ParsingResult<T> = Result<T, Spanned<ParsingError>>;
 
-pub fn parse_program(lexer: Lexer) -> ParsingResult<ast::Program> {
-    let mut strings = Interner::new();
-
+pub fn parse_program(lexer: Lexer, strings: &mut Interner<String>) -> ParsingResult<ast::Program> {
     let declarations = {
-        let mut parser = Parser::new(lexer, &mut strings);
+        let mut parser = Parser::new(lexer, strings);
 
         let mut declarations = Vec::new();
 
@@ -25,10 +23,7 @@ pub fn parse_program(lexer: Lexer) -> ParsingResult<ast::Program> {
         declarations
     };
 
-    Ok(ast::Program {
-        strings,
-        declarations,
-    })
+    Ok(ast::Program { declarations })
 }
 
 struct Parser<'si, 'input> {

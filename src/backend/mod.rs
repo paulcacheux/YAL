@@ -14,8 +14,8 @@ mod utils;
 use self::helper::*;
 use self::execution_module::ExecutionModule;
 
-pub fn llvm_gen_program(program: ir::Program) -> ExecutionModule {
-    let mut backend = Backend::new(program.strings);
+pub fn llvm_gen_program(program: ir::Program, strings: &Interner<String>) -> ExecutionModule {
+    let mut backend = Backend::new(strings);
 
     //self.register_builtins();
     backend.load_runtime();
@@ -37,20 +37,20 @@ pub fn llvm_gen_program(program: ir::Program) -> ExecutionModule {
 }
 
 #[derive(Debug, Clone)]
-pub struct Backend {
+pub struct Backend<'s> {
     context: Context,
     module: Module,
     builder: IRBuilder,
     ids: HashMap<ir::IdentifierId, LLVMValueRef>,
     new_arrays: HashMap<ty::Type, LLVMValueRef>,
-    strings: Interner<String>,
+    strings: &'s Interner<String>,
     current_func: LLVMValueRef,
     current_break: LLVMBasicBlockRef,
     current_continue: LLVMBasicBlockRef,
 }
 
-impl Backend {
-    pub fn new(strings: Interner<String>) -> Backend {
+impl<'s> Backend<'s> {
+    pub fn new(strings: &'s Interner<String>) -> Self {
         let context = Context::new();
         let module = Module::new_in_context(&context, b"main\0");
         let builder = IRBuilder::new_in_context(&context);
