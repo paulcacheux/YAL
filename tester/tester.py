@@ -34,7 +34,7 @@ def handle_good_suite(next_path):
             given_input = None
 
         res = run_exec(code_path, given_input)
-        print("Test {} : {}".format(name, "OK" if expected_output == res.stdout else "FAIL"))
+        print("Test {}\t\t: {}".format(name, "OK" if expected_output == res.stdout else "FAIL"))
 
     handle_suite(good_path, run_good_test)
 
@@ -45,7 +45,7 @@ def handle_bad_suite():
         code_path = os.path.join(bad_path, name + ".jl")
 
         res = run_exec(code_path)
-        print("Test {} : {} (exit code {})".format(name, "OK" if res.returncode == 1 else "FAIL", res.returncode))
+        print("Test {}\t\t: {} (exit code {})".format(name, "OK" if res.returncode == 1 else "FAIL", res.returncode))
     handle_suite(bad_path, run_bad_test)
 
 handle_good_suite("good")
