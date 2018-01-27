@@ -148,9 +148,10 @@ pub enum Expression {
         unop: UnaryOperatorKind,
         sub: Box<Spanned<Expression>>,
     },
-    Increment(Box<Spanned<Expression>>),
-    Decrement(Box<Spanned<Expression>>),
-    AddressOf(Box<Spanned<Expression>>),
+    LValueUnaryOperator {
+        lvalue_unop: LValueUnaryOperatorKind,
+        sub: Box<Spanned<Expression>>,
+    },
     Subscript {
         array: Box<Spanned<Expression>>,
         index: Box<Spanned<Expression>>,
@@ -203,4 +204,11 @@ pub enum UnaryOperatorKind {
     Minus,
     LogicalNot,
     PtrDeref,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum LValueUnaryOperatorKind {
+    Increment,
+    Decrement,
+    AddressOf,
 }

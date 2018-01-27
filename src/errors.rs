@@ -29,10 +29,10 @@ pub enum TranslationError {
     BinOpUndefined(ast::BinaryOperatorKind, ty::Type, ty::Type),
     LazyOpUndefined(ast::LazyOperatorKind, ty::Type, ty::Type),
     UnOpUndefined(ast::UnaryOperatorKind, ty::Type),
+    LValueUnOpUndefined(ast::LValueUnaryOperatorKind, ty::Type),
     FunctionCallArityMismatch(usize, usize),
     FunctionUndefined(String),
-    IncDecNonLValue,
-    AddressOfNonLValue,
+    LValueUnopNonLValue,
     BreakContinueOutOfLoop,
     MainWrongType,
     NoMain,
@@ -126,6 +126,11 @@ impl fmt::Display for TranslationError {
                 "The unary operator '{:?}' can't be applied to '{:?}'",
                 unop, a
             ),
+            TranslationError::LValueUnOpUndefined(unop, ref a) => write!(
+                f,
+                "The lvalue unary operator '{:?}' can't be applied to '{:?}'",
+                unop, a
+            ),
             TranslationError::FunctionCallArityMismatch(a, b) => write!(
                 f,
                 "Mismatching arities in function call between {} and {}",
@@ -134,12 +139,8 @@ impl fmt::Display for TranslationError {
             TranslationError::FunctionUndefined(ref func) => {
                 write!(f, "The function '{}' is undefined", func)
             }
-            TranslationError::IncDecNonLValue => write!(
-                f,
-                "Increment or decrement to a value that can't be assigned"
-            ),
-            TranslationError::AddressOfNonLValue => {
-                write!(f, "AddressOf to a value that has no address")
+            TranslationError::LValueUnopNonLValue => {
+                write!(f, "LValue unary operator on a value that can't be assigned")
             }
             TranslationError::BreakContinueOutOfLoop => {
                 write!(f, "Break or continue outside a loop")

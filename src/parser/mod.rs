@@ -461,14 +461,20 @@ impl<'si, 'input> Parser<'si, 'input> {
                 Token::PlusPlus => {
                     let end_span = self.lexer.next_token()?.span;
                     let span = Span::merge(sub.span, end_span);
-                    let expr = ast::Expression::Increment(Box::new(sub));
+                    let expr = ast::Expression::LValueUnaryOperator {
+                        lvalue_unop: ast::LValueUnaryOperatorKind::Increment,
+                        sub: Box::new(sub),
+                    };
                     sub = Spanned::new(expr, span);
                     continue;
                 }
                 Token::MinusMinus => {
                     let end_span = self.lexer.next_token()?.span;
                     let span = Span::merge(sub.span, end_span);
-                    let expr = ast::Expression::Decrement(Box::new(sub));
+                    let expr = ast::Expression::LValueUnaryOperator {
+                        lvalue_unop: ast::LValueUnaryOperatorKind::Decrement,
+                        sub: Box::new(sub),
+                    };
                     sub = Spanned::new(expr, span);
                     continue;
                 }
@@ -570,7 +576,10 @@ impl<'si, 'input> Parser<'si, 'input> {
             Token::Amp => {
                 let sub = self.parse_mid_expression()?;
                 let span = Span::merge(span, sub.span);
-                let expr = ast::Expression::AddressOf(Box::new(sub));
+                let expr = ast::Expression::LValueUnaryOperator {
+                    lvalue_unop: ast::LValueUnaryOperatorKind::AddressOf,
+                    sub: Box::new(sub),
+                };
                 Ok(Spanned::new(expr, span))
             }
             Token::Star => {

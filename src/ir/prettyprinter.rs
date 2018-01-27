@@ -201,17 +201,12 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
                 let sub = self.pp_expression_percent(sub)?;
                 format!("{:?}({})", unop, sub)
             }
-            ir::Expression::Increment(ref sub) => {
-                let sub = self.pp_expression_percent(sub)?;
-                format!("{}++", sub)
-            }
-            ir::Expression::Decrement(ref sub) => {
-                let sub = self.pp_expression_percent(sub)?;
-                format!("{}--", sub)
-            }
-            ir::Expression::AddressOf(ref sub) => {
-                let sub = self.pp_expression_percent(sub)?;
-                format!("&{}", sub)
+            ir::Expression::LValueUnaryOperator {
+                lvalue_unop,
+                ref sub,
+            } => {
+                let sub = self.pp_expression(sub)?;
+                format!("{:?}({})", lvalue_unop, sub)
             }
             ir::Expression::FunctionCall {
                 ref function,

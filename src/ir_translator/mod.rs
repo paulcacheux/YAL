@@ -467,54 +467,26 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     error!(TranslationError::UnOpUndefined(unop, sub.ty), expr_span)
                 }
             }
-            ast::Expression::Increment(sub) => {
-                let sub_span = sub.span;
+            ast::Expression::LValueUnaryOperator { lvalue_unop, sub } => {
                 let sub = self.translate_expression(*sub)?;
 
-                if let ty::Type::LValue(ref sub_ty) = sub.ty {
-                    utils::check_eq_types(sub_ty, &ty::Type::Int, sub_span)?;
+                if let ty::Type::LValue(sub_ty) = sub.ty.clone() {
+                    if let Some((ty, op)) = typeck::lvalue_unop_typeck(lvalue_unop, &sub_ty) {
+                        let expr = ir::Expression::LValueUnaryOperator {
+                            lvalue_unop: op,
+                            sub: Box::new(sub),
+                        };
+                        Ok(ir::TypedExpression { ty, expr })
+                    } else {
+                        error!(
+                            TranslationError::LValueUnOpUndefined(lvalue_unop, *sub_ty),
+                            expr_span
+                        )
+                    }
                 } else {
-                    return error!(TranslationError::IncDecNonLValue, sub_span);
+                    // TODO can also be addressof
+                    return error!(TranslationError::LValueUnopNonLValue, expr_span);
                 }
-
-                let ty = sub.ty.clone();
-
-                Ok(ir::TypedExpression {
-                    ty,
-                    expr: ir::Expression::Increment(Box::new(sub)),
-                })
-            }
-            ast::Expression::Decrement(sub) => {
-                let sub_span = sub.span;
-                let sub = self.translate_expression(*sub)?;
-
-                if let ty::Type::LValue(ref sub_ty) = sub.ty {
-                    utils::check_eq_types(sub_ty, &ty::Type::Int, sub_span)?;
-                } else {
-                    return error!(TranslationError::IncDecNonLValue, sub_span);
-                }
-
-                let ty = sub.ty.clone();
-
-                Ok(ir::TypedExpression {
-                    ty,
-                    expr: ir::Expression::Decrement(Box::new(sub)),
-                })
-            }
-            ast::Expression::AddressOf(sub) => {
-                let sub_span = sub.span;
-                let sub = self.translate_expression(*sub)?;
-
-                let ptr_ty = if let ty::Type::LValue(ref sub_ty) = sub.ty {
-                    ty::Type::Pointer(sub_ty.clone())
-                } else {
-                    return error!(TranslationError::AddressOfNonLValue, sub_span);
-                };
-
-                Ok(ir::TypedExpression {
-                    ty: ptr_ty,
-                    expr: ir::Expression::AddressOf(Box::new(sub)),
-                })
             }
             ast::Expression::Subscript { array, index } => {
                 let index_span = index.span;
@@ -756,7 +728,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         // translation of index++
         let index_inc = ir::TypedExpression {
             ty: ty::Type::LValue(Box::new(ty::Type::Int)),
-            expr: ir::Expression::Increment(Box::new(index_expr.clone())),
+            expr: ir::Expression::LValueUnaryOperator {
+                lvalue_unop: ir::LValueUnaryOperatorKind::IntIncrement,
+                sub: Box::new(index_expr.clone()),
+            },
         };
 
         // body

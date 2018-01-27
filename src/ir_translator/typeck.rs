@@ -109,3 +109,26 @@ pub fn unop_typeck(
         _ => None,
     }
 }
+
+pub fn lvalue_unop_typeck(
+    lvalue_unop: ast::LValueUnaryOperatorKind,
+    sub: &ty::Type,
+) -> Option<(ty::Type, ir::LValueUnaryOperatorKind)> {
+    use ast::LValueUnaryOperatorKind::*;
+
+    match (lvalue_unop, sub) {
+        (Increment, &ty::Type::Int) => Some((
+            ty::Type::LValue(Box::new(ty::Type::Int)),
+            ir::LValueUnaryOperatorKind::IntIncrement,
+        )),
+        (Decrement, &ty::Type::Int) => Some((
+            ty::Type::LValue(Box::new(ty::Type::Int)),
+            ir::LValueUnaryOperatorKind::IntDecrement,
+        )),
+        (AddressOf, sub) => Some((
+            ty::Type::Pointer(Box::new(sub.clone())),
+            ir::LValueUnaryOperatorKind::LValueAddressOf,
+        )),
+        _ => None,
+    }
+}

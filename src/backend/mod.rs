@@ -329,9 +329,9 @@ impl<'s> Backend<'s> {
             ir::Expression::Assign { lhs, rhs } => self.gen_assign(*lhs, *rhs),
             ir::Expression::BinaryOperator { binop, lhs, rhs } => self.gen_binop(binop, *lhs, *rhs),
             ir::Expression::UnaryOperator { unop, sub } => self.gen_unop(unop, *sub),
-            ir::Expression::Increment(sub) => self.gen_incdecrement(*sub, true),
-            ir::Expression::Decrement(sub) => self.gen_incdecrement(*sub, false),
-            ir::Expression::AddressOf(sub) => self.gen_addressof(*sub),
+            ir::Expression::LValueUnaryOperator { lvalue_unop, sub } => {
+                self.gen_lvalue_unop(lvalue_unop, *sub)
+            }
             ir::Expression::Subscript { array, index } => self.gen_subscript(*array, *index),
             ir::Expression::FunctionCall { function, args } => self.gen_funccall(&function, args),
             ir::Expression::NewArray { sub_ty, size } => self.gen_new_array(&sub_ty, *size),
@@ -466,6 +466,18 @@ impl<'s> Backend<'s> {
             }
             ir::UnaryOperatorKind::BooleanNot => self.builder.build_not(sub, b"\0"),
             ir::UnaryOperatorKind::PointerDeref => sub,
+        }
+    }
+
+    fn gen_lvalue_unop(
+        &mut self,
+        lvalue_unop: ir::LValueUnaryOperatorKind,
+        sub: ir::TypedExpression,
+    ) -> LLVMValueRef {
+        match lvalue_unop {
+            ir::LValueUnaryOperatorKind::IntIncrement => self.gen_incdecrement(sub, true),
+            ir::LValueUnaryOperatorKind::IntDecrement => self.gen_incdecrement(sub, false),
+            ir::LValueUnaryOperatorKind::LValueAddressOf => self.gen_addressof(sub),
         }
     }
 
