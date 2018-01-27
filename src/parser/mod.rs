@@ -76,32 +76,26 @@ impl<'si, 'input> Parser<'si, 'input> {
         }
     }
 
-    fn parse_bottom_type(&mut self, void: bool) -> ParsingResult<Spanned<ty::Type>> {
+    fn parse_bottom_type(&mut self) -> ParsingResult<Spanned<ty::Type>> {
         let TokenAndSpan { token, span } = self.lexer.next_token()?;
         let ty = match token {
             Token::IntKeyword => ty::Type::Int,
             Token::DoubleKeyword => ty::Type::Double,
             Token::BooleanKeyword => ty::Type::Boolean,
             Token::StringKeyword => ty::Type::String,
-            Token::VoidKeyword if void => ty::Type::Void,
+            Token::VoidKeyword => ty::Type::Void,
             Token::Identifier(id) => ty::Type::StructPointer(id.to_string()),
-            _ => {
-                if void {
-                    return_unexpected!(span, "int", "boolean", "double", "void")
-                } else {
-                    return_unexpected!(span, "int", "boolean", "double")
-                }
-            }
+            _ => return_unexpected!(span, "int", "boolean", "double", "void"),
         };
 
         Ok(Spanned::new(ty, span))
     }
 
-    fn parse_type(&mut self, void: bool) -> ParsingResult<Spanned<ty::Type>> {
+    fn parse_type_inner(&mut self) -> ParsingResult<Spanned<ty::Type>> {
         let Spanned {
             inner: mut ty,
             mut span,
-        } = self.parse_bottom_type(void)?;
+        } = self.parse_bottom_type()?;
 
         loop {
             match self.lexer.peek_token()?.token {
@@ -120,6 +114,16 @@ impl<'si, 'input> Parser<'si, 'input> {
             }
         }
 
+        Ok(Spanned::new(ty, span))
+    }
+
+    fn parse_type(&mut self, void: bool) -> ParsingResult<Spanned<ty::Type>> {
+        let Spanned { inner: ty, span } = self.parse_type_inner()?;
+        if !void && ty == ty::Type::Void {
+            panic!()
+        } else if ty.is_invalid() {
+            panic!()
+        }
         Ok(Spanned::new(ty, span))
     }
 
@@ -533,7 +537,7 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let Spanned {
                     inner: bty,
                     mut span,
-                } = self.parse_bottom_type(false)?;
+                } = self.parse_bottom_type()?;
                 let mut sizes = Vec::new();
                 loop {
                     expect!(self.lexer; Token::LeftSquare, "[");

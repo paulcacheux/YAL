@@ -15,6 +15,8 @@ pub enum LexingError {
 pub enum ParsingError {
     LexingError(LexingError),
     Unexpected(Vec<String>),
+    InvalidType,
+    UnexpectedVoid,
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +82,11 @@ impl fmt::Display for ParsingError {
                 f,
                 "Unexpected token, expected one of {}",
                 expected.join(", ")
+            ),
+            ParsingError::InvalidType => write!(f, "Invalid type"),
+            ParsingError::UnexpectedVoid => write!(
+                f,
+                "Unexpected void (can only be used as function return type or in pointers)"
             ),
         }
     }

@@ -102,7 +102,7 @@ pub fn unop_typeck(
         (LogicalNot, &ty::Type::Boolean) => {
             Some((ty::Type::Boolean, ir::UnaryOperatorKind::BooleanNot))
         }
-        (PtrDeref, &ty::Type::Pointer(ref sub)) => Some((
+        (PtrDeref, &ty::Type::Pointer(ref sub)) if **sub != ty::Type::Void => Some((
             ty::Type::LValue(sub.clone()),
             ir::UnaryOperatorKind::PointerDeref,
         )),
