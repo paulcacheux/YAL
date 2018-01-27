@@ -9,7 +9,7 @@ use ty;
 use common;
 use interner::{Interner, InternerId};
 
-pub mod helper;
+mod helper;
 pub mod execution_module;
 mod utils;
 use self::helper::*;

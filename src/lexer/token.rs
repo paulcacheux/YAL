@@ -1,3 +1,7 @@
+/// Represents a Token from a Javalette program.
+///
+/// Usually constructed by a `Lexer` and used by the `Parser` to build the `AST`.
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'input> {
     EOF,

@@ -196,10 +196,6 @@ impl IRBuilder {
         unsafe { LLVMBuildNot(self.builder, expr, c_str(name)) }
     }
 
-    pub fn build_phi(&self, ty: LLVMTypeRef, name: &[u8]) -> LLVMValueRef {
-        unsafe { LLVMBuildPhi(self.builder, ty, c_str(name)) }
-    }
-
     pub fn build_call(
         &self,
         func: LLVMValueRef,
@@ -346,9 +342,5 @@ impl IRBuilder {
                 c_str(name),
             )
         }
-    }
-
-    pub fn get_insert_block(&self) -> LLVMBasicBlockRef {
-        unsafe { LLVMGetInsertBlock(self.builder) }
     }
 }
