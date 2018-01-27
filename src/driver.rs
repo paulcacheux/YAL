@@ -191,7 +191,7 @@ fn main() {
         pp.pp_program(&ir_prog).expect("ir_pp error");
     }
 
-    let mut llvm_exec = backend::llvm_gen_program(ir_prog, &string_interner);
+    let mut llvm_exec = backend::llvm_codegen_program(ir_prog, &string_interner);
     llvm_exec.verify_module();
     if options.opt {
         llvm_exec.optimize();
