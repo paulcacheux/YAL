@@ -21,3 +21,8 @@ for (int a : array) {
 ```c
 extern void free(int*);
 ```
+- cast expression
+```c
+int a = 12;
+double b = a as double;
+```
