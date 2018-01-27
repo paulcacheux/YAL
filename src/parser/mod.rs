@@ -1,6 +1,7 @@
 use lexer::{Lexer, Token, TokenAndSpan};
 use ast;
 use ty;
+use common;
 use interner::Interner;
 use codemap::{Span, Spanned};
 use errors::ParsingError;
@@ -512,15 +513,15 @@ impl<'si, 'input> Parser<'si, 'input> {
         let TokenAndSpan { token, span } = self.lexer.next_token()?;
         match token {
             Token::IntegerLiteral(i) => {
-                let expr = ast::Expression::Literal(ast::Literal::IntLiteral(i));
+                let expr = ast::Expression::Literal(common::Literal::IntLiteral(i));
                 Ok(Spanned::new(expr, span))
             }
             Token::DoubleLiteral(d) => {
-                let expr = ast::Expression::Literal(ast::Literal::DoubleLiteral(d));
+                let expr = ast::Expression::Literal(common::Literal::DoubleLiteral(d));
                 Ok(Spanned::new(expr, span))
             }
             Token::BooleanLiteral(b) => {
-                let expr = ast::Expression::Literal(ast::Literal::BooleanLiteral(b));
+                let expr = ast::Expression::Literal(common::Literal::BooleanLiteral(b));
                 Ok(Spanned::new(expr, span))
             }
             Token::StringLiteral(s) => {
@@ -528,7 +529,7 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let s = &s[1..s.len() - 1];
                 let s = convert_escape_string(s);
                 let sid = self.string_interner.intern(s);
-                let expr = ast::Expression::Literal(ast::Literal::StringLiteral(sid));
+                let expr = ast::Expression::Literal(common::Literal::StringLiteral(sid));
                 Ok(Spanned::new(expr, span))
             }
             Token::NewKeyword => {

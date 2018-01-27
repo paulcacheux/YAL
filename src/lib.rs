@@ -12,6 +12,7 @@ pub mod codemap;
 pub mod lexer;
 pub mod ast;
 pub mod parser;
+pub mod common;
 pub mod ty;
 pub mod ir;
 pub mod ir_translator;

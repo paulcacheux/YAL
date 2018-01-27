@@ -1,6 +1,7 @@
 use ast;
 use ty;
 use ir;
+use common;
 use codemap::*;
 use errors::TranslationError;
 
@@ -213,13 +214,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             utils::check_eq_types(&expr.ty, &ty, value_span)?;
             expr
         } else if ty.has_default_value() {
-            let lit = match ty {
-                ty::Type::Int => ir::Literal::IntLiteral(0),
-                ty::Type::Double => ir::Literal::DoubleLiteral(0.0),
-                ty::Type::Boolean => ir::Literal::BooleanLiteral(false),
-                _ => unreachable!(),
-            };
-            utils::literal_to_texpr(lit)
+            utils::default_value_for_ty(&ty)
         } else {
             return error!(TranslationError::NoDefaultValue, error_span);
         };
@@ -389,25 +384,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         } = expression;
 
         match expression {
-            ast::Expression::Literal(lit) => {
-                let (ty, lit) = match lit {
-                    ast::Literal::IntLiteral(i) => (ty::Type::Int, ir::Literal::IntLiteral(i)),
-                    ast::Literal::DoubleLiteral(d) => {
-                        (ty::Type::Double, ir::Literal::DoubleLiteral(d))
-                    }
-                    ast::Literal::BooleanLiteral(b) => {
-                        (ty::Type::Boolean, ir::Literal::BooleanLiteral(b))
-                    }
-                    ast::Literal::StringLiteral(s) => {
-                        (ty::Type::String, ir::Literal::StringLiteral(s))
-                    }
-                };
-
-                Ok(ir::TypedExpression {
-                    ty,
-                    expr: ir::Expression::Literal(lit),
-                })
-            }
+            ast::Expression::Literal(lit) => Ok(utils::literal_to_texpr(lit)),
             ast::Expression::Identifier(id) => {
                 if let Some(symbol) = self.symbol_table.lookup_local(&id) {
                     Ok(utils::build_texpr_from_id(symbol.ty.clone(), symbol.id))
@@ -601,7 +578,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
         let (init, cond) = match lazyop {
             ast::LazyOperatorKind::LogicalOr => {
-                let init = utils::literal_to_texpr(ir::Literal::BooleanLiteral(true));
+                let init = utils::literal_to_texpr(common::Literal::BooleanLiteral(true));
 
                 let cond = ir::TypedExpression {
                     ty: ty::Type::Boolean,
@@ -614,7 +591,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 (init, cond)
             }
             ast::LazyOperatorKind::LogicalAnd => {
-                let init = utils::literal_to_texpr(ir::Literal::BooleanLiteral(false));
+                let init = utils::literal_to_texpr(common::Literal::BooleanLiteral(false));
                 (init, lhs)
             }
         };
@@ -710,7 +687,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         let array_expr = utils::build_texpr_from_id(array.ty.clone(), array_id);
         let array_rvalue = utils::lvalue_to_rvalue(array_expr.clone());
 
-        let const0 = utils::literal_to_texpr(ir::Literal::IntLiteral(0));
+        let const0 = utils::literal_to_texpr(common::Literal::IntLiteral(0));
         let array_len_expr = ir::TypedExpression {
             ty: ty::Type::Int,
             expr: ir::Expression::ArrayLength(Box::new(array_rvalue.clone())),

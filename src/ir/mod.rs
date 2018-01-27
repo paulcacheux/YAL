@@ -1,6 +1,6 @@
 use ty::*;
-use interner::InternerId;
 use codemap::Span;
+use common::Literal;
 
 pub mod prettyprinter;
 
@@ -142,14 +142,6 @@ pub enum Expression {
 pub struct BlockExpression {
     pub stmts: BlockStatement,
     pub final_expr: TypedExpression,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Literal {
-    IntLiteral(i64),
-    DoubleLiteral(f64),
-    BooleanLiteral(bool),
-    StringLiteral(InternerId),
 }
 
 #[derive(Debug, Clone, Copy)]

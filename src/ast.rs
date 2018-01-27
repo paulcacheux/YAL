@@ -1,6 +1,6 @@
 use ty::*;
-use interner::InternerId;
 use codemap::{Span, Spanned};
+use common::Literal;
 
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -168,14 +168,6 @@ pub enum Expression {
         expr: Box<Spanned<Expression>>,
         member: String,
     },
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Literal {
-    IntLiteral(i64),
-    DoubleLiteral(f64),
-    BooleanLiteral(bool),
-    StringLiteral(InternerId),
 }
 
 #[derive(Debug, Clone, Copy)]

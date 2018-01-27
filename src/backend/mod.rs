@@ -6,6 +6,7 @@ use llvm::prelude::*;
 
 use ir;
 use ty;
+use common;
 use interner::{Interner, InternerId};
 
 pub mod helper;
@@ -351,21 +352,21 @@ impl<'s> Backend<'s> {
         self.builder.build_load(expr, b"\0")
     }
 
-    fn gen_literal(&mut self, literal: ir::Literal) -> LLVMValueRef {
+    fn gen_literal(&mut self, literal: common::Literal) -> LLVMValueRef {
         match literal {
-            ir::Literal::IntLiteral(i) => {
+            common::Literal::IntLiteral(i) => {
                 let ty = self.gen_type(&ty::Type::Int);
                 utils::const_int(ty, i, true)
             }
-            ir::Literal::DoubleLiteral(d) => {
+            common::Literal::DoubleLiteral(d) => {
                 let ty = self.gen_type(&ty::Type::Double);
                 utils::const_real(ty, d)
             }
-            ir::Literal::BooleanLiteral(b) => {
+            common::Literal::BooleanLiteral(b) => {
                 let ty = self.gen_type(&ty::Type::Boolean);
                 utils::const_int(ty, b as _, false)
             }
-            ir::Literal::StringLiteral(id) => self.gen_string_literal(id),
+            common::Literal::StringLiteral(id) => self.gen_string_literal(id),
         }
     }
 

@@ -1,5 +1,6 @@
 use ty;
 use ir;
+use common;
 use ir::IdentifierId;
 use errors::TranslationError;
 use ir_translator::TranslationResult;
@@ -70,21 +71,16 @@ pub fn lvalue_to_rvalue(expression: ir::TypedExpression) -> ir::TypedExpression 
 
 pub fn default_value_for_ty(ty: &ty::Type) -> ir::TypedExpression {
     let lit = match *ty {
-        ty::Type::Int => ir::Literal::IntLiteral(0),
-        ty::Type::Double => ir::Literal::DoubleLiteral(0.0),
-        ty::Type::Boolean => ir::Literal::BooleanLiteral(false),
+        ty::Type::Int => common::Literal::IntLiteral(0),
+        ty::Type::Double => common::Literal::DoubleLiteral(0.0),
+        ty::Type::Boolean => common::Literal::BooleanLiteral(false),
         _ => panic!("This type doesn't have a default value"),
     };
     literal_to_texpr(lit)
 }
 
-pub fn literal_to_texpr(lit: ir::Literal) -> ir::TypedExpression {
-    let ty = match lit {
-        ir::Literal::IntLiteral(_) => ty::Type::Int,
-        ir::Literal::DoubleLiteral(_) => ty::Type::Double,
-        ir::Literal::BooleanLiteral(_) => ty::Type::Boolean,
-        ir::Literal::StringLiteral(_) => ty::Type::String,
-    };
+pub fn literal_to_texpr(lit: common::Literal) -> ir::TypedExpression {
+    let ty = lit.get_type();
     ir::TypedExpression {
         ty,
         expr: ir::Expression::Literal(lit),
@@ -103,14 +99,16 @@ pub fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
             ref body,
             ref else_clause,
         } => match condition.expr {
-            ir::Expression::Literal(ir::Literal::BooleanLiteral(true)) => check_return_paths(body),
-            ir::Expression::Literal(ir::Literal::BooleanLiteral(false)) => {
+            ir::Expression::Literal(common::Literal::BooleanLiteral(true)) => {
+                check_return_paths(body)
+            }
+            ir::Expression::Literal(common::Literal::BooleanLiteral(false)) => {
                 check_return_paths(else_clause)
             }
             _ => check_return_paths(body) && check_return_paths(else_clause),
         },
         ir::Statement::While { ref condition, .. } => {
-            if let ir::Expression::Literal(ir::Literal::BooleanLiteral(true)) = condition.expr {
+            if let ir::Expression::Literal(common::Literal::BooleanLiteral(true)) = condition.expr {
                 true
             } else {
                 false
