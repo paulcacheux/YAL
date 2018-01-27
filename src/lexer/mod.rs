@@ -3,7 +3,7 @@ use errors::LexingError;
 use codemap::{Span, Spanned};
 
 mod token;
-pub use self::token::{Token, TokenAndSpan};
+pub use self::token::Token;
 
 lazy_static! {
     static ref WHITESPACES: Regex = Regex::new(r"^\s+").unwrap();
@@ -23,13 +23,13 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct LexerState<'input> {
     pos: usize,
-    buffer: Option<TokenAndSpan<'input>>,
+    buffer: Option<Spanned<Token<'input>>>,
 }
 
 pub struct Lexer<'input> {
     input: &'input str,
     pos: usize,
-    buffer: Option<TokenAndSpan<'input>>,
+    buffer: Option<Spanned<Token<'input>>>,
 }
 
 pub type LexingResult<T> = Result<T, Spanned<LexingError>>;
@@ -76,7 +76,7 @@ impl<'input> Lexer<'input> {
         })
     }
 
-    pub fn peek_token(&mut self) -> LexingResult<&TokenAndSpan<'input>> {
+    pub fn peek_token(&mut self) -> LexingResult<&Spanned<Token<'input>>> {
         if self.buffer.is_none() {
             self.buffer = Some(self.next_token()?);
         }
@@ -88,14 +88,14 @@ impl<'input> Lexer<'input> {
         }
     }
 
-    pub fn next_token(&mut self) -> LexingResult<TokenAndSpan<'input>> {
+    pub fn next_token(&mut self) -> LexingResult<Spanned<Token<'input>>> {
         macro_rules! match_literal {
             ($lexer:expr; $literal:tt => $ret_expr:expr) => {
                 if (&$lexer.input[$lexer.pos..]).starts_with($literal) {
                     let len = $literal.len();
                     let start = $lexer.pos;
                     $lexer.pos += len;
-                    return Ok(TokenAndSpan::new_with_len($ret_expr, start, len))
+                    return Ok(Spanned::new($ret_expr, Span::new_with_len(start, len)))
                 }
             }
         }
@@ -107,7 +107,10 @@ impl<'input> Lexer<'input> {
         self.skip_whitespaces();
 
         if self.pos >= self.input.len() {
-            return Ok(TokenAndSpan::new_with_len(Token::EOF, self.input.len(), 1));
+            return Ok(Spanned::new(
+                Token::EOF,
+                Span::new_with_len(self.input.len(), 1),
+            ));
         }
 
         match_literal!(self; "..." => Token::DotDotDot);
@@ -175,7 +178,7 @@ impl<'input> Lexer<'input> {
                     Token::Identifier(s)
                 }
             };
-            return Ok(TokenAndSpan::new_with_len(token, start_pos, len));
+            return Ok(Spanned::new(token, Span::new_with_len(start_pos, len)));
         }
         if let Some(s) = self.match_regex(&DOUBLE_REGEX) {
             let len = s.len();
@@ -188,7 +191,7 @@ impl<'input> Lexer<'input> {
                 ));
             };
             let token = Token::DoubleLiteral(number);
-            return Ok(TokenAndSpan::new_with_len(token, start_pos, len));
+            return Ok(Spanned::new(token, Span::new_with_len(start_pos, len)));
         }
         if let Some(s) = self.match_regex(&INTEGER_REGEX) {
             let len = s.len();
@@ -201,12 +204,12 @@ impl<'input> Lexer<'input> {
                 ));
             };
             let token = Token::IntegerLiteral(number);
-            return Ok(TokenAndSpan::new_with_len(token, start_pos, len));
+            return Ok(Spanned::new(token, Span::new_with_len(start_pos, len)));
         }
         if let Some(s) = self.match_regex(&STRING_REGEX) {
             let len = s.len();
             let token = Token::StringLiteral(s);
-            return Ok(TokenAndSpan::new_with_len(token, start_pos, len));
+            return Ok(Spanned::new(token, Span::new_with_len(start_pos, len)));
         }
 
         Err(Spanned::new(
