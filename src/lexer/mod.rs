@@ -164,6 +164,7 @@ impl<'input> Lexer<'input> {
                 "new" => Token::NewKeyword,
                 "struct" => Token::StructKeyword,
                 "typedef" => Token::TypedefKeyword,
+                "as" => Token::AsKeyword,
                 s => {
                     if s.starts_with("___") {
                         return Err(Spanned::new(

@@ -465,6 +465,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     return error!(TranslationError::LValueUnopNonLValue, expr_span);
                 }
             }
+            ast::Expression::Cast { .. } => unimplemented!(),
             ast::Expression::Subscript { array, index } => {
                 let index_span = index.span;
                 let array = self.translate_expression(*array)?;

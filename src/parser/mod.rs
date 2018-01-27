@@ -452,8 +452,28 @@ impl<'si, 'input> Parser<'si, 'input> {
     }
 
     fn parse_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
-        let lhs = self.parse_mid_expression()?;
+        let lhs = self.parse_cast_expression()?;
         parse_expression_inner(self, lhs, 0)
+    }
+
+    fn parse_cast_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
+        let mut sub = self.parse_mid_expression()?;
+        while let Token::AsKeyword = self.lexer.peek_token()?.token {
+            self.lexer.next_token()?;
+            let Spanned {
+                inner: ty,
+                span: ty_span,
+            } = self.parse_type(false)?;
+            let span = Span::merge(sub.span, ty_span);
+            sub = Spanned::new(
+                ast::Expression::Cast {
+                    as_ty: ty,
+                    sub: Box::new(sub),
+                },
+                span,
+            );
+        }
+        Ok(sub)
     }
 
     fn parse_mid_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {

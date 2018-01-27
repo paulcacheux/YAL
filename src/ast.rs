@@ -152,6 +152,10 @@ pub enum Expression {
         lvalue_unop: LValueUnaryOperatorKind,
         sub: Box<Spanned<Expression>>,
     },
+    Cast {
+        as_ty: Type,
+        sub: Box<Spanned<Expression>>,
+    },
     Subscript {
         array: Box<Spanned<Expression>>,
         index: Box<Spanned<Expression>>,
