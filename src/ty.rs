@@ -21,10 +21,9 @@ impl Type {
 
     pub fn is_invalid(&self) -> bool {
         match *self {
-            Type::Int | Type::Double | Type::Boolean | Type::String | Type::Void => false,
             Type::LValue(ref sub) | Type::Array(ref sub) => **sub == Type::Void || sub.is_invalid(),
             Type::Pointer(ref sub) => sub.is_invalid(),
-            _ => unimplemented!(),
+            _ => false,
         }
     }
 }
