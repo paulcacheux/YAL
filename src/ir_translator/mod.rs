@@ -744,3 +744,23 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         ))
     }
 }
+
+pub fn check_if_main_declaration(prog: &ir::Program) -> TranslationResult<()> {
+    for decl in &prog.declarations {
+        let (name, ty, span) = match *decl {
+            ir::Declaration::ExternFunction(ref exfunc) => {
+                (&exfunc.name, exfunc.ty.clone(), exfunc.span)
+            }
+            ir::Declaration::Function(ref func) => (&func.name, func.get_type(), func.span),
+        };
+
+        if name == "main" {
+            if ty.return_ty == ty::Type::Int && ty.parameters_ty.is_empty() && !ty.is_vararg {
+                return Ok(());
+            } else {
+                return error!(TranslationError::MainWrongType, span);
+            }
+        }
+    }
+    error!(TranslationError::NoMain, Span::dummy())
+}

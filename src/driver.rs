@@ -58,13 +58,11 @@ fn continue_or_exit<T, E: std::fmt::Display>(
     match res {
         Ok(v) => v,
         Err(Spanned { inner: error, span }) => {
-            println!("{:?}", span);
             let source_loc = codemap.bytepos_to_sourceloc(span.start);
             eprintln!(
                 "{}:{}:{}: {}",
                 path, source_loc.line, source_loc.column, error
             );
-            eprintln!("{}", error);
             print_error_line(codemap.input, span);
             std::process::exit(1);
         }
@@ -182,14 +180,8 @@ fn main() {
         options.input_path,
         &codemap,
         ir_translator::translate_program(ast, Some(runtime_ir)).and_then(|ir_prog| {
-            if !ir_prog.is_main_declared() {
-                Err(Spanned::new(
-                    errors::TranslationError::NoMain,
-                    Span::dummy(),
-                ))
-            } else {
-                Ok(ir_prog)
-            }
+            ir_translator::check_if_main_declaration(&ir_prog)?;
+            Ok(ir_prog)
         }),
     );
 

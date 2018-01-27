@@ -225,13 +225,10 @@ impl<'si, 'input> Parser<'si, 'input> {
         let name = self.parse_identifier()?;
         expect!(self.lexer; Token::LeftParenthesis, "(");
         let parameters = self.parse_parameter_list()?;
-        expect!(self.lexer; Token::RightParenthesis, ")");
-        let Spanned {
-            inner: body,
-            span: body_span,
-        } = self.parse_block_statement()?;
+        let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
+        let Spanned { inner: body, .. } = self.parse_block_statement()?;
 
-        let span = Span::merge(ty_span, body_span);
+        let span = Span::merge(ty_span, end_span);
 
         Ok(ast::Declaration::Function(ast::Function {
             return_ty,

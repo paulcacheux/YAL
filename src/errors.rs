@@ -145,7 +145,7 @@ impl fmt::Display for TranslationError {
             TranslationError::BreakContinueOutOfLoop => {
                 write!(f, "Break or continue outside a loop")
             }
-            TranslationError::MainWrongType => write!(f, "Main must be of type void(void)"),
+            TranslationError::MainWrongType => write!(f, "Main must be of type int()"),
             TranslationError::NoMain => write!(f, "A main function must be defined"),
             TranslationError::NotAllPathsReturn => {
                 write!(f, "A path in this function doesn't return")
