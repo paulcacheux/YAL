@@ -282,6 +282,33 @@ impl IRBuilder {
         unsafe { LLVMBuildZExt(self.builder, value, dest_ty, c_str(name)) }
     }
 
+    pub fn build_si_to_fp(
+        &self,
+        value: LLVMValueRef,
+        dest_ty: LLVMTypeRef,
+        name: &[u8],
+    ) -> LLVMValueRef {
+        unsafe { LLVMBuildSIToFP(self.builder, value, dest_ty, c_str(name)) }
+    }
+
+    pub fn build_fp_to_si(
+        &self,
+        value: LLVMValueRef,
+        dest_ty: LLVMTypeRef,
+        name: &[u8],
+    ) -> LLVMValueRef {
+        unsafe { LLVMBuildFPToSI(self.builder, value, dest_ty, c_str(name)) }
+    }
+
+    pub fn build_trunc(
+        &self,
+        value: LLVMValueRef,
+        dest_ty: LLVMTypeRef,
+        name: &[u8],
+    ) -> LLVMValueRef {
+        unsafe { LLVMBuildTrunc(self.builder, value, dest_ty, c_str(name)) }
+    }
+
     pub fn build_malloc(&self, ty: LLVMTypeRef, name: &[u8]) -> LLVMValueRef {
         unsafe { LLVMBuildMalloc(self.builder, ty, c_str(name)) }
     }

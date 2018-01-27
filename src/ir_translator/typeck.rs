@@ -132,3 +132,14 @@ pub fn lvalue_unop_typeck(
         _ => None,
     }
 }
+
+pub fn cast_typeck(src_ty: &ty::Type, target_ty: &ty::Type) -> Option<ir::CastKind> {
+    match (src_ty, target_ty) {
+        (&ty::Type::Int, &ty::Type::Double) => Some(ir::CastKind::IntToDouble),
+        (&ty::Type::Double, &ty::Type::Int) => Some(ir::CastKind::DoubleToInt),
+        (&ty::Type::Boolean, &ty::Type::Int) => Some(ir::CastKind::BooleanToInt),
+        (&ty::Type::Int, &ty::Type::Boolean) => Some(ir::CastKind::IntToBoolean),
+        (&ty::Type::Pointer(_), &ty::Type::Pointer(_)) => Some(ir::CastKind::PtrToPtr),
+        _ => None,
+    }
+}

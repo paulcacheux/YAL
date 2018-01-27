@@ -321,7 +321,7 @@ impl<'s> Backend<'s> {
     }
 
     fn gen_expression(&mut self, expr: ir::TypedExpression) -> LLVMValueRef {
-        let ir::TypedExpression { expr, .. } = expr;
+        let ir::TypedExpression { ty, expr } = expr;
         match expr {
             ir::Expression::Block(block) => self.gen_expr_block(*block),
             ir::Expression::LValueToRValue(sub) => self.gen_l2r_expr(*sub),
@@ -333,6 +333,7 @@ impl<'s> Backend<'s> {
             ir::Expression::LValueUnaryOperator { lvalue_unop, sub } => {
                 self.gen_lvalue_unop(lvalue_unop, *sub)
             }
+            ir::Expression::Cast { kind, sub } => self.gen_cast(&ty, kind, *sub),
             ir::Expression::Subscript { array, index } => self.gen_subscript(*array, *index),
             ir::Expression::FunctionCall { function, args } => self.gen_funccall(&function, args),
             ir::Expression::NewArray { sub_ty, size } => self.gen_new_array(&sub_ty, *size),
@@ -501,6 +502,24 @@ impl<'s> Backend<'s> {
 
     fn gen_addressof(&mut self, sub: ir::TypedExpression) -> LLVMValueRef {
         self.gen_expression(sub)
+    }
+
+    fn gen_cast(
+        &mut self,
+        dest_ty: &ty::Type,
+        kind: ir::CastKind,
+        sub: ir::TypedExpression,
+    ) -> LLVMValueRef {
+        let sub = self.gen_expression(sub);
+        let llvm_ty = self.gen_type(&dest_ty);
+
+        match kind {
+            ir::CastKind::IntToDouble => self.builder.build_si_to_fp(sub, llvm_ty, b"\0"),
+            ir::CastKind::DoubleToInt => self.builder.build_fp_to_si(sub, llvm_ty, b"\0"),
+            ir::CastKind::BooleanToInt => self.builder.build_zext(sub, llvm_ty, b"\0"),
+            ir::CastKind::IntToBoolean => self.builder.build_trunc(sub, llvm_ty, b"\0"),
+            ir::CastKind::PtrToPtr => self.builder.build_bitcast(sub, llvm_ty, b"\0"),
+        }
     }
 
     fn gen_subscript(

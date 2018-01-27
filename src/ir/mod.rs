@@ -103,6 +103,10 @@ pub enum Expression {
         lvalue_unop: LValueUnaryOperatorKind,
         sub: Box<TypedExpression>,
     },
+    Cast {
+        kind: CastKind,
+        sub: Box<TypedExpression>,
+    },
     Subscript {
         array: Box<TypedExpression>,
         index: Box<TypedExpression>,
@@ -164,4 +168,13 @@ pub enum LValueUnaryOperatorKind {
     IntIncrement,
     IntDecrement,
     LValueAddressOf,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CastKind {
+    IntToDouble,
+    DoubleToInt,
+    BooleanToInt,
+    IntToBoolean,
+    PtrToPtr,
 }

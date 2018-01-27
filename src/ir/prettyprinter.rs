@@ -205,8 +205,12 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
                 lvalue_unop,
                 ref sub,
             } => {
-                let sub = self.pp_expression(sub)?;
+                let sub = self.pp_expression_percent(sub)?;
                 format!("{:?}({})", lvalue_unop, sub)
+            }
+            ir::Expression::Cast { kind, ref sub } => {
+                let sub = self.pp_expression_percent(sub)?;
+                format!("{:?}({})", kind, sub)
             }
             ir::Expression::FunctionCall {
                 ref function,

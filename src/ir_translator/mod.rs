@@ -462,10 +462,27 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     }
                 } else {
                     // TODO can also be addressof
-                    return error!(TranslationError::LValueUnopNonLValue, expr_span);
+                    error!(TranslationError::LValueUnopNonLValue, expr_span)
                 }
             }
-            ast::Expression::Cast { .. } => unimplemented!(),
+            ast::Expression::Cast { as_ty, sub } => {
+                let sub = self.translate_expression(*sub)?;
+                let sub = utils::lvalue_to_rvalue(sub);
+                let sub_ty = sub.ty.clone();
+
+                if let Some(kind) = typeck::cast_typeck(&sub.ty, &as_ty) {
+                    let expr = ir::Expression::Cast {
+                        kind,
+                        sub: Box::new(sub),
+                    };
+                    Ok(ir::TypedExpression {
+                        ty: as_ty.clone(),
+                        expr,
+                    })
+                } else {
+                    error!(TranslationError::CastUndefined(sub_ty, as_ty), expr_span)
+                }
+            }
             ast::Expression::Subscript { array, index } => {
                 let index_span = index.span;
                 let array = self.translate_expression(*array)?;

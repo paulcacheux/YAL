@@ -32,6 +32,7 @@ pub enum TranslationError {
     LazyOpUndefined(ast::LazyOperatorKind, ty::Type, ty::Type),
     UnOpUndefined(ast::UnaryOperatorKind, ty::Type),
     LValueUnOpUndefined(ast::LValueUnaryOperatorKind, ty::Type),
+    CastUndefined(ty::Type, ty::Type),
     FunctionCallArityMismatch(usize, usize),
     FunctionUndefined(String),
     LValueUnopNonLValue,
@@ -138,6 +139,9 @@ impl fmt::Display for TranslationError {
                 "The lvalue unary operator '{:?}' can't be applied to '{:?}'",
                 unop, a
             ),
+            TranslationError::CastUndefined(ref a, ref b) => {
+                write!(f, "Undefined cast between '{:?}' and '{:?}'", a, b)
+            }
             TranslationError::FunctionCallArityMismatch(a, b) => write!(
                 f,
                 "Mismatching arities in function call between {} and {}",
