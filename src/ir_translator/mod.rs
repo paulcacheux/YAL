@@ -103,8 +103,8 @@ fn translate_function(
 
     symbol_table.begin_scope();
 
-    let mut func_infos = FunctionInfos::new(function.return_ty.clone());
-    let mut body = translate_block_statement(&mut symbol_table, function.body, &mut func_infos)?;
+    let mut func_builder = FunctionBuilder::new(function.return_ty.clone());
+    let mut body = func_builder.translate_block_statement(&mut symbol_table, function.body)?;
 
     if !utils::check_return_paths(&body) {
         if function.return_ty != ty::Type::Void {
@@ -121,47 +121,47 @@ fn translate_function(
         return_ty: function.return_ty,
         name: function.name,
         parameters,
-        var_declarations: func_infos.var_declarations,
+        var_declarations: func_builder.var_declarations,
         body,
         span: function.span,
     })
 }
 
-fn translate_block_statement(
-    st: &mut SymbolTable,
-    block: ast::BlockStatement,
-    fi: &mut FunctionInfos,
-) -> TranslationResult<ir::BlockStatement> {
-    st.begin_scope();
-
-    let block = {
-        let mut builder = BlockBuilder::new(st, fi);
-
-        for stmt in block.statements {
-            builder.translate_statement(stmt)?;
-        }
-
-        builder.collect()
-    };
-
-    st.end_scope();
-    Ok(block)
-}
-
 #[derive(Debug)]
-struct FunctionInfos {
+struct FunctionBuilder {
     ret_ty: ty::Type,
     in_loop: bool,
     var_declarations: Vec<ir::VarDeclaration>,
 }
 
-impl FunctionInfos {
+impl FunctionBuilder {
     fn new(ret_ty: ty::Type) -> Self {
-        FunctionInfos {
+        FunctionBuilder {
             ret_ty,
             in_loop: false,
             var_declarations: Vec::new(),
         }
+    }
+
+    fn translate_block_statement(
+        &mut self,
+        st: &mut SymbolTable,
+        block: ast::BlockStatement,
+    ) -> TranslationResult<ir::BlockStatement> {
+        st.begin_scope();
+
+        let block = {
+            let mut builder = BlockBuilder::new(st, self);
+
+            for stmt in block.statements {
+                builder.translate_statement(stmt)?;
+            }
+
+            builder.collect()
+        };
+
+        st.end_scope();
+        Ok(block)
     }
 }
 
@@ -169,15 +169,15 @@ impl FunctionInfos {
 struct BlockBuilder<'a, 'b: 'a, 'c> {
     symbol_table: &'a mut SymbolTable<'b>,
     statements: ir::BlockStatement,
-    func_infos: &'c mut FunctionInfos,
+    func_builder: &'c mut FunctionBuilder,
 }
 
 impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
-    fn new(st: &'a mut SymbolTable<'b>, fi: &'c mut FunctionInfos) -> Self {
+    fn new(st: &'a mut SymbolTable<'b>, fb: &'c mut FunctionBuilder) -> Self {
         BlockBuilder {
             symbol_table: st,
             statements: Vec::new(),
-            func_infos: fi,
+            func_builder: fb,
         }
     }
 
@@ -191,13 +191,11 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
     ) -> TranslationResult<ir::BlockStatement> {
         match statement.inner {
             ast::Statement::Empty => Ok(ir::BlockStatement::new()),
-            ast::Statement::Block(b) => {
-                translate_block_statement(self.symbol_table, b, self.func_infos)
-            }
-            other => translate_block_statement(
+            ast::Statement::Block(b) => self.func_builder
+                .translate_block_statement(self.symbol_table, b),
+            other => self.func_builder.translate_block_statement(
                 self.symbol_table,
                 ast::BlockStatement::from_vec(vec![Spanned::new(other, statement.span)]),
-                self.func_infos,
             ),
         }
     }
@@ -223,7 +221,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         };
 
         if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
-            self.func_infos
+            self.func_builder
                 .var_declarations
                 .push(ir::VarDeclaration { ty: ty.clone(), id });
             self.statements
@@ -247,7 +245,8 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         match statement {
             ast::Statement::Empty => {}
             ast::Statement::Block(block) => {
-                let block = translate_block_statement(self.symbol_table, block, self.func_infos)?;
+                let block = self.func_builder
+                    .translate_block_statement(self.symbol_table, block)?;
                 self.statements.push(ir::Statement::Block(block));
             }
             ast::Statement::VarDecl(ast::VarDeclarations { ty, declarations }) => {
@@ -285,10 +284,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let condition = utils::lvalue_to_rvalue(condition);
                 utils::check_expect_type(&ty::Type::Boolean, &condition.ty, condition_span)?;
 
-                let old_in_loop = self.func_infos.in_loop;
-                self.func_infos.in_loop = true;
+                let old_in_loop = self.func_builder.in_loop;
+                self.func_builder.in_loop = true;
                 let body = self.translate_statement_as_block(*body)?;
-                self.func_infos.in_loop = old_in_loop;
+                self.func_builder.in_loop = old_in_loop;
 
                 self.statements
                     .push(ir::Statement::While { condition, body })
@@ -299,11 +298,11 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     let expr_span = expr.span;
                     let expr = self.translate_expression(expr)?;
                     let expr = utils::lvalue_to_rvalue(expr);
-                    utils::check_eq_types(&expr.ty, &self.func_infos.ret_ty, expr_span)?;
+                    utils::check_eq_types(&expr.ty, &self.func_builder.ret_ty, expr_span)?;
 
                     Some(expr)
                 } else {
-                    utils::check_eq_types(&ty::Type::Void, &self.func_infos.ret_ty, stmt_span)?;
+                    utils::check_eq_types(&ty::Type::Void, &self.func_builder.ret_ty, stmt_span)?;
                     None
                 };
 
@@ -315,14 +314,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 self.statements.push(ir::Statement::Expression(expr));
             }
             ast::Statement::Break => {
-                if self.func_infos.in_loop {
+                if self.func_builder.in_loop {
                     self.statements.push(ir::Statement::Break);
                 } else {
                     return error!(TranslationError::BreakContinueOutOfLoop, stmt_span);
                 }
             }
             ast::Statement::Continue => {
-                if self.func_infos.in_loop {
+                if self.func_builder.in_loop {
                     self.statements.push(ir::Statement::Continue);
                 } else {
                     return error!(TranslationError::BreakContinueOutOfLoop, stmt_span);
@@ -359,14 +358,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 unreachable!()
             };
 
-        let old_in_loop = self.func_infos.in_loop;
-        self.func_infos.in_loop = true;
+        let old_in_loop = self.func_builder.in_loop;
+        self.func_builder.in_loop = true;
         let body = self.translate_statement_as_block(*body)?;
-        self.func_infos.in_loop = old_in_loop;
+        self.func_builder.in_loop = old_in_loop;
         self.symbol_table.end_scope();
 
         // loop building
-        self.func_infos.var_declarations.push(ir::VarDeclaration {
+        self.func_builder.var_declarations.push(ir::VarDeclaration {
             ty: ty.clone(),
             id: current_id,
         });
@@ -624,7 +623,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         let res_id = self.symbol_table.new_identifier_id();
         let res_id_expr = utils::build_texpr_from_id(ty::Type::Boolean, res_id);
 
-        self.func_infos.var_declarations.push(ir::VarDeclaration {
+        self.func_builder.var_declarations.push(ir::VarDeclaration {
             ty: ty::Type::Boolean,
             id: res_id,
         });
@@ -742,11 +741,11 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         body.push(ir::Statement::Expression(index_inc));
 
         // finalization
-        self.func_infos.var_declarations.push(ir::VarDeclaration {
+        self.func_builder.var_declarations.push(ir::VarDeclaration {
             ty: array_rvalue.ty.clone(),
             id: array_id,
         });
-        self.func_infos.var_declarations.push(ir::VarDeclaration {
+        self.func_builder.var_declarations.push(ir::VarDeclaration {
             ty: ty::Type::Int,
             id: index_id,
         });
