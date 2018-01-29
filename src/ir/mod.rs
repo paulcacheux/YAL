@@ -30,6 +30,7 @@ pub struct Function {
     pub return_ty: Type,
     pub name: String,
     pub parameters: Vec<(Type, IdentifierId)>,
+    pub var_declarations: Vec<VarDeclaration>,
     pub body: BlockStatement,
     pub span: Span,
 }
@@ -50,13 +51,14 @@ impl Function {
 }
 
 #[derive(Debug, Clone)]
+pub struct VarDeclaration {
+    pub ty: Type,
+    pub id: IdentifierId,
+}
+
+#[derive(Debug, Clone)]
 pub enum Statement {
     Block(BlockStatement),
-    VarDecl {
-        ty: Type,
-        id: IdentifierId,
-        init: Option<TypedExpression>,
-    },
     If {
         condition: TypedExpression,
         body: BlockStatement,

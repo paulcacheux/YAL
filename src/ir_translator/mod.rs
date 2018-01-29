@@ -121,6 +121,7 @@ fn translate_function(
         return_ty: function.return_ty,
         name: function.name,
         parameters,
+        var_declarations: func_infos.var_declarations,
         body,
         span: function.span,
     })
@@ -151,6 +152,7 @@ fn translate_block_statement(
 struct FunctionInfos {
     ret_ty: ty::Type,
     in_loop: bool,
+    var_declarations: Vec<ir::VarDeclaration>,
 }
 
 impl FunctionInfos {
@@ -158,6 +160,7 @@ impl FunctionInfos {
         FunctionInfos {
             ret_ty,
             in_loop: false,
+            var_declarations: Vec::new(),
         }
     }
 }
@@ -220,11 +223,15 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         };
 
         if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
-            self.statements.push(ir::Statement::VarDecl {
-                ty,
-                id,
-                init: Some(rhs),
-            });
+            self.func_infos
+                .var_declarations
+                .push(ir::VarDeclaration { ty: ty.clone(), id });
+            self.statements
+                .push(ir::Statement::Expression(utils::build_assign_to_id(
+                    ty,
+                    id,
+                    rhs,
+                )))
         } else {
             return error!(TranslationError::LocalAlreadyDefined(name), error_span);
         }
@@ -359,14 +366,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         self.symbol_table.end_scope();
 
         // loop building
+        self.func_infos.var_declarations.push(ir::VarDeclaration {
+            ty: ty.clone(),
+            id: current_id,
+        });
         let (_, loop_block) = self.create_loop(ty.clone(), array, |array_indexed| {
             let array_indexed = utils::lvalue_to_rvalue(array_indexed);
             Ok(vec![
-                ir::Statement::VarDecl {
-                    ty: ty,
-                    id: current_id,
-                    init: Some(array_indexed),
-                },
+                ir::Statement::Expression(utils::build_assign_to_id(ty, current_id, array_indexed)),
                 ir::Statement::Block(body),
             ])
         })?;
@@ -617,12 +624,13 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         let res_id = self.symbol_table.new_identifier_id();
         let res_id_expr = utils::build_texpr_from_id(ty::Type::Boolean, res_id);
 
+        self.func_infos.var_declarations.push(ir::VarDeclaration {
+            ty: ty::Type::Boolean,
+            id: res_id,
+        });
+
         let stmts = vec![
-            ir::Statement::VarDecl {
-                ty: ty::Type::Boolean,
-                id: res_id,
-                init: Some(init),
-            },
+            ir::Statement::Expression(utils::build_assign_to_id(ty::Type::Boolean, res_id, init)),
             ir::Statement::If {
                 condition: cond,
                 body: vec![
@@ -734,19 +742,28 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         body.push(ir::Statement::Expression(index_inc));
 
         // finalization
+        self.func_infos.var_declarations.push(ir::VarDeclaration {
+            ty: array_rvalue.ty.clone(),
+            id: array_id,
+        });
+        self.func_infos.var_declarations.push(ir::VarDeclaration {
+            ty: ty::Type::Int,
+            id: index_id,
+        });
+
         Ok((
             array_expr,
             vec![
-                ir::Statement::VarDecl {
-                    ty: array_rvalue.ty.clone(),
-                    id: array_id,
-                    init: Some(array),
-                },
-                ir::Statement::VarDecl {
-                    ty: ty::Type::Int,
-                    id: index_id,
-                    init: Some(const0),
-                },
+                ir::Statement::Expression(utils::build_assign_to_id(
+                    array_rvalue.ty.clone(),
+                    array_id,
+                    array,
+                )),
+                ir::Statement::Expression(utils::build_assign_to_id(
+                    ty::Type::Int,
+                    index_id,
+                    const0,
+                )),
                 ir::Statement::While {
                     condition: ir::TypedExpression {
                         ty: ty::Type::Boolean,

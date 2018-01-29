@@ -19,6 +19,15 @@ pub fn build_texpr_from_id(ty: ty::Type, id: IdentifierId) -> ir::TypedExpressio
     }
 }
 
+pub fn build_assign_to_id(
+    ty: ty::Type,
+    id: IdentifierId,
+    rhs: ir::TypedExpression,
+) -> ir::TypedExpression {
+    let lhs = build_texpr_from_id(ty, id);
+    build_assign(lhs, rhs)
+}
+
 pub fn build_assign(lhs: ir::TypedExpression, rhs: ir::TypedExpression) -> ir::TypedExpression {
     let rhs_ty = rhs.ty.clone();
     ir::TypedExpression {

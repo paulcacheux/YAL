@@ -172,6 +172,10 @@ impl<'s> Backend<'s> {
             self.codegen_parameter(&ty, id, func_ref, index);
         }
 
+        for decl in function.var_declarations {
+            self.codegen_vardecl(&decl.ty, decl.id)
+        }
+
         if !self.codegen_block_statement(function.body) {
             self.builder.build_unreachable();
         }
@@ -203,9 +207,6 @@ impl<'s> Backend<'s> {
         // return true if the statement end on a terminator
         match statement {
             ir::Statement::Block(block) => self.codegen_block_statement(block),
-            ir::Statement::VarDecl { ty, id, init } => {
-                self.codegen_vardecl_statement(&ty, id, init)
-            }
             ir::Statement::If {
                 condition,
                 body,
@@ -222,22 +223,10 @@ impl<'s> Backend<'s> {
         }
     }
 
-    fn codegen_vardecl_statement(
-        &mut self,
-        ty: &ty::Type,
-        id: ir::IdentifierId,
-        init: Option<ir::TypedExpression>,
-    ) -> bool {
+    fn codegen_vardecl(&mut self, ty: &ty::Type, id: ir::IdentifierId) {
         let llvm_ty = self.codegen_type(ty);
         let ptr = self.builder.build_alloca(llvm_ty, b"\0");
-
-        if let Some(init) = init {
-            let init_value = self.codegen_expression(init);
-            self.builder.build_store(init_value, ptr);
-        }
-
         self.ids.insert(id, ptr);
-        false
     }
 
     fn codegen_if(

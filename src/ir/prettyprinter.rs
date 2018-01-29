@@ -95,8 +95,22 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
             .map(|&(ref ty, id)| ty_to_string(ty) + " " + &idid_to_string(id))
             .collect();
         self.pp_func_header(&func.return_ty, &params, &func.name, func.span, false)?;
+
+        for decl in &func.var_declarations {
+            self.pp_var_decl(decl)?;
+        }
+
         self.pp_block_statement(&func.body)?;
         writeln_pp!(self)
+    }
+
+    pub fn pp_var_decl(&mut self, vardecl: &ir::VarDeclaration) -> io::Result<()> {
+        writeln_pp!(
+            self,
+            "let {}: {};",
+            idid_to_string(vardecl.id),
+            ty_to_string(&vardecl.ty),
+        )
     }
 
     pub fn pp_block_statement(&mut self, block: &[ir::Statement]) -> io::Result<()> {
@@ -112,24 +126,6 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
     pub fn pp_statement(&mut self, stmt: &ir::Statement) -> io::Result<()> {
         match *stmt {
             ir::Statement::Block(ref b) => self.pp_block_statement(b),
-            ir::Statement::VarDecl {
-                ref ty,
-                id,
-                ref init,
-            } => {
-                let init = if let Some(ref init) = *init {
-                    self.pp_expression_percent(init)?
-                } else {
-                    "def".to_string()
-                };
-                writeln_pp!(
-                    self,
-                    "let {}: {} = {};",
-                    idid_to_string(id),
-                    ty_to_string(ty),
-                    init
-                )
-            }
             ir::Statement::If {
                 ref condition,
                 ref body,
