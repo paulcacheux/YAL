@@ -5,9 +5,20 @@ import subprocess
 exec_path = sys.argv[1]
 testsuite_path = sys.argv[2]
 exec_opt = sys.argv[3:] if len(sys.argv) > 3 else []
+total_ok = 0
+total_fail = 0
 
 def run_exec(path, input=None):
     return subprocess.run([exec_path, path] + exec_opt, input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+
+def result_test(name, success, added_infos=None):
+    global total_ok, total_fail
+    if success:
+        total_ok += 1
+    else:
+        total_fail += 1
+
+    print("Test {}\t\t: {} {}".format(name, "OK" if success else "FAIL", added_infos if added_infos else ""))
 
 def handle_suite(path, run_test):
     names = set(os.path.splitext(f)[0] for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)))
@@ -34,7 +45,7 @@ def handle_good_suite(next_path):
             given_input = None
 
         res = run_exec(code_path, given_input)
-        print("Test {}\t\t: {}".format(name, "OK" if expected_output == res.stdout else "FAIL"))
+        result_test(name, expected_output == res.stdout)
 
     handle_suite(good_path, run_good_test)
 
@@ -45,10 +56,13 @@ def handle_bad_suite():
         code_path = os.path.join(bad_path, name + ".jl")
 
         res = run_exec(code_path)
-        print("Test {}\t\t: {} (exit code {})".format(name, "OK" if res.returncode == 1 else "FAIL", res.returncode))
+        result_test(name, res.returncode == 1, "(exit code {})".format(res.returncode))
     handle_suite(bad_path, run_bad_test)
 
 handle_good_suite("good")
 handle_good_suite("extensions/arrays1")
 handle_good_suite("extensions/arrays2")
 handle_bad_suite()
+
+print("----------------------------------")
+print("{} tests | {} fails ({}%)".format(total_ok + total_fail, total_fail, 100 * total_fail / (total_ok + total_fail)))
