@@ -158,7 +158,7 @@ fn main() {
     let mut string_interner = interner::Interner::<String>::new();
 
     // load runtime
-    let runtime_input = include_str!("../runtime/io.jl");
+    let runtime_input = include_str!("../runtime/io.yal");
     let runtime_lexer = lexer::Lexer::new(&runtime_input);
     let runtime_ast = parser::parse_program(runtime_lexer, &mut string_interner).unwrap();
     let runtime_ir = ir_translator::translate_program(runtime_ast, None).unwrap();
