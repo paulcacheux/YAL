@@ -1,0 +1,7 @@
+fn main() -> int {
+let x: int;
+let y: double;
+    printInt(x);
+    printDouble(y);
+    return 0;
+}

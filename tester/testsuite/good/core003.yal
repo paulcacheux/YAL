@@ -1,0 +1,23 @@
+// Testing the return checker
+
+fn f () -> int {
+   if (true)
+     return 0;
+   else
+     {}
+}
+
+fn g () -> int{
+  if (false) 
+      {}
+  else
+      return 0;
+}
+
+fn p () {}
+  
+
+fn main() -> int {
+  p();
+  return 0;
+}

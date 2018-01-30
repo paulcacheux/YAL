@@ -1,0 +1,26 @@
+/* Test arithmetic and comparisons. */
+
+fn main() -> int {
+let x: int = 56;
+let y: int = -23;
+    printInt(x+y);
+    printInt(x-y);
+    printInt(x*y);
+    printInt(45/2);
+    printInt(78%3);
+let z: double = -9.3;
+let w: double = 5.1;
+    printBool(z+w > z-w);
+    printBool(z/w <= z*w);
+    return 0 ;
+}
+
+fn printBool(b: boolean) {
+  if (b) {
+    printString("true");
+    return;
+  } else {
+    printString("false");
+    return;
+ }
+}

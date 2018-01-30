@@ -1,0 +1,7 @@
+/* allow comparing booleans. */
+
+fn main() -> int {
+  if (true == true) { printInt(42); }
+  return 0 ;
+
+}

@@ -1,0 +1,15 @@
+/* test input */
+
+fn main() -> int {
+let x: int = readInt();
+let y: double = readDouble();
+
+  printInt(x-5);
+  
+  if (y > 42.0 || y < 43.0) 
+    printString("yay!");
+  else
+    printString("nay!");
+  return 0 ;
+
+}

@@ -1,0 +1,13 @@
+// Declaration of multiple variables of the same type in one statement:
+// made useless by the passage to yal
+
+fn main () -> int {
+    let x: int;
+    let y: int;
+  x = 45;
+  y = -36;
+  printInt(x);
+  printInt(y);
+  return 0 ;
+
+}

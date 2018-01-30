@@ -1,0 +1,16 @@
+/* parity of positive integers by recursion */
+
+fn main () -> int {
+  printInt(ev(17)) ;
+  return 0 ;
+}
+
+fn ev (y: int) -> int {
+  if (y > 0)
+    return ev (y-2) ;
+  else
+    if (y < 0)
+      return 0 ;
+    else
+      return 1 ;
+}

@@ -1,0 +1,46 @@
+fn doubleArray (a: int[]) -> int[]{
+    let res: int[] = new int[a.length];
+    let i:int = 0;
+  for (int n : a){
+    res [i] = 2 * n ;
+    i ++ ;
+  }
+  return res ;
+}
+
+fn shiftLeft (a: int[]){
+let x: int = a[0];
+let i: int = 0;
+  while (i < a.length - 1){
+    a [i] = a [i + 1];
+    i ++ ;
+  }
+  a[a.length - 1]= x ;
+  return;
+ }
+
+fn scalProd(a: int[], b: int[]) -> int {
+  let res: int = 0;
+    let i: int = 0;
+  while (i < a.length) {
+    res = res + a[i] * b[i];
+    i++;
+  }
+  return res;
+}
+
+fn main () -> int  {
+let a: int[] = new int[5];
+let i: int = 0;
+  while (i < a.length){
+    a [i]= i ;
+    i ++ ;
+    }
+  shiftLeft (a);
+let b: int[] = doubleArray(a);
+  for (int x : a)printInt (x);
+  for (int x : b)printInt (x);
+  printInt(scalProd(a,b));
+  return 0 ;
+}
+ 

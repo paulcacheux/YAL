@@ -1,0 +1,13 @@
+// Calling functions which take zero parameters
+
+fn main() -> int {
+let x: int = foo();
+ printInt(x);
+ return 0 ;
+
+}
+
+fn foo() -> int {
+ return 10;
+}
+

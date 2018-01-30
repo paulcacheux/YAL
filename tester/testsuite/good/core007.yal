@@ -1,0 +1,8 @@
+// declaration and initialization in same statement
+
+fn main() -> int {
+ let x: int = 7;
+ printInt(x);
+ return 0 ;
+
+}

@@ -1,0 +1,40 @@
+/* Test boolean operators */
+
+fn main () -> int {
+let x: int = 4;
+  if (3 <= x && 4 != 2 && true) {
+    printBool(true);
+  } else {
+    printString("apa");
+  }
+
+  printBool(true == true || dontCallMe(1));
+  printBool(4.0 < -50.0 && dontCallMe(2));
+
+  printBool(4 == x && true == !false && true);
+
+  printBool(implies(false,false));
+  printBool(implies(false,true));
+  printBool(implies(true,false));
+  printBool(implies(true,true));
+  return 0 ;
+
+}
+
+fn dontCallMe(x: int) -> boolean {
+  printInt(x);
+  return true;
+}
+
+fn printBool(b: boolean) {
+  if (b) {
+    printString("true");
+  } else {
+    printString("false");
+ }
+ return;
+}
+
+fn implies(x: boolean, y: boolean) -> boolean {
+  return !x || x == y;
+}

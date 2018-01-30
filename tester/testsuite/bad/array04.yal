@@ -1,0 +1,7 @@
+
+
+fn main() -> int {
+let b: int = 3;
+let c: int = b.length;
+  return 0;
+}

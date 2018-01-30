@@ -1,0 +1,6 @@
+fn main() -> int {
+let a: int[];
+  a = new int[50];
+  a[0] = true;
+  return 0;
+}

@@ -1,0 +1,26 @@
+fn main() -> int {
+let i: int = 78;
+  {
+    let i: int = 1;
+    printInt(i);
+  }
+  printInt(i);
+  while (i > 76) {
+    i--;
+    printInt(i);
+   // this is a little tricky
+   // on the right hand side, i refers to the outer i
+    let i: int = i + 7;
+   printInt(i);
+  }
+  printInt(i);
+  if (i > 4) {
+    let i: int = 4;
+    printInt(i);
+  } else {
+    printString("foo");
+  } 
+  printInt(i);
+  return 0 ;
+
+}

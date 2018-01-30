@@ -1,0 +1,9 @@
+
+
+fn main() -> int {
+  for(boolean i : new int[20]) {
+let x: boolean = i;
+    boolean x = i;
+  }
+  return 0;
+}

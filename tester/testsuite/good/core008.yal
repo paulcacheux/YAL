@@ -1,0 +1,12 @@
+// multiple variables of the same type declared 
+// and possibly initialized in the same statement
+
+fn main() -> int {
+    let x: int;
+    let y: int = 7;
+ x = -1234234;
+ printInt(x);
+ printInt(y);
+ return 0 ;
+
+}

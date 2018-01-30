@@ -1,0 +1,16 @@
+fn main() -> int {
+
+let a: int[] = new int[10];
+let j: int = 0;
+  while (j<a.length) {
+     a[j] = j;
+     j++;
+  }
+
+  for (int x : a) 
+     printInt(x);
+
+let x: int = 45;
+  printInt(x);
+  return 0;
+}

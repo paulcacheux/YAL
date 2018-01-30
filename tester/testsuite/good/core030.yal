@@ -1,0 +1,15 @@
+fn main() -> int {
+let dA: double;
+let dB: double;
+    dA=1.4e-3;
+    dB=0.4e-3;
+    if (dA-dB == 0.001) {
+        printInt(99);
+    }
+let iA: int;
+let iB: int;
+    iA=342;
+    iB=5123123;
+    printInt(iA-iB);
+    return 0;
+}

@@ -1,0 +1,13 @@
+fn main() -> int {
+    // Arithmetic operations
+let x: int;
+    x++;
+    printInt(x);
+    x--;
+    printInt(x);
+    x--;
+    printInt(x);
+    printInt(x+x);
+
+    return 0;
+}

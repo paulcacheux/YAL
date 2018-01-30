@@ -1,0 +1,35 @@
+fn main() -> int {
+
+let vector: double[] = new double[4];
+let matrix: double[][] = new double[3][4];
+
+let i: int = 0;
+  while (i<matrix.length) {
+let j: int = 0;
+    while (j<matrix[0].length) {
+       matrix[i][j] = 5.0;
+       j++;
+    }
+    i++;
+  }
+
+  i=0;
+  while (i<vector.length-1) {
+     vector[i] = 3.0;
+     i++;
+  }
+
+  matrix[0] = vector; 
+
+let j: int = 0;
+  while (j<vector.length) {
+    matrix[1][j] = vector[j]+1.0;
+    j++;
+  }
+  
+  for (double[] x : matrix)
+    for (double y : x)
+      printDouble(y);
+
+  return 0 ;
+}

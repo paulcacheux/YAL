@@ -1,0 +1,73 @@
+fn main() -> int {
+	printInt(fac(10));
+	printInt(rfac(10));
+	printInt(mfac(10));
+    printInt(ifac(10));
+    let r: double; // just to test blocks
+	{
+        let n: int = 10;
+        let r: int = 1;
+	    while (n>0) {
+	        r = r * n;
+	        n--;
+	    }
+	    printInt(r);
+	}
+	printDouble(dfac(10.0));
+	printString ("hello */");
+    printString ("/* world") ;
+    return 0;
+}
+
+fn fac(a: int) -> int {
+    let r: int;
+    let n: int;
+
+	r = 1;
+	n = a;
+	while (n > 0) {
+	  r = r * n;
+	  n = n - 1;
+	}
+	return r;
+}
+
+fn rfac(n: int) -> int {
+	if (n == 0)
+	  return 1;
+	else
+	  return n * rfac(n-1);
+}
+
+fn mfac(n: int) -> int {
+	if (n == 0)
+	  return 1;
+	else
+	  return n * nfac(n-1);
+}
+
+fn nfac(n: int) -> int {
+	if (n != 0)
+	  return mfac(n-1) * n;
+	else
+	  return 1;
+}
+
+fn dfac(n: double) -> double {
+	if (n == 0.0)
+	  return 1.0;
+	else
+	  return n * dfac(n-1.0);
+}
+
+fn ifac(n: int) -> int { return ifac2f(1, n); }
+
+fn ifac2f(l: int, h: int) -> int {
+        if (l == h)
+          return l;
+        if (l > h)
+          return 1;
+        let m: int;
+        m = (l + h) / 2;
+        return ifac2f(l,m) * ifac2f(m+1,h);
+}

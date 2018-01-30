@@ -1,0 +1,7 @@
+fn main() -> int {
+let x: int;
+  for(int i : x) {
+let y: int = i;
+  }
+  return 0;
+}

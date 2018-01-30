@@ -1,0 +1,19 @@
+// count function parameters as initialized
+
+fn main() -> int {
+  printInt(fac(5));
+  return 0 ;
+}
+
+fn fac (a: int) -> int {
+let r: int;
+let n: int;
+  r = 1;
+  n = a;
+  while (n > 0)
+  {
+    r = r * n;
+    n = n - 1;
+  }
+  return r;
+}
