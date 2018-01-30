@@ -128,11 +128,13 @@ impl<'si, 'input> Parser<'si, 'input> {
     }
 
     fn parse_declaration(&mut self) -> ParsingResult<ast::Declaration> {
+        let span = self.lexer.peek_token()?.span;
         match self.lexer.peek_token()?.inner {
             Token::StructKeyword => self.parse_struct_declaration(),
             Token::TypedefKeyword => self.parse_typedef_declaration(),
             Token::ExternKeyword => self.parse_extern_function_declaration(),
-            _ => self.parse_function_declaration(),
+            Token::FnKeyword => self.parse_function_declaration(),
+            _ => return_unexpected!(span, "struct", "typedef", "extern", "fn"),
         }
     }
 
@@ -181,11 +183,19 @@ impl<'si, 'input> Parser<'si, 'input> {
 
     fn parse_extern_function_declaration(&mut self) -> ParsingResult<ast::Declaration> {
         let begin_span = expect!(self.lexer; Token::ExternKeyword, "extern");
-        let return_ty = self.parse_type(true)?.inner;
+        expect!(self.lexer; Token::FnKeyword, "fn");
         let name = self.parse_identifier()?;
         expect!(self.lexer; Token::LeftParenthesis, "(");
         let (parameters, is_vararg) = self.parse_extern_parameter_list()?;
         expect!(self.lexer; Token::RightParenthesis, ")");
+
+        let return_ty = if let Token::Arrow = self.lexer.peek_token()?.inner {
+            self.lexer.next_token()?;
+            self.parse_type(true)?.inner
+        } else {
+            ty::Type::Void
+        };
+
         let end_span = expect!(self.lexer; Token::SemiColon, ";");
         let span = Span::merge(begin_span, end_span);
 
@@ -222,17 +232,23 @@ impl<'si, 'input> Parser<'si, 'input> {
     }
 
     fn parse_function_declaration(&mut self) -> ParsingResult<ast::Declaration> {
-        let Spanned {
-            inner: return_ty,
-            span: ty_span,
-        } = self.parse_type(true)?;
+        let begin_span = expect!(self.lexer; Token::FnKeyword, "fn");
         let name = self.parse_identifier()?;
         expect!(self.lexer; Token::LeftParenthesis, "(");
         let parameters = self.parse_parameter_list()?;
-        let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
-        let Spanned { inner: body, .. } = self.parse_block_statement()?;
+        let mut end_span = expect!(self.lexer; Token::RightParenthesis, ")");
 
-        let span = Span::merge(ty_span, end_span);
+        let return_ty = if let Token::Arrow = self.lexer.peek_token()?.inner {
+            self.lexer.next_token()?;
+            let ty = self.parse_type(true)?;
+            end_span = ty.span;
+            ty.inner
+        } else {
+            ty::Type::Void
+        };
+
+        let span = Span::merge(begin_span, end_span);
+        let body = self.parse_block_statement()?.inner;
 
         Ok(ast::Declaration::Function(ast::Function {
             return_ty,
@@ -261,8 +277,9 @@ impl<'si, 'input> Parser<'si, 'input> {
     }
 
     fn parse_parameter(&mut self) -> ParsingResult<(ty::Type, String)> {
-        let ty = self.parse_type(false)?.inner;
         let name = self.parse_identifier()?;
+        expect!(self.lexer; Token::Colon, ":");
+        let ty = self.parse_type(false)?.inner;
         Ok((ty, name))
     }
 
@@ -310,18 +327,8 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let span = self.lexer.next_token()?.span;
                 Ok(Spanned::new(ast::Statement::Continue, span))
             }
-            Token::IntKeyword | Token::DoubleKeyword | Token::BooleanKeyword => {
-                self.parse_var_declaration()
-            }
-            _ => {
-                let state = self.lexer.save_state();
-                if let Ok(stmt) = self.parse_expression_statement() {
-                    Ok(stmt)
-                } else {
-                    self.lexer.load_state(state);
-                    self.parse_var_declaration()
-                }
-            }
+            Token::LetKeyword => self.parse_let_statement(),
+            _ => self.parse_expression_statement(),
         }
     }
 
@@ -416,37 +423,22 @@ impl<'si, 'input> Parser<'si, 'input> {
         Ok(Spanned::new(ast::Statement::Return(expr), span))
     }
 
-    fn parse_identifier_and_maybe_value(
-        &mut self,
-    ) -> ParsingResult<(String, Option<Spanned<ast::Expression>>)> {
+    fn parse_let_statement(&mut self) -> ParsingResult<Spanned<ast::Statement>> {
+        let begin_span = expect!(self.lexer; Token::LetKeyword, "let");
         let name = self.parse_identifier()?;
-        let expr = if let Token::Equal = self.lexer.peek_token()?.inner {
+        expect!(self.lexer; Token::Colon, ":");
+        let ty = self.parse_type(false)?.inner;
+        let value = if let Token::Equal = self.lexer.peek_token()?.inner {
             self.lexer.next_token()?;
             Some(self.parse_expression()?)
         } else {
             None
         };
-        Ok((name, expr))
-    }
-
-    fn parse_var_declaration(&mut self) -> ParsingResult<Spanned<ast::Statement>> {
-        let Spanned {
-            inner: ty,
-            span: ty_span,
-        } = self.parse_type(false)?;
-        let mut declarations = Vec::new();
-
-        declarations.push(self.parse_identifier_and_maybe_value()?);
-        while let Token::Comma = self.lexer.peek_token()?.inner {
-            self.lexer.next_token()?;
-            declarations.push(self.parse_identifier_and_maybe_value()?);
-        }
         let end_span = expect!(self.lexer; Token::SemiColon, ";");
-
-        let span = Span::merge(ty_span, end_span);
+        let span = Span::merge(begin_span, end_span);
 
         Ok(Spanned::new(
-            ast::Statement::VarDecl(ast::VarDeclarations { ty, declarations }),
+            ast::Statement::Let(ast::LetStatement { ty, name, value }),
             span,
         ))
     }

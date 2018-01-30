@@ -36,6 +36,7 @@ pub enum Token<'input> {
     Amp,
     AmpAmp,
     Bang,
+    Arrow,
     //keywords
     ExternKeyword,
     StructKeyword,
@@ -49,6 +50,8 @@ pub enum Token<'input> {
     ContinueKeyword,
     NewKeyword,
     AsKeyword,
+    FnKeyword,
+    LetKeyword,
 
     IntKeyword,
     DoubleKeyword,

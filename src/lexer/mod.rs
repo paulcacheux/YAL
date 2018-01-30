@@ -20,12 +20,6 @@ lazy_static! {
     static ref STRING_REGEX: Regex = Regex::new(r##"^"(([^"]|\\")*[^\\])?""##).unwrap();
 }
 
-#[derive(Debug, Clone)]
-pub struct LexerState<'input> {
-    pos: usize,
-    buffer: Option<Spanned<Token<'input>>>,
-}
-
 pub struct Lexer<'input> {
     input: &'input str,
     pos: usize,
@@ -41,18 +35,6 @@ impl<'input> Lexer<'input> {
             pos: 0,
             buffer: None,
         }
-    }
-
-    pub fn save_state(&self) -> LexerState<'input> {
-        LexerState {
-            pos: self.pos,
-            buffer: self.buffer.clone(),
-        }
-    }
-
-    pub fn load_state(&mut self, state: LexerState<'input>) {
-        self.pos = state.pos;
-        self.buffer = state.buffer;
     }
 
     pub fn skip_whitespaces(&mut self) {
@@ -124,6 +106,7 @@ impl<'input> Lexer<'input> {
         match_literal!(self; ":" => Token::Colon);
         match_literal!(self; "," => Token::Comma);
         match_literal!(self; "." => Token::Dot);
+        match_literal!(self; "->" => Token::Arrow);
 
         match_literal!(self; "==" => Token::EqualEqual);
         match_literal!(self; "!=" => Token::BangEqual);
@@ -168,6 +151,8 @@ impl<'input> Lexer<'input> {
                 "struct" => Token::StructKeyword,
                 "typedef" => Token::TypedefKeyword,
                 "as" => Token::AsKeyword,
+                "fn" => Token::FnKeyword,
+                "let" => Token::LetKeyword,
                 s => {
                     if s.starts_with("___") {
                         return Err(Spanned::new(

@@ -249,10 +249,8 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     .translate_block_statement(self.symbol_table, block)?;
                 self.statements.push(ir::Statement::Block(block));
             }
-            ast::Statement::VarDecl(ast::VarDeclarations { ty, declarations }) => {
-                for (name, value) in declarations {
-                    self.translate_var_decl(ty.clone(), name, value, stmt_span)?;
-                }
+            ast::Statement::Let(ast::LetStatement { ty, name, value }) => {
+                self.translate_var_decl(ty, name, value, stmt_span)?
             }
             ast::Statement::If(ast::IfStatement {
                 condition,

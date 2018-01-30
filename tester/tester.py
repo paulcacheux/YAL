@@ -31,7 +31,7 @@ def handle_good_suite(next_path):
     good_path = os.path.join(testsuite_path, next_path)
 
     def run_good_test(name):
-        code_path = os.path.join(good_path, name + ".jl")
+        code_path = os.path.join(good_path, name + ".yal")
         output_path = os.path.join(good_path, name + ".output")
         input_path = os.path.join(good_path, name + ".input")
 
@@ -53,7 +53,7 @@ def handle_bad_suite():
     bad_path = os.path.join(testsuite_path, "bad")
 
     def run_bad_test(name):
-        code_path = os.path.join(bad_path, name + ".jl")
+        code_path = os.path.join(bad_path, name + ".yal")
 
         res = run_exec(code_path)
         result_test(name, res.returncode == 1, "(exit code {})".format(res.returncode))

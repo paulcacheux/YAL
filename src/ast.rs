@@ -77,7 +77,7 @@ impl Function {
 pub enum Statement {
     Empty,
     Block(BlockStatement),
-    VarDecl(VarDeclarations),
+    Let(LetStatement),
     If(IfStatement),
     While(WhileStatement),
     For(ForStatement),
@@ -99,9 +99,10 @@ impl BlockStatement {
 }
 
 #[derive(Debug, Clone)]
-pub struct VarDeclarations {
+pub struct LetStatement {
     pub ty: Type,
-    pub declarations: Vec<(String, Option<Spanned<Expression>>)>,
+    pub name: String,
+    pub value: Option<Spanned<Expression>>,
 }
 
 #[derive(Debug, Clone)]

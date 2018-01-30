@@ -1,27 +1,26 @@
-extern int printf(string, ...);
-extern int scanf(string, ...);
-extern int puts(string, ...);
+extern fn printf(string, ...) -> int;
+extern fn scanf(string, ...) -> int;
 
-void printInt(int x) {
+fn printInt(x: int) {
     printf("%d\n", x);
 }
 
-void printDouble(double x) {
+fn printDouble(x: double) {
     printf("%.1f\n", x);
 }
 
-void printString(string x) {
-    puts(x);
+fn printString(x: string) {
+    printf("%s\n", x);
 }
 
-int readInt() {
-    int res;
+fn readInt() -> int {
+    let res: int;
     scanf("%d", &res);
     return res;
 }
 
-double readDouble() {
-    double res;
+fn readDouble() -> double {
+    let res: double;
     scanf("%lf", &res);
     return res;
 }
