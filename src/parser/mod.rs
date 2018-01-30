@@ -76,55 +76,44 @@ impl<'si, 'input> Parser<'si, 'input> {
         }
     }
 
-    fn parse_bottom_type(&mut self) -> ParsingResult<Spanned<ty::Type>> {
+    fn parse_bottom_type(&mut self, void: bool) -> ParsingResult<Spanned<ty::Type>> {
         let Spanned { inner: token, span } = self.lexer.next_token()?;
         let ty = match token {
             Token::IntKeyword => ty::Type::Int,
             Token::DoubleKeyword => ty::Type::Double,
             Token::BooleanKeyword => ty::Type::Boolean,
             Token::StringKeyword => ty::Type::String,
-            Token::VoidKeyword => ty::Type::Void,
+            Token::VoidKeyword if void => ty::Type::Void,
             Token::Identifier(id) => ty::Type::StructPointer(id.to_string()),
-            _ => return_unexpected!(span, "int", "boolean", "double", "void"),
+            _ => {
+                if void {
+                    return_unexpected!(span, "int", "boolean", "double", "void")
+                } else {
+                    return_unexpected!(span, "int", "boolean", "double")
+                }
+            }
         };
 
         Ok(Spanned::new(ty, span))
     }
 
-    fn parse_type_inner(&mut self) -> ParsingResult<Spanned<ty::Type>> {
-        let Spanned {
-            inner: mut ty,
-            mut span,
-        } = self.parse_bottom_type()?;
-
-        loop {
-            match self.lexer.peek_token()?.inner {
-                Token::LeftSquare => {
-                    self.lexer.next_token()?;
-                    let end_span = expect!(self.lexer; Token::RightSquare, "]");
-                    span = Span::merge(span, end_span);
-                    ty = ty::Type::Array(Box::new(ty));
-                }
-                Token::Star => {
-                    let end_span = self.lexer.next_token()?.span;
-                    span = Span::merge(span, end_span);
-                    ty = ty::Type::Pointer(Box::new(ty));
-                }
-                _ => break,
-            }
-        }
-
-        Ok(Spanned::new(ty, span))
-    }
-
     fn parse_type(&mut self, void: bool) -> ParsingResult<Spanned<ty::Type>> {
-        let Spanned { inner: ty, span } = self.parse_type_inner()?;
-        if !void && ty == ty::Type::Void {
-            panic!()
-        } else if ty.is_invalid() {
-            panic!()
+        match self.lexer.peek_token()?.inner {
+            Token::LeftSquare => {
+                let begin_span = self.lexer.next_token()?.span;
+                let ty = self.parse_type(false)?.inner;
+                let end_span = expect!(self.lexer; Token::RightSquare, "]");
+                let span = Span::merge(begin_span, end_span);
+                Ok(Spanned::new(ty::Type::Array(Box::new(ty)), span))
+            }
+            Token::Star => {
+                let begin_span = self.lexer.next_token()?.span;
+                let ty = self.parse_type(true)?;
+                let span = Span::merge(begin_span, ty.span);
+                Ok(Spanned::new(ty::Type::Pointer(Box::new(ty.inner)), span))
+            }
+            _ => self.parse_bottom_type(void),
         }
-        Ok(Spanned::new(ty, span))
     }
 
     fn parse_declaration(&mut self) -> ParsingResult<ast::Declaration> {
@@ -549,7 +538,7 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let Spanned {
                     inner: bty,
                     mut span,
-                } = self.parse_bottom_type()?;
+                } = self.parse_bottom_type(false)?;
                 let mut sizes = Vec::new();
                 loop {
                     expect!(self.lexer; Token::LeftSquare, "[");

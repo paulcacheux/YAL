@@ -1,6 +1,6 @@
 fn main() -> int {
 
-let a: int[] = new int[10];
+let a: [int] = new int[10];
 let j: int = 0;
   while (j<a.length) {
      a[j] = j;
