@@ -438,6 +438,39 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     error!(TranslationError::CastUndefined(sub_ty, as_ty), expr_span)
                 }
             }
+            ast::Expression::Subscript { array, index } => {
+                let array_span = array.span;
+                let index_span = index.span;
+
+                let array = self.translate_expression(*array)?;
+                let array = utils::lvalue_to_rvalue(array);
+                let index = self.translate_expression(*index)?;
+                let index = utils::lvalue_to_rvalue(index);
+
+                let ty = if let ty::Type::Pointer(ref sub) = array.ty {
+                    *sub.clone()
+                } else {
+                    return error!(
+                        TranslationError::SubscriptNotArray(array.ty.clone()),
+                        array_span
+                    );
+                };
+
+                if index.ty != ty::Type::Int {
+                    return error!(
+                        TranslationError::UnexpectedType(ty::Type::Int, index.ty.clone()),
+                        index_span
+                    );
+                }
+
+                Ok(ir::TypedExpression {
+                    ty,
+                    expr: ir::Expression::Subscipt {
+                        ptr: Box::new(array),
+                        index: Box::new(index),
+                    },
+                })
+            }
             ast::Expression::FunctionCall { function, args } => {
                 if let Some(func_ty) = self.symbol_table.lookup_function(&function).cloned() {
                     let mut args_translated = Vec::with_capacity(args.len());
