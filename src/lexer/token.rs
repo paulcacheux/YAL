@@ -48,7 +48,6 @@ pub enum Token<'input> {
     ReturnKeyword,
     BreakKeyword,
     ContinueKeyword,
-    NewKeyword,
     AsKeyword,
     FnKeyword,
     LetKeyword,

@@ -109,19 +109,14 @@ pub enum Expression {
         kind: CastKind,
         sub: Box<TypedExpression>,
     },
-    Subscript {
-        array: Box<TypedExpression>,
-        index: Box<TypedExpression>,
-    },
     FunctionCall {
         function: String,
         args: Vec<TypedExpression>,
     },
-    NewArray {
-        sub_ty: Type,
-        size: Box<TypedExpression>,
+    Subscipt {
+        ptr: Box<TypedExpression>,
+        index: Box<TypedExpression>,
     },
-    ArrayLength(Box<TypedExpression>),
 }
 
 #[derive(Debug, Clone)]
@@ -169,7 +164,7 @@ pub enum UnaryOperatorKind {
 pub enum LValueUnaryOperatorKind {
     IntIncrement,
     IntDecrement,
-    LValueAddressOf,
+    LValueToPtr,
 }
 
 #[derive(Debug, Clone, Copy)]

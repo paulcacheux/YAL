@@ -68,10 +68,10 @@ impl<'s> Backend<'s> {
         }
     }
 
-    fn codegen_raw_array_type(&self, sub: &ty::Type) -> LLVMTypeRef {
+    /*fn codegen_raw_array_type(&self, sub: &ty::Type) -> LLVMTypeRef {
         self.context
             .raw_array_ty(self.codegen_type(sub), self.context.i32_ty())
-    }
+    }*/
 
     fn codegen_type(&self, ty: &ty::Type) -> LLVMTypeRef {
         match *ty {
@@ -81,14 +81,11 @@ impl<'s> Backend<'s> {
             ty::Type::Boolean => self.context.i1_ty(),
             ty::Type::String => utils::pointer_ty(self.context.i8_ty()),
             ty::Type::LValue(ref sub) => utils::pointer_ty(self.codegen_type(sub)),
-            ty::Type::Array(ref sub) => self.context
-                .array_ty(self.codegen_type(sub), self.context.i32_ty()),
             ty::Type::Pointer(ref sub) => utils::pointer_ty(self.codegen_type(sub)),
-            _ => unimplemented!(),
         }
     }
 
-    fn codegen_new_array_func(&mut self, ty: &ty::Type) -> LLVMValueRef {
+    /*fn codegen_new_array_func(&mut self, ty: &ty::Type) -> LLVMValueRef {
         let raw_array_llvm_ty = self.codegen_raw_array_type(ty);
         let array_llvm_ty = utils::pointer_ty(raw_array_llvm_ty);
         let sub_llvm_ty = self.codegen_type(ty);
@@ -129,7 +126,7 @@ impl<'s> Backend<'s> {
             self.new_arrays.insert(ty.clone(), new_func);
             new_func
         }
-    }
+    }*/
 
     fn pre_codegen_extern_function(&mut self, exfunc: &ir::ExternFunction) {
         let ret_ty = self.codegen_type(&exfunc.ty.return_ty);
@@ -329,12 +326,10 @@ impl<'s> Backend<'s> {
                 self.codegen_lvalue_unop(lvalue_unop, *sub)
             }
             ir::Expression::Cast { kind, sub } => self.codegen_cast(&ty, kind, *sub),
-            ir::Expression::Subscript { array, index } => self.codegen_subscript(*array, *index),
             ir::Expression::FunctionCall { function, args } => {
                 self.codegen_funccall(&function, args)
             }
-            ir::Expression::NewArray { sub_ty, size } => self.codegen_new_array(&sub_ty, *size),
-            ir::Expression::ArrayLength(sub) => self.codegen_array_len(*sub),
+            ir::Expression::Subscipt { ptr, index } => self.codegen_subscript(*ptr, *index),
         }
     }
 
@@ -484,7 +479,7 @@ impl<'s> Backend<'s> {
         match lvalue_unop {
             ir::LValueUnaryOperatorKind::IntIncrement => self.codegen_incdecrement(sub, true),
             ir::LValueUnaryOperatorKind::IntDecrement => self.codegen_incdecrement(sub, false),
-            ir::LValueUnaryOperatorKind::LValueAddressOf => self.codegen_addressof(sub),
+            ir::LValueUnaryOperatorKind::LValueToPtr => self.codegen_addressof(sub),
         }
     }
 
@@ -529,14 +524,12 @@ impl<'s> Backend<'s> {
 
     fn codegen_subscript(
         &mut self,
-        array: ir::TypedExpression,
+        ptr: ir::TypedExpression,
         index: ir::TypedExpression,
     ) -> LLVMValueRef {
-        let array = self.codegen_expression(array);
+        let ptr = self.codegen_expression(ptr);
         let index = self.codegen_expression(index);
 
-        let ptr_ptr = self.builder.build_struct_gep(array, 0, b"\0");
-        let ptr = self.builder.build_load(ptr_ptr, b"\0");
         self.builder.build_gep(ptr, vec![index], b"\0")
     }
 
@@ -548,18 +541,6 @@ impl<'s> Backend<'s> {
             .collect();
 
         self.builder.build_call(func, args, b"\0")
-    }
-
-    fn codegen_new_array(&mut self, sub_ty: &ty::Type, size: ir::TypedExpression) -> LLVMValueRef {
-        let size = self.codegen_expression(size);
-        let na_func = self.get_new_array_func(sub_ty);
-        self.builder.build_call(na_func, vec![size], b"\0")
-    }
-
-    fn codegen_array_len(&mut self, sub: ir::TypedExpression) -> LLVMValueRef {
-        let array = self.codegen_expression(sub);
-        let size_ptr = self.builder.build_struct_gep(array, 1, b"\0");
-        self.builder.build_load(size_ptr, b"\0")
     }
 
     fn into_exec_module(self) -> ExecutionModule {

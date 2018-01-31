@@ -165,10 +165,6 @@ pub enum Expression {
         function: String,
         args: Vec<Spanned<Expression>>,
     },
-    NewArray {
-        ty: Type,
-        sizes: Vec<Spanned<Expression>>,
-    },
     MemberAccess {
         expr: Box<Spanned<Expression>>,
         member: String,

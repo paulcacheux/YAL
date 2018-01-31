@@ -44,7 +44,7 @@ pub fn const_real(ty: LLVMTypeRef, r: f64) -> LLVMValueRef {
     unsafe { LLVMConstReal(ty, r as _) }
 }
 
-pub fn ty_to_string(ty: &ty::Type) -> String {
+/*pub fn ty_to_string(ty: &ty::Type) -> String {
     match *ty {
         ty::Type::Int => "int".to_string(),
         ty::Type::Double => "double".to_string(),
@@ -55,4 +55,4 @@ pub fn ty_to_string(ty: &ty::Type) -> String {
         ty::Type::Array(ref sub) => format!("array.{}", ty_to_string(sub)),
         _ => unimplemented!(),
     }
-}
+}*/

@@ -173,6 +173,7 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
     pub fn pp_expression(&mut self, expr: &ir::TypedExpression) -> io::Result<usize> {
         let ir::TypedExpression { ref ty, ref expr } = *expr;
         let rhs = match *expr {
+            ir::Expression::Block(ref block) => self.pp_block_expression(block)?,
             ir::Expression::LValueToRValue(ref sub) => {
                 let sub = self.pp_expression_percent(sub)?;
                 format!("deref({})", sub)
@@ -219,27 +220,11 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
 
                 format!("call {}({})", function, args.join(", "))
             }
-            ir::Expression::Subscript {
-                ref array,
-                ref index,
-            } => {
-                let array = self.pp_expression_percent(array)?;
+            ir::Expression::Subscipt { ref ptr, ref index } => {
+                let ptr = self.pp_expression_percent(ptr)?;
                 let index = self.pp_expression_percent(index)?;
-
-                format!("subscript {}[{}]", array, index)
+                format!("Subscript(ptr: {}, index: {})", ptr, index)
             }
-            ir::Expression::NewArray {
-                ref sub_ty,
-                ref size,
-            } => {
-                let size = self.pp_expression_percent(size)?;
-                format!("new_array {} [{}]", ty_to_string(sub_ty), size)
-            }
-            ir::Expression::ArrayLength(ref sub) => {
-                let sub = self.pp_expression_percent(sub)?;
-                format!("len {}", sub)
-            }
-            ir::Expression::Block(ref block) => self.pp_block_expression(block)?,
         };
 
         let id = self.new_expr();
@@ -289,8 +274,6 @@ fn ty_to_string(ty: &ty::Type) -> String {
         ty::Type::String => "string".to_string(),
         ty::Type::Void => "void".to_string(),
         ty::Type::LValue(ref sub) => format!("&{}", ty_to_string(sub)),
-        ty::Type::Array(ref sub) => format!("{}[]", ty_to_string(sub)),
-        ty::Type::Pointer(ref sub) => format!("{}*", ty_to_string(sub)),
-        _ => unimplemented!(),
+        ty::Type::Pointer(ref sub) => format!("*{}", ty_to_string(sub)),
     }
 }

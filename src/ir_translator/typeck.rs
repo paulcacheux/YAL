@@ -127,7 +127,7 @@ pub fn lvalue_unop_typeck(
         )),
         (AddressOf, sub) => Some((
             ty::Type::Pointer(Box::new(sub.clone())),
-            ir::LValueUnaryOperatorKind::LValueAddressOf,
+            ir::LValueUnaryOperatorKind::LValueToPtr,
         )),
         _ => None,
     }

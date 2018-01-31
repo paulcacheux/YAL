@@ -84,7 +84,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             Token::BooleanKeyword => ty::Type::Boolean,
             Token::StringKeyword => ty::Type::String,
             Token::VoidKeyword if void => ty::Type::Void,
-            Token::Identifier(id) => ty::Type::StructPointer(id.to_string()),
+            Token::Identifier(id) => unimplemented!(),
             _ => {
                 if void {
                     return_unexpected!(span, "int", "boolean", "double", "void")
@@ -99,13 +99,6 @@ impl<'si, 'input> Parser<'si, 'input> {
 
     fn parse_type(&mut self, void: bool) -> ParsingResult<Spanned<ty::Type>> {
         match self.lexer.peek_token()?.inner {
-            Token::LeftSquare => {
-                let begin_span = self.lexer.next_token()?.span;
-                let ty = self.parse_type(false)?.inner;
-                let end_span = expect!(self.lexer; Token::RightSquare, "]");
-                let span = Span::merge(begin_span, end_span);
-                Ok(Spanned::new(ty::Type::Array(Box::new(ty)), span))
-            }
             Token::Star => {
                 let begin_span = self.lexer.next_token()?.span;
                 let ty = self.parse_type(true)?;
@@ -533,30 +526,6 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let sid = self.string_interner.intern(s);
                 let expr = ast::Expression::Literal(common::Literal::StringLiteral(sid));
                 Ok(Spanned::new(expr, span))
-            }
-            Token::NewKeyword => {
-                let Spanned {
-                    inner: bty,
-                    mut span,
-                } = self.parse_bottom_type(false)?;
-                let mut sizes = Vec::new();
-                loop {
-                    expect!(self.lexer; Token::LeftSquare, "[");
-                    let size = self.parse_expression()?;
-                    sizes.push(size);
-                    span = Span::merge(span, expect!(self.lexer; Token::RightSquare, "]"));
-
-                    if let Token::LeftSquare = self.lexer.peek_token()?.inner {
-                        continue;
-                    } else {
-                        break;
-                    }
-                }
-
-                Ok(Spanned::new(
-                    ast::Expression::NewArray { ty: bty, sizes },
-                    span,
-                ))
             }
             Token::Minus => {
                 let sub = self.parse_mid_expression()?;

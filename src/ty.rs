@@ -5,9 +5,7 @@ pub enum Type {
     Boolean,
     String,
     Void,
-    StructPointer(String),
     LValue(Box<Type>),
-    Array(Box<Type>),
     Pointer(Box<Type>),
 }
 
@@ -15,14 +13,6 @@ impl Type {
     pub fn has_default_value(&self) -> bool {
         match *self {
             Type::Int | Type::Double | Type::Boolean => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_invalid(&self) -> bool {
-        match *self {
-            Type::LValue(ref sub) | Type::Array(ref sub) => **sub == Type::Void || sub.is_invalid(),
-            Type::Pointer(ref sub) => sub.is_invalid(),
             _ => false,
         }
     }
