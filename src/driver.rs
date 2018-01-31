@@ -1,5 +1,5 @@
 extern crate clap;
-extern crate javalette;
+extern crate yal;
 
 use std::fs::File;
 use std::io::{self, Read};
@@ -7,7 +7,7 @@ use std::path::Path;
 
 use clap::{App, Arg};
 
-use javalette::*;
+use yal::*;
 use codemap::{CodeMap, Span, Spanned};
 
 fn slurp_file<P: AsRef<Path>>(path: P) -> io::Result<String> {

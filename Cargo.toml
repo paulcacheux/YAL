@@ -1,14 +1,14 @@
 [package]
-name = "javalette"
-version = "0.1.0"
+name = "YAL"
+version = "0.2.0"
 authors = ["Paul CACHEUX <paulcacheux@gmail.com>"]
 
 [lib]
-name = "javalette"
+name = "yal"
 path = "src/lib.rs"
 
 [[bin]]
-name = "jlc"
+name = "yalc"
 path = "src/driver.rs"
 
 
