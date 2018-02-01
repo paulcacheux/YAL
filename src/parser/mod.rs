@@ -105,6 +105,16 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let span = Span::merge(begin_span, ty.span);
                 Ok(Spanned::new(ty::Type::Pointer(Box::new(ty.inner)), span))
             }
+            Token::LeftSquare => {
+                let begin_span = self.lexer.next_token()?.span;
+                let ty = self.parse_type(false)?.inner;
+                expect!(self.lexer; Token::SemiColon, ";");
+                let (size, _) =
+                    accept!(self.lexer; Token::IntegerLiteral(i) => i as usize, "integer literal");
+                let end_span = expect!(self.lexer; Token::RightSquare, "]");
+                let span = Span::merge(begin_span, end_span);
+                Ok(Spanned::new(ty::Type::Array(Box::new(ty), size), span))
+            }
             _ => self.parse_bottom_type(void),
         }
     }
@@ -560,6 +570,19 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let expr = ast::Expression::UnaryOperator {
                     unop: ast::UnaryOperatorKind::PtrDeref,
                     sub: Box::new(sub),
+                };
+                Ok(Spanned::new(expr, span))
+            }
+            Token::LeftSquare => {
+                let value = self.parse_expression()?;
+                expect!(self.lexer; Token::SemiColon, ";");
+                let (size, _) =
+                    accept!(self.lexer; Token::IntegerLiteral(i) => i as usize, "integer literal");
+                let end_span = expect!(self.lexer; Token::RightSquare, "]");
+                let span = Span::merge(span, end_span);
+                let expr = ast::Expression::ArrayFillLiteral {
+                    value: Box::new(value),
+                    size,
                 };
                 Ok(Spanned::new(expr, span))
             }

@@ -26,6 +26,10 @@ pub fn function_ty(
     }
 }
 
+pub fn array_ty(sub_ty: LLVMTypeRef, size: usize) -> LLVMTypeRef {
+    unsafe { LLVMArrayType(sub_ty, size as _) }
+}
+
 pub fn get_func_param(func: LLVMValueRef, index: usize) -> LLVMValueRef {
     unsafe { LLVMGetParam(func, index as _) }
 }

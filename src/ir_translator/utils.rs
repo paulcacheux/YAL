@@ -78,6 +78,30 @@ pub fn lvalue_to_rvalue(expression: ir::TypedExpression) -> ir::TypedExpression 
     }
 }
 
+pub fn unsure_subscriptable(expr: ir::TypedExpression) -> Option<(ty::Type, ir::TypedExpression)> {
+    match expr.ty.clone() {
+        ty::Type::Pointer(sub) => Some((*sub, expr)),
+        ty::Type::Array(sub, _) => {
+            let ty = *sub;
+            let ptr_ty = ty::Type::Pointer(Box::new(ty.clone()));
+            Some((
+                ty,
+                ir::TypedExpression {
+                    ty: ptr_ty.clone(),
+                    expr: ir::Expression::BitCast {
+                        dest_ty: ptr_ty.clone(),
+                        sub: Box::new(ir::TypedExpression {
+                            ty: ty::Type::Pointer(Box::new(expr.ty.clone())),
+                            expr: ir::Expression::RValueToPtr(Box::new(expr)),
+                        }),
+                    },
+                },
+            ))
+        }
+        _ => return None,
+    }
+}
+
 pub fn default_value_for_ty(ty: &ty::Type) -> ir::TypedExpression {
     let lit = match *ty {
         ty::Type::Int => common::Literal::IntLiteral(0),

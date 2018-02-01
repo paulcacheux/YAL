@@ -86,6 +86,7 @@ pub struct TypedExpression {
 pub enum Expression {
     Block(Box<BlockExpression>),
     LValueToRValue(Box<TypedExpression>),
+    RValueToPtr(Box<TypedExpression>),
     Literal(Literal),
     Identifier(IdentifierId),
     Assign {
@@ -109,6 +110,10 @@ pub enum Expression {
         kind: CastKind,
         sub: Box<TypedExpression>,
     },
+    BitCast {
+        dest_ty: Type,
+        sub: Box<TypedExpression>,
+    },
     FunctionCall {
         function: String,
         args: Vec<TypedExpression>,
@@ -116,6 +121,10 @@ pub enum Expression {
     Subscipt {
         ptr: Box<TypedExpression>,
         index: Box<TypedExpression>,
+    },
+    NewArray {
+        ty: Type,
+        size: usize,
     },
 }
 
@@ -173,5 +182,4 @@ pub enum CastKind {
     DoubleToInt,
     BooleanToInt,
     IntToBoolean,
-    PtrToPtr,
 }

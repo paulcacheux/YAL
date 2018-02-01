@@ -7,6 +7,7 @@ pub enum Type {
     Void,
     LValue(Box<Type>),
     Pointer(Box<Type>),
+    Array(Box<Type>, usize),
 }
 
 impl Type {
@@ -15,6 +16,7 @@ impl Type {
             Type::Int | Type::Double | Type::Boolean => true,
             _ => false,
         }
+        // maybe add a default value for arrays
     }
 }
 

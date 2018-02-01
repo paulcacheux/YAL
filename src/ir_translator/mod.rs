@@ -185,6 +185,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         self.statements
     }
 
+    fn register_temp_local(&mut self, ty: ty::Type) -> ir::IdentifierId {
+        let id = self.symbol_table.new_identifier_id();
+        self.func_builder
+            .var_declarations
+            .push(ir::VarDeclaration { ty, id });
+        id
+    }
+
     fn translate_statement_as_block(
         &mut self,
         statement: Spanned<ast::Statement>,
@@ -425,52 +433,33 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let sub = utils::lvalue_to_rvalue(sub);
                 let sub_ty = sub.ty.clone();
 
-                if let Some(kind) = typeck::cast_typeck(&sub.ty, &as_ty) {
-                    let expr = ir::Expression::Cast {
-                        kind,
-                        sub: Box::new(sub),
-                    };
-                    Ok(ir::TypedExpression {
-                        ty: as_ty.clone(),
-                        expr,
-                    })
-                } else {
-                    error!(TranslationError::CastUndefined(sub_ty, as_ty), expr_span)
+                match typeck::cast_typeck(&sub.ty, &as_ty) {
+                    typeck::CastTypeckResult::Cast(kind) => {
+                        let expr = ir::Expression::Cast {
+                            kind,
+                            sub: Box::new(sub),
+                        };
+                        Ok(ir::TypedExpression {
+                            ty: as_ty.clone(),
+                            expr,
+                        })
+                    }
+                    typeck::CastTypeckResult::BitCast => {
+                        let expr = ir::Expression::BitCast {
+                            dest_ty: as_ty.clone(),
+                            sub: Box::new(sub),
+                        };
+                        Ok(ir::TypedExpression {
+                            ty: as_ty.clone(),
+                            expr,
+                        })
+                    }
+                    typeck::CastTypeckResult::Error => {
+                        error!(TranslationError::CastUndefined(sub_ty, as_ty), expr_span)
+                    }
                 }
             }
-            ast::Expression::Subscript { array, index } => {
-                let array_span = array.span;
-                let index_span = index.span;
-
-                let array = self.translate_expression(*array)?;
-                let array = utils::lvalue_to_rvalue(array);
-                let index = self.translate_expression(*index)?;
-                let index = utils::lvalue_to_rvalue(index);
-
-                let ty = if let ty::Type::Pointer(ref sub) = array.ty {
-                    *sub.clone()
-                } else {
-                    return error!(
-                        TranslationError::SubscriptNotArray(array.ty.clone()),
-                        array_span
-                    );
-                };
-
-                if index.ty != ty::Type::Int {
-                    return error!(
-                        TranslationError::UnexpectedType(ty::Type::Int, index.ty.clone()),
-                        index_span
-                    );
-                }
-
-                Ok(ir::TypedExpression {
-                    ty,
-                    expr: ir::Expression::Subscipt {
-                        ptr: Box::new(array),
-                        index: Box::new(index),
-                    },
-                })
-            }
+            ast::Expression::Subscript { array, index } => self.translate_subscript(*array, *index),
             ast::Expression::FunctionCall { function, args } => {
                 if let Some(func_ty) = self.symbol_table.lookup_function(&function).cloned() {
                     let mut args_translated = Vec::with_capacity(args.len());
@@ -520,9 +509,46 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     error!(TranslationError::FunctionUndefined(function), expr_span)
                 }
             }
+            ast::Expression::ArrayFillLiteral { value, size } => unimplemented!(),
 
             _ => unimplemented!(),
         }
+    }
+
+    fn translate_subscript(
+        &mut self,
+        array: Spanned<ast::Expression>,
+        index: Spanned<ast::Expression>,
+    ) -> TranslationResult<ir::TypedExpression> {
+        let array_span = array.span;
+        let index_span = index.span;
+
+        let array = self.translate_expression(array)?;
+        let array = utils::lvalue_to_rvalue(array);
+        let index = self.translate_expression(index)?;
+        let index = utils::lvalue_to_rvalue(index);
+        let array_ty = array.ty.clone();
+
+        let (sub_ty, ptr) = if let Some(s) = utils::unsure_subscriptable(array) {
+            s
+        } else {
+            return error!(TranslationError::SubscriptNotArray(array_ty), array_span);
+        };
+
+        if index.ty != ty::Type::Int {
+            return error!(
+                TranslationError::UnexpectedType(ty::Type::Int, index.ty.clone()),
+                index_span
+            );
+        }
+
+        Ok(ir::TypedExpression {
+            ty: sub_ty,
+            expr: ir::Expression::Subscipt {
+                ptr: Box::new(ptr),
+                index: Box::new(index),
+            },
+        })
     }
 
     fn translate_lazyop(
@@ -564,13 +590,8 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
         };
 
-        let res_id = self.symbol_table.new_identifier_id();
+        let res_id = self.register_temp_local(ty::Type::Boolean);
         let res_id_expr = utils::build_texpr_from_id(ty::Type::Boolean, res_id);
-
-        self.func_builder.var_declarations.push(ir::VarDeclaration {
-            ty: ty::Type::Boolean,
-            id: res_id,
-        });
 
         let stmts = vec![
             ir::Statement::Expression(utils::build_assign_to_id(ty::Type::Boolean, res_id, init)),
@@ -591,6 +612,77 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             })),
         })
     }
+
+    /*pub fn create_loop<F: FnOnce(ir::TypedExpression) -> TranslationResult<ir::BlockStatement>>(
+        &mut self,
+        ty: ty::Type,
+        array: ir::TypedExpression,
+        body_builder: F,
+    ) -> TranslationResult<(ir::TypedExpression, ir::BlockStatement)> {
+        // initialization of the counter and the array
+        let index_id = self.register_temp_local(ty::Type::Int);
+        let index_expr = utils::build_texpr_from_id(ty::Type::Int, index_id);
+        let index_rvalue = utils::lvalue_to_rvalue(index_expr.clone());
+        let array_id = self.register_temp_local(array.ty.clone());
+        let array_expr = utils::build_texpr_from_id(array.ty.clone(), array_id);
+        let array_rvalue = utils::lvalue_to_rvalue(array_expr.clone());
+
+        let const0 = utils::literal_to_texpr(common::Literal::IntLiteral(0));
+        let array_len_expr = ir::TypedExpression {
+            ty: ty::Type::Int,
+            expr: ir::Expression::ArrayLength(Box::new(array_rvalue.clone())),
+        };
+
+        // translation of current loop value
+        // TODO build_subscript
+        let array_indexed = ir::TypedExpression {
+            ty: ty::Type::LValue(Box::new(ty)),
+            expr: ir::Expression::Subscript {
+                array: Box::new(array_rvalue.clone()),
+                index: Box::new(index_rvalue.clone()),
+            },
+        };
+
+        // translation of index++
+        let index_inc = ir::TypedExpression {
+            ty: ty::Type::LValue(Box::new(ty::Type::Int)),
+            expr: ir::Expression::LValueUnaryOperator {
+                lvalue_unop: ir::LValueUnaryOperatorKind::IntIncrement,
+                sub: Box::new(index_expr.clone()),
+            },
+        };
+
+        // body
+        let mut body = body_builder(array_indexed)?;
+        body.push(ir::Statement::Expression(index_inc));
+
+        Ok((
+            array_expr,
+            vec![
+                ir::Statement::Expression(utils::build_assign_to_id(
+                    array_rvalue.ty.clone(),
+                    array_id,
+                    array,
+                )),
+                ir::Statement::Expression(utils::build_assign_to_id(
+                    ty::Type::Int,
+                    index_id,
+                    const0,
+                )),
+                ir::Statement::While {
+                    condition: ir::TypedExpression {
+                        ty: ty::Type::Boolean,
+                        expr: ir::Expression::BinaryOperator {
+                            binop: ir::BinaryOperatorKind::IntLess,
+                            lhs: Box::new(index_rvalue.clone()),
+                            rhs: Box::new(array_len_expr),
+                        },
+                    },
+                    body,
+                },
+            ],
+        ))
+    }*/
 }
 
 pub fn check_if_main_declaration(prog: &ir::Program) -> TranslationResult<()> {

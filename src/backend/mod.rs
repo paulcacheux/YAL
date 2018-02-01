@@ -82,6 +82,7 @@ impl<'s> Backend<'s> {
             ty::Type::String => utils::pointer_ty(self.context.i8_ty()),
             ty::Type::LValue(ref sub) => utils::pointer_ty(self.codegen_type(sub)),
             ty::Type::Pointer(ref sub) => utils::pointer_ty(self.codegen_type(sub)),
+            ty::Type::Array(ref sub, size) => utils::array_ty(self.codegen_type(sub), size),
         }
     }
 
@@ -325,11 +326,14 @@ impl<'s> Backend<'s> {
             ir::Expression::LValueUnaryOperator { lvalue_unop, sub } => {
                 self.codegen_lvalue_unop(lvalue_unop, *sub)
             }
-            ir::Expression::Cast { kind, sub } => self.codegen_cast(&ty, kind, *sub),
+            ir::Expression::Cast { kind, sub } => self.codegen_cast(kind, *sub),
+            ir::Expression::BitCast { dest_ty, sub } => self.codegen_bitcast(&dest_ty, *sub),
             ir::Expression::FunctionCall { function, args } => {
                 self.codegen_funccall(&function, args)
             }
             ir::Expression::Subscipt { ptr, index } => self.codegen_subscript(*ptr, *index),
+            ir::Expression::NewArray { ty, size } => self.codegen_new_array(ty, size),
+            _ => unimplemented!(),
         }
     }
 
@@ -504,22 +508,34 @@ impl<'s> Backend<'s> {
         self.codegen_expression(sub)
     }
 
-    fn codegen_cast(
-        &mut self,
-        dest_ty: &ty::Type,
-        kind: ir::CastKind,
-        sub: ir::TypedExpression,
-    ) -> LLVMValueRef {
+    fn codegen_cast(&mut self, kind: ir::CastKind, sub: ir::TypedExpression) -> LLVMValueRef {
         let sub = self.codegen_expression(sub);
-        let llvm_ty = self.codegen_type(&dest_ty);
 
         match kind {
-            ir::CastKind::IntToDouble => self.builder.build_si_to_fp(sub, llvm_ty, b"\0"),
-            ir::CastKind::DoubleToInt => self.builder.build_fp_to_si(sub, llvm_ty, b"\0"),
-            ir::CastKind::BooleanToInt => self.builder.build_zext(sub, llvm_ty, b"\0"),
-            ir::CastKind::IntToBoolean => self.builder.build_trunc(sub, llvm_ty, b"\0"),
-            ir::CastKind::PtrToPtr => self.builder.build_bitcast(sub, llvm_ty, b"\0"),
+            ir::CastKind::IntToDouble => {
+                self.builder
+                    .build_si_to_fp(sub, self.codegen_type(&ty::Type::Double), b"\0")
+            }
+            ir::CastKind::DoubleToInt => {
+                self.builder
+                    .build_fp_to_si(sub, self.codegen_type(&ty::Type::Int), b"\0")
+            }
+            ir::CastKind::BooleanToInt => {
+                self.builder
+                    .build_zext(sub, self.codegen_type(&ty::Type::Int), b"\0")
+            }
+            ir::CastKind::IntToBoolean => {
+                self.builder
+                    .build_trunc(sub, self.codegen_type(&ty::Type::Boolean), b"\0")
+            } // ir::CastKind::PtrToPtr => self.builder.build_bitcast(sub, llvm_ty, b"\0"), -->
+              // bitcast
         }
+    }
+
+    fn codegen_bitcast(&mut self, dest_ty: &ty::Type, sub: ir::TypedExpression) -> LLVMValueRef {
+        let sub = self.codegen_expression(sub);
+        self.builder
+            .build_bitcast(sub, self.codegen_type(dest_ty), b"\0")
     }
 
     fn codegen_subscript(
@@ -541,6 +557,12 @@ impl<'s> Backend<'s> {
             .collect();
 
         self.builder.build_call(func, args, b"\0")
+    }
+
+    fn codegen_new_array(&mut self, ty: ty::Type, size: usize) -> LLVMValueRef {
+        let llvm_ty = self.codegen_type(&ty::Type::Array(Box::new(ty), size));
+        let array_ptr = self.builder.build_alloca(llvm_ty, b"\0");
+        self.builder.build_load(array_ptr, b"\0")
     }
 
     fn into_exec_module(self) -> ExecutionModule {
