@@ -12,29 +12,32 @@ macro_rules! error {
     }
 }
 
-pub fn build_texpr_from_id(ty: ty::Type, id: IdentifierId) -> ir::TypedExpression {
-    ir::TypedExpression {
+#[derive(Debug, Clone)]
+pub struct TypedExpression {
+    pub ty: ty::Type,
+    pub expr: ir::Expression,
+}
+
+pub fn build_texpr_from_id(ty: ty::Type, id: IdentifierId) -> TypedExpression {
+    TypedExpression {
         ty: ty::Type::LValue(Box::new(ty)),
         expr: ir::Expression::Identifier(id),
     }
 }
 
-pub fn build_assign_to_id(
-    ty: ty::Type,
-    id: IdentifierId,
-    rhs: ir::TypedExpression,
-) -> ir::TypedExpression {
-    let lhs = build_texpr_from_id(ty, id);
-    build_assign(lhs, rhs)
+pub fn build_assign_to_id(id: IdentifierId, rhs: ir::Expression) -> ir::Expression {
+    ir::Expression::Assign {
+        lhs: Box::new(ir::Expression::Identifier(id)),
+        rhs: Box::new(rhs),
+    }
 }
 
-pub fn build_assign(lhs: ir::TypedExpression, rhs: ir::TypedExpression) -> ir::TypedExpression {
-    let rhs_ty = rhs.ty.clone();
-    ir::TypedExpression {
-        ty: rhs_ty,
+pub fn build_assign(lhs: TypedExpression, rhs: TypedExpression) -> TypedExpression {
+    TypedExpression {
+        ty: rhs.ty,
         expr: ir::Expression::Assign {
-            lhs: Box::new(lhs),
-            rhs: Box::new(rhs),
+            lhs: Box::new(lhs.expr),
+            rhs: Box::new(rhs.expr),
         },
     }
 }
@@ -65,44 +68,38 @@ pub fn check_expect_type(
     }
 }
 
-pub fn lvalue_to_rvalue(expression: ir::TypedExpression) -> ir::TypedExpression {
-    match expression.ty.clone() {
-        ty::Type::LValue(sub) => ir::TypedExpression {
+pub fn lvalue_to_rvalue(expression: TypedExpression) -> TypedExpression {
+    match expression.ty {
+        ty::Type::LValue(sub) => TypedExpression {
             ty: *sub,
-            expr: ir::Expression::LValueToRValue(Box::new(expression)),
+            expr: ir::Expression::LValueToRValue(Box::new(expression.expr)),
         },
-        other => ir::TypedExpression {
+        other => TypedExpression {
             ty: other,
             expr: expression.expr,
         },
     }
 }
 
-pub fn unsure_subscriptable(expr: ir::TypedExpression) -> Option<(ty::Type, ir::TypedExpression)> {
+pub fn unsure_subscriptable(expr: TypedExpression) -> Option<(ty::Type, ir::Expression)> {
     match expr.ty.clone() {
-        ty::Type::Pointer(sub) => Some((*sub, expr)),
+        ty::Type::Pointer(sub) => Some((*sub, expr.expr)),
         ty::Type::Array(sub, _) => {
             let ty = *sub;
             let ptr_ty = ty::Type::Pointer(Box::new(ty.clone()));
             Some((
                 ty,
-                ir::TypedExpression {
-                    ty: ptr_ty.clone(),
-                    expr: ir::Expression::BitCast {
-                        dest_ty: ptr_ty.clone(),
-                        sub: Box::new(ir::TypedExpression {
-                            ty: ty::Type::Pointer(Box::new(expr.ty.clone())),
-                            expr: ir::Expression::RValueToPtr(Box::new(expr)),
-                        }),
-                    },
+                ir::Expression::BitCast {
+                    dest_ty: ptr_ty.clone(),
+                    sub: Box::new(ir::Expression::RValueToPtr(Box::new(expr.expr))),
                 },
             ))
         }
-        _ => return None,
+        _ => None,
     }
 }
 
-pub fn default_value_for_ty(ty: &ty::Type) -> ir::TypedExpression {
+pub fn default_value_for_ty(ty: &ty::Type) -> TypedExpression {
     let lit = match *ty {
         ty::Type::Int => common::Literal::IntLiteral(0),
         ty::Type::Double => common::Literal::DoubleLiteral(0.0),
@@ -112,9 +109,9 @@ pub fn default_value_for_ty(ty: &ty::Type) -> ir::TypedExpression {
     literal_to_texpr(lit)
 }
 
-pub fn literal_to_texpr(lit: common::Literal) -> ir::TypedExpression {
+pub fn literal_to_texpr(lit: common::Literal) -> TypedExpression {
     let ty = lit.get_type();
-    ir::TypedExpression {
+    TypedExpression {
         ty,
         expr: ir::Expression::Literal(lit),
     }
@@ -131,7 +128,7 @@ pub fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
             ref condition,
             ref body,
             ref else_clause,
-        } => match condition.expr {
+        } => match *condition {
             ir::Expression::Literal(common::Literal::BooleanLiteral(true)) => {
                 check_return_paths(body)
             }
@@ -141,7 +138,7 @@ pub fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
             _ => check_return_paths(body) && check_return_paths(else_clause),
         },
         ir::Statement::While { ref condition, .. } => {
-            if let ir::Expression::Literal(common::Literal::BooleanLiteral(true)) = condition.expr {
+            if let ir::Expression::Literal(common::Literal::BooleanLiteral(true)) = *condition {
                 true
             } else {
                 false

@@ -162,16 +162,15 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
         }
     }
 
-    pub fn pp_expression_percent(&mut self, expr: &ir::TypedExpression) -> io::Result<String> {
-        if let ir::Expression::Identifier(id) = expr.expr {
+    pub fn pp_expression_percent(&mut self, expr: &ir::Expression) -> io::Result<String> {
+        if let ir::Expression::Identifier(id) = *expr {
             Ok(idid_to_string(id))
         } else {
             Ok(format!("%{}", self.pp_expression(expr)?))
         }
     }
 
-    pub fn pp_expression(&mut self, expr: &ir::TypedExpression) -> io::Result<usize> {
-        let ir::TypedExpression { ref ty, ref expr } = *expr;
+    pub fn pp_expression(&mut self, expr: &ir::Expression) -> io::Result<usize> {
         let rhs = match *expr {
             ir::Expression::Block(ref block) => self.pp_block_expression(block)?,
             ir::Expression::LValueToRValue(ref sub) => {
@@ -242,11 +241,11 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
         };
 
         let id = self.new_expr();
-        writeln_pp!(self, "%{}: {} = {};", id, ty_to_string(ty), rhs)?;
+        writeln_pp!(self, "%{} = {};", id, rhs)?;
         Ok(id)
     }
 
-    pub fn pp_expression_as_block(&mut self, expr: &ir::TypedExpression) -> io::Result<()> {
+    pub fn pp_expression_as_block(&mut self, expr: &ir::Expression) -> io::Result<()> {
         writeln_pp!(self, "{{")?;
         self.tab += 1;
         let res = self.pp_expression_percent(expr)?;

@@ -229,7 +229,7 @@ impl<'s> Backend<'s> {
 
     fn codegen_if(
         &mut self,
-        cond: ir::TypedExpression,
+        cond: ir::Expression,
         body: ir::BlockStatement,
         else_clause: ir::BlockStatement,
     ) -> bool {
@@ -264,7 +264,7 @@ impl<'s> Backend<'s> {
         res
     }
 
-    fn codegen_while(&mut self, cond: ir::TypedExpression, body: ir::BlockStatement) -> bool {
+    fn codegen_while(&mut self, cond: ir::Expression, body: ir::BlockStatement) -> bool {
         let loop_bb = self.context.append_bb_to_func(self.current_func, b"loop\0");
         let then_bb = self.context.append_bb_to_func(self.current_func, b"then\0");
         let end_bb = self.context.append_bb_to_func(self.current_func, b"end\0");
@@ -291,7 +291,7 @@ impl<'s> Backend<'s> {
         self.builder.position_at_end(bb);
     }
 
-    fn codegen_return_statement(&mut self, expr: Option<ir::TypedExpression>) -> bool {
+    fn codegen_return_statement(&mut self, expr: Option<ir::Expression>) -> bool {
         if let Some(expr) = expr {
             let expr = self.codegen_expression(expr);
             self.builder.build_ret(expr);
@@ -311,8 +311,7 @@ impl<'s> Backend<'s> {
         true
     }
 
-    fn codegen_expression(&mut self, expr: ir::TypedExpression) -> LLVMValueRef {
-        let ir::TypedExpression { ty, expr } = expr;
+    fn codegen_expression(&mut self, expr: ir::Expression) -> LLVMValueRef {
         match expr {
             ir::Expression::Block(block) => self.codegen_expr_block(*block),
             ir::Expression::LValueToRValue(sub) => self.codegen_l2r_expr(*sub),
@@ -344,7 +343,7 @@ impl<'s> Backend<'s> {
         self.codegen_expression(block.final_expr)
     }
 
-    fn codegen_l2r_expr(&mut self, expr: ir::TypedExpression) -> LLVMValueRef {
+    fn codegen_l2r_expr(&mut self, expr: ir::Expression) -> LLVMValueRef {
         let expr = self.codegen_expression(expr);
         self.builder.build_load(expr, b"\0")
     }
@@ -379,11 +378,7 @@ impl<'s> Backend<'s> {
         self.ids[&id]
     }
 
-    fn codegen_assign(
-        &mut self,
-        lhs: ir::TypedExpression,
-        rhs: ir::TypedExpression,
-    ) -> LLVMValueRef {
+    fn codegen_assign(&mut self, lhs: ir::Expression, rhs: ir::Expression) -> LLVMValueRef {
         let lhs = self.codegen_expression(lhs);
         let rhs = self.codegen_expression(rhs);
 
@@ -395,8 +390,8 @@ impl<'s> Backend<'s> {
     fn codegen_binop(
         &mut self,
         binop: ir::BinaryOperatorKind,
-        lhs: ir::TypedExpression,
-        rhs: ir::TypedExpression,
+        lhs: ir::Expression,
+        rhs: ir::Expression,
     ) -> LLVMValueRef {
         let lhs = self.codegen_expression(lhs);
         let rhs = self.codegen_expression(rhs);
@@ -454,11 +449,7 @@ impl<'s> Backend<'s> {
         func(&self.builder, lhs, rhs, b"\0")
     }
 
-    fn codegen_unop(
-        &mut self,
-        unop: ir::UnaryOperatorKind,
-        sub: ir::TypedExpression,
-    ) -> LLVMValueRef {
+    fn codegen_unop(&mut self, unop: ir::UnaryOperatorKind, sub: ir::Expression) -> LLVMValueRef {
         let sub = self.codegen_expression(sub);
 
         match unop {
@@ -478,7 +469,7 @@ impl<'s> Backend<'s> {
     fn codegen_lvalue_unop(
         &mut self,
         lvalue_unop: ir::LValueUnaryOperatorKind,
-        sub: ir::TypedExpression,
+        sub: ir::Expression,
     ) -> LLVMValueRef {
         match lvalue_unop {
             ir::LValueUnaryOperatorKind::IntIncrement => self.codegen_incdecrement(sub, true),
@@ -487,7 +478,7 @@ impl<'s> Backend<'s> {
         }
     }
 
-    fn codegen_incdecrement(&mut self, sub: ir::TypedExpression, inc: bool) -> LLVMValueRef {
+    fn codegen_incdecrement(&mut self, sub: ir::Expression, inc: bool) -> LLVMValueRef {
         let ptr = self.codegen_expression(sub);
 
         let c1 = utils::const_int(self.codegen_type(&ty::Type::Int), 1, true);
@@ -504,11 +495,11 @@ impl<'s> Backend<'s> {
         ptr
     }
 
-    fn codegen_addressof(&mut self, sub: ir::TypedExpression) -> LLVMValueRef {
+    fn codegen_addressof(&mut self, sub: ir::Expression) -> LLVMValueRef {
         self.codegen_expression(sub)
     }
 
-    fn codegen_cast(&mut self, kind: ir::CastKind, sub: ir::TypedExpression) -> LLVMValueRef {
+    fn codegen_cast(&mut self, kind: ir::CastKind, sub: ir::Expression) -> LLVMValueRef {
         let sub = self.codegen_expression(sub);
 
         match kind {
@@ -532,24 +523,20 @@ impl<'s> Backend<'s> {
         }
     }
 
-    fn codegen_bitcast(&mut self, dest_ty: &ty::Type, sub: ir::TypedExpression) -> LLVMValueRef {
+    fn codegen_bitcast(&mut self, dest_ty: &ty::Type, sub: ir::Expression) -> LLVMValueRef {
         let sub = self.codegen_expression(sub);
         self.builder
             .build_bitcast(sub, self.codegen_type(dest_ty), b"\0")
     }
 
-    fn codegen_subscript(
-        &mut self,
-        ptr: ir::TypedExpression,
-        index: ir::TypedExpression,
-    ) -> LLVMValueRef {
+    fn codegen_subscript(&mut self, ptr: ir::Expression, index: ir::Expression) -> LLVMValueRef {
         let ptr = self.codegen_expression(ptr);
         let index = self.codegen_expression(index);
 
         self.builder.build_gep(ptr, vec![index], b"\0")
     }
 
-    fn codegen_funccall(&mut self, func: &str, args: Vec<ir::TypedExpression>) -> LLVMValueRef {
+    fn codegen_funccall(&mut self, func: &str, args: Vec<ir::Expression>) -> LLVMValueRef {
         let func = self.module
             .get_named_function(&CString::new(func.to_string()).unwrap());
         let args: Vec<_> = args.into_iter()

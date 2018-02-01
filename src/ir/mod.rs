@@ -60,16 +60,16 @@ pub struct VarDeclaration {
 pub enum Statement {
     Block(BlockStatement),
     If {
-        condition: TypedExpression,
+        condition: Expression,
         body: BlockStatement,
         else_clause: BlockStatement,
     },
     While {
-        condition: TypedExpression,
+        condition: Expression,
         body: BlockStatement,
     },
-    Return(Option<TypedExpression>), // None for void
-    Expression(TypedExpression),
+    Return(Option<Expression>), // None for void
+    Expression(Expression),
     Break,
     Continue,
 }
@@ -77,50 +77,44 @@ pub enum Statement {
 pub type BlockStatement = Vec<Statement>;
 
 #[derive(Debug, Clone)]
-pub struct TypedExpression {
-    pub ty: Type,
-    pub expr: Expression,
-}
-
-#[derive(Debug, Clone)]
 pub enum Expression {
     Block(Box<BlockExpression>),
-    LValueToRValue(Box<TypedExpression>),
-    RValueToPtr(Box<TypedExpression>),
+    LValueToRValue(Box<Expression>),
+    RValueToPtr(Box<Expression>),
     Literal(Literal),
     Identifier(IdentifierId),
     Assign {
-        lhs: Box<TypedExpression>,
-        rhs: Box<TypedExpression>,
+        lhs: Box<Expression>,
+        rhs: Box<Expression>,
     },
     BinaryOperator {
         binop: BinaryOperatorKind,
-        lhs: Box<TypedExpression>,
-        rhs: Box<TypedExpression>,
+        lhs: Box<Expression>,
+        rhs: Box<Expression>,
     },
     UnaryOperator {
         unop: UnaryOperatorKind,
-        sub: Box<TypedExpression>,
+        sub: Box<Expression>,
     },
     LValueUnaryOperator {
         lvalue_unop: LValueUnaryOperatorKind,
-        sub: Box<TypedExpression>,
+        sub: Box<Expression>,
     },
     Cast {
         kind: CastKind,
-        sub: Box<TypedExpression>,
+        sub: Box<Expression>,
     },
     BitCast {
         dest_ty: Type,
-        sub: Box<TypedExpression>,
+        sub: Box<Expression>,
     },
     FunctionCall {
         function: String,
-        args: Vec<TypedExpression>,
+        args: Vec<Expression>,
     },
     Subscipt {
-        ptr: Box<TypedExpression>,
-        index: Box<TypedExpression>,
+        ptr: Box<Expression>,
+        index: Box<Expression>,
     },
     NewArray {
         ty: Type,
@@ -131,7 +125,7 @@ pub enum Expression {
 #[derive(Debug, Clone)]
 pub struct BlockExpression {
     pub stmts: BlockStatement,
-    pub final_expr: TypedExpression,
+    pub final_expr: Expression,
 }
 
 #[derive(Debug, Clone, Copy)]
