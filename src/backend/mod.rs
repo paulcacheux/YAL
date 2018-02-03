@@ -42,7 +42,6 @@ struct Backend<'s> {
     module: Module,
     builder: IRBuilder,
     ids: HashMap<ir::IdentifierId, LLVMValueRef>,
-    new_arrays: HashMap<ty::Type, LLVMValueRef>,
     strings: &'s Interner<String>,
     current_func: LLVMValueRef,
     current_break: LLVMBasicBlockRef,
@@ -60,18 +59,12 @@ impl<'s> Backend<'s> {
             module,
             builder,
             ids: HashMap::new(),
-            new_arrays: HashMap::new(),
             strings,
             current_func: ptr::null_mut(),
             current_break: ptr::null_mut(),
             current_continue: ptr::null_mut(),
         }
     }
-
-    /*fn codegen_raw_array_type(&self, sub: &ty::Type) -> LLVMTypeRef {
-        self.context
-            .raw_array_ty(self.codegen_type(sub), self.context.i32_ty())
-    }*/
 
     fn codegen_type(&self, ty: &ty::Type) -> LLVMTypeRef {
         match *ty {
@@ -82,52 +75,8 @@ impl<'s> Backend<'s> {
             ty::Type::String => utils::pointer_ty(self.context.i8_ty()),
             ty::Type::LValue(ref sub) => utils::pointer_ty(self.codegen_type(sub)),
             ty::Type::Pointer(ref sub) => utils::pointer_ty(self.codegen_type(sub)),
-            ty::Type::Array(ref sub, size) => utils::array_ty(self.codegen_type(sub), size),
         }
     }
-
-    /*fn codegen_new_array_func(&mut self, ty: &ty::Type) -> LLVMValueRef {
-        let raw_array_llvm_ty = self.codegen_raw_array_type(ty);
-        let array_llvm_ty = utils::pointer_ty(raw_array_llvm_ty);
-        let sub_llvm_ty = self.codegen_type(ty);
-        let func_ty = utils::function_ty(array_llvm_ty, vec![self.context.i32_ty()], false);
-
-        let func_name = format!("builtin.new_array.{}", utils::ty_to_string(ty));
-        let c_name = CString::new(func_name).unwrap();
-
-        let func_ref = self.module.add_function(&c_name, func_ty);
-        let builder = IRBuilder::new_in_context(&self.context);
-        let entry_bb = self.context.append_bb_to_func(func_ref, b"entry\0");
-        builder.position_at_end(entry_bb);
-
-        let size = builder.build_zext(
-            utils::get_func_param(func_ref, 0),
-            self.context.i64_ty(),
-            b"\0",
-        );
-
-        let array_ptr = builder.build_malloc(raw_array_llvm_ty, b"\0");
-        let sub_array_ptr = builder.build_array_malloc(sub_llvm_ty, size, b"\0");
-
-        let ptr_field = builder.build_struct_gep(array_ptr, 0, b"\0");
-        let size_field = builder.build_struct_gep(array_ptr, 1, b"\0");
-
-        builder.build_store(sub_array_ptr, ptr_field);
-        builder.build_store(utils::get_func_param(func_ref, 0), size_field);
-        builder.build_ret(array_ptr);
-
-        func_ref
-    }
-
-    fn get_new_array_func(&mut self, ty: &ty::Type) -> LLVMValueRef {
-        if let Some(&value) = self.new_arrays.get(ty) {
-            value
-        } else {
-            let new_func = self.codegen_new_array_func(ty);
-            self.new_arrays.insert(ty.clone(), new_func);
-            new_func
-        }
-    }*/
 
     fn pre_codegen_extern_function(&mut self, exfunc: &ir::ExternFunction) {
         let ret_ty = self.codegen_type(&exfunc.ty.return_ty);
@@ -330,8 +279,7 @@ impl<'s> Backend<'s> {
             ir::Expression::FunctionCall { function, args } => {
                 self.codegen_funccall(&function, args)
             }
-            ir::Expression::Subscipt { ptr, index } => self.codegen_subscript(*ptr, *index),
-            ir::Expression::NewArray { ty, size } => self.codegen_new_array(ty, size),
+            ir::Expression::Subscript { ptr, index } => self.codegen_subscript(*ptr, *index),
             _ => unimplemented!(),
         }
     }
@@ -518,8 +466,7 @@ impl<'s> Backend<'s> {
             ir::CastKind::IntToBoolean => {
                 self.builder
                     .build_trunc(sub, self.codegen_type(&ty::Type::Boolean), b"\0")
-            } // ir::CastKind::PtrToPtr => self.builder.build_bitcast(sub, llvm_ty, b"\0"), -->
-              // bitcast
+            }
         }
     }
 
@@ -544,12 +491,6 @@ impl<'s> Backend<'s> {
             .collect();
 
         self.builder.build_call(func, args, b"\0")
-    }
-
-    fn codegen_new_array(&mut self, ty: ty::Type, size: usize) -> LLVMValueRef {
-        let llvm_ty = self.codegen_type(&ty::Type::Array(Box::new(ty), size));
-        let array_ptr = self.builder.build_alloca(llvm_ty, b"\0");
-        self.builder.build_load(array_ptr, b"\0")
     }
 
     fn into_exec_module(self) -> ExecutionModule {

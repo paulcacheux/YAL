@@ -84,17 +84,6 @@ pub fn lvalue_to_rvalue(expression: TypedExpression) -> TypedExpression {
 pub fn unsure_subscriptable(expr: TypedExpression) -> Option<(ty::Type, ir::Expression)> {
     match expr.ty.clone() {
         ty::Type::Pointer(sub) => Some((*sub, expr.expr)),
-        ty::Type::Array(sub, _) => {
-            let ty = *sub;
-            let ptr_ty = ty::Type::Pointer(Box::new(ty.clone()));
-            Some((
-                ty,
-                ir::Expression::BitCast {
-                    dest_ty: ptr_ty.clone(),
-                    sub: Box::new(ir::Expression::RValueToPtr(Box::new(expr.expr))),
-                },
-            ))
-        }
         _ => None,
     }
 }

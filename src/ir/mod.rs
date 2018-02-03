@@ -68,6 +68,12 @@ pub enum Statement {
         condition: Expression,
         body: BlockStatement,
     },
+    /*For {
+        init: Expression,
+        condition: Expression,
+        step: Expression,
+        body: BlockStatement,
+    },*/
     Return(Option<Expression>), // None for void
     Expression(Expression),
     Break,
@@ -112,13 +118,9 @@ pub enum Expression {
         function: String,
         args: Vec<Expression>,
     },
-    Subscipt {
+    Subscript {
         ptr: Box<Expression>,
         index: Box<Expression>,
-    },
-    NewArray {
-        ty: Type,
-        size: usize,
     },
 }
 

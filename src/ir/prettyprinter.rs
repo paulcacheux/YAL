@@ -230,13 +230,10 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
 
                 format!("call {}({})", function, args.join(", "))
             }
-            ir::Expression::Subscipt { ref ptr, ref index } => {
+            ir::Expression::Subscript { ref ptr, ref index } => {
                 let ptr = self.pp_expression_percent(ptr)?;
                 let index = self.pp_expression_percent(index)?;
                 format!("Subscript(ptr: {}, index: {})", ptr, index)
-            }
-            ir::Expression::NewArray { ref ty, size } => {
-                format!("newarray {} x {}", ty_to_string(ty), size)
             }
         };
 
@@ -288,6 +285,5 @@ fn ty_to_string(ty: &ty::Type) -> String {
         ty::Type::Void => "void".to_string(),
         ty::Type::LValue(ref sub) => format!("&{}", ty_to_string(sub)),
         ty::Type::Pointer(ref sub) => format!("*{}", ty_to_string(sub)),
-        ty::Type::Array(ref sub, size) => format!("[{}; {}]", ty_to_string(sub), size),
     }
 }
