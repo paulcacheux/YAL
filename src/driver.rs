@@ -161,7 +161,7 @@ fn main() {
     let runtime_input = include_str!("../runtime/io.yal");
     let runtime_lexer = lexer::Lexer::new(&runtime_input);
     let runtime_ast = parser::parse_program(runtime_lexer, &mut string_interner).unwrap();
-    let runtime_ir = ir_translator::translate_program(runtime_ast, None).unwrap();
+    let runtime_ir = trans::translate_program(runtime_ast, None).unwrap();
 
     let input = slurp_file(options.input_path).unwrap();
     let codemap = codemap::CodeMap::new(options.input_path, &input);
@@ -179,8 +179,8 @@ fn main() {
     let ir_prog = continue_or_exit(
         options.input_path,
         &codemap,
-        ir_translator::translate_program(ast, Some(runtime_ir)).and_then(|ir_prog| {
-            ir_translator::check_if_main_declaration(&ir_prog)?;
+        trans::translate_program(ast, Some(runtime_ir)).and_then(|ir_prog| {
+            trans::check_if_main_declaration(&ir_prog)?;
             Ok(ir_prog)
         }),
     );
