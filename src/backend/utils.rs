@@ -1,7 +1,6 @@
 use libc;
 use llvm::core::*;
 use llvm::prelude::*;
-use ty;
 
 pub fn c_str(b: &[u8]) -> *const libc::c_char {
     b.as_ptr() as *const _
@@ -46,6 +45,10 @@ pub fn const_int(ty: LLVMTypeRef, c: i64, sign_ext: bool) -> LLVMValueRef {
 
 pub fn const_real(ty: LLVMTypeRef, r: f64) -> LLVMValueRef {
     unsafe { LLVMConstReal(ty, r as _) }
+}
+
+pub fn type_of(v: LLVMValueRef) -> LLVMTypeRef {
+    unsafe { LLVMTypeOf(v) }
 }
 
 /*pub fn ty_to_string(ty: &ty::Type) -> String {

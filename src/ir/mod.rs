@@ -155,6 +155,10 @@ pub enum BinaryOperatorKind {
     DoubleGreater,
     IntGreaterEqual,
     DoubleGreaterEqual,
+
+    PtrPlusOffset,
+    PtrMinusOffset,
+    PtrDiff,
 }
 
 #[derive(Debug, Clone, Copy)]

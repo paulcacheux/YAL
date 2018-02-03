@@ -368,6 +368,27 @@ impl<'s> Backend<'s> {
             };
         }
 
+        fn build_ptr_plus_offset(
+            b: &IRBuilder,
+            l: LLVMValueRef,
+            r: LLVMValueRef,
+            n: &[u8],
+        ) -> LLVMValueRef {
+            b.build_gep(l, vec![r], n)
+        }
+
+        fn build_ptr_minus_offset(
+            b: &IRBuilder,
+            l: LLVMValueRef,
+            r: LLVMValueRef,
+            n: &[u8],
+        ) -> LLVMValueRef {
+            let ty = utils::type_of(r);
+            let const0 = utils::const_int(ty, 0, false);
+            let neg = b.build_sub(const0, r, b"\0");
+            b.build_gep(l, vec![neg], n)
+        }
+
         let func = match binop {
             bok::IntPlus => IRBuilder::build_add,
             bok::DoublePlus => IRBuilder::build_fadd,
@@ -392,6 +413,9 @@ impl<'s> Backend<'s> {
             bok::DoubleGreater => cmp_builder!(@f LLVMRealUGT),
             bok::IntGreaterEqual => cmp_builder!(@i LLVMIntSGE),
             bok::DoubleGreaterEqual => cmp_builder!(@f LLVMRealUGE),
+            bok::PtrPlusOffset => build_ptr_plus_offset,
+            bok::PtrMinusOffset => build_ptr_minus_offset,
+            bok::PtrDiff => unimplemented!(),
         };
 
         func(&self.builder, lhs, rhs, b"\0")

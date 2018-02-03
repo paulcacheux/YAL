@@ -85,7 +85,15 @@ pub fn binop_typeck(
             ty::Type::Boolean,
             ir::BinaryOperatorKind::DoubleGreaterEqual,
         )),
-
+        (Plus, &ty::Type::Pointer(ref sub), &ty::Type::Int) => {
+            Some((*sub.clone(), ir::BinaryOperatorKind::PtrPlusOffset))
+        }
+        (Minus, &ty::Type::Pointer(ref sub), &ty::Type::Int) => {
+            Some((*sub.clone(), ir::BinaryOperatorKind::PtrMinusOffset))
+        }
+        (Minus, &ty::Type::Pointer(ref a), &ty::Type::Pointer(ref b)) if *a == *b => {
+            Some((ty::Type::Int, ir::BinaryOperatorKind::PtrDiff))
+        }
         _ => None,
     }
 }
