@@ -1,23 +1,24 @@
 fn main() -> int {
-    let y: double = -1.2;
-    while (y < 1.2) {
-        let x: double = -2.05;
-        while (x < 0.55) {
+    let y: double = 1.0;
+    while (y >= -1.0) {
+        let x: double = -2.5;
+        while (x < 1.0) {
             let real: double = 0.0;
             let imag: double = 0.0;
             let iter: int = 0;
+            let max_iter: int = 1000;
 
-            while (iter < 100) {
+            while (real * real + imag * imag < 4.0 && iter < max_iter) {
                 let next_real: double = real * real - imag * imag + x;
                 let next_imag: double = 2.0 * real * imag + y;
 
                 real = next_real;
                 imag = next_imag;
 
-                iter = iter + 1;
+                iter++;
             }
             
-            if (real * real + imag * imag < 4.0) {
+            if (iter == max_iter) {
                 printf("#");
             } else {
                 printf(".");
@@ -27,7 +28,7 @@ fn main() -> int {
         }
         printf("\n");
 
-        y = y + 0.05;
+        y = y - 0.05;
     }
         
 

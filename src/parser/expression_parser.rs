@@ -153,13 +153,13 @@ pub(super) fn parse_expression_inner<'si, 'input>(
                                 && next_infos.precedence == infos.precedence);
                         then {
                             // really unsure about infos or next_infos.precedenc
-                            rhs = parse_expression_inner(parser, rhs, infos.precedence)?;
+                            // rhs = parse_expression_inner(parser, rhs, infos.precedence)?;
                             // rhs = parse_expression_inner(parser, rhs, next_infos.precedence)?;
-                            /*if next_infos.relational {
+                            if next_infos.relational {
                                 rhs = parse_expression_inner(parser, rhs, infos.precedence)?;
                             } else {
                                 rhs = parse_expression_inner(parser, rhs, next_infos.precedence)?;
-                            }*/
+                            }
                         } else {
                             break
                         }
