@@ -118,10 +118,6 @@ pub enum Expression {
         function: String,
         args: Vec<Expression>,
     },
-    Subscript {
-        ptr: Box<Expression>,
-        index: Box<Expression>,
-    },
 }
 
 #[derive(Debug, Clone)]

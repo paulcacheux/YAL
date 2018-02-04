@@ -1,16 +1,15 @@
-int main() {
-    double y = -1.2;
+fn main() -> int {
+    let y: double = -1.2;
     while (y < 1.2) {
-        
-        double x = -2.05;
+        let x: double = -2.05;
         while (x < 0.55) {
-            double real = 0.0;
-            double imag = 0.0;
-            int iter = 0;
-            
+            let real: double = 0.0;
+            let imag: double = 0.0;
+            let iter: int = 0;
+
             while (iter < 100) {
-                double next_real = real * real - imag * imag + x;
-                double next_imag = 2.0 * real * imag + y;
+                let next_real: double = real * real - imag * imag + x;
+                let next_imag: double = 2.0 * real * imag + y;
 
                 real = next_real;
                 imag = next_imag;

@@ -542,9 +542,13 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
         Ok(utils::TypedExpression {
             ty: sub_ty,
-            expr: ir::Expression::Subscript {
-                ptr: Box::new(ptr),
-                index: Box::new(index.expr),
+            expr: ir::Expression::UnaryOperator {
+                unop: ir::UnaryOperatorKind::PointerDeref,
+                sub: Box::new(ir::Expression::BinaryOperator {
+                    binop: ir::BinaryOperatorKind::PtrPlusOffset,
+                    lhs: Box::new(ptr),
+                    rhs: Box::new(index.expr),
+                }),
             },
         })
     }

@@ -230,11 +230,6 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
 
                 format!("call {}({})", function, args.join(", "))
             }
-            ir::Expression::Subscript { ref ptr, ref index } => {
-                let ptr = self.pp_expression_percent(ptr)?;
-                let index = self.pp_expression_percent(index)?;
-                format!("Subscript(ptr: {}, index: {})", ptr, index)
-            }
         };
 
         let id = self.new_expr();

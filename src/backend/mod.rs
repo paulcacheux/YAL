@@ -279,7 +279,6 @@ impl<'s> Backend<'s> {
             ir::Expression::FunctionCall { function, args } => {
                 self.codegen_funccall(&function, args)
             }
-            ir::Expression::Subscript { ptr, index } => self.codegen_subscript(*ptr, *index),
             _ => unimplemented!(),
         }
     }
@@ -498,13 +497,6 @@ impl<'s> Backend<'s> {
         let sub = self.codegen_expression(sub);
         self.builder
             .build_bitcast(sub, self.codegen_type(dest_ty), b"\0")
-    }
-
-    fn codegen_subscript(&mut self, ptr: ir::Expression, index: ir::Expression) -> LLVMValueRef {
-        let ptr = self.codegen_expression(ptr);
-        let index = self.codegen_expression(index);
-
-        self.builder.build_gep(ptr, vec![index], b"\0")
     }
 
     fn codegen_funccall(&mut self, func: &str, args: Vec<ir::Expression>) -> LLVMValueRef {
