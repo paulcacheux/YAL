@@ -21,7 +21,6 @@ pub enum ParsingError {
 
 #[derive(Debug, Clone)]
 pub enum TranslationError {
-    LetNoTypeNorValue,
     FunctionAlreadyDefined(String),
     ParameterAlreadyDefined(String),
     LocalAlreadyDefined(String),
@@ -44,7 +43,6 @@ pub enum TranslationError {
     SubscriptNotArray(ty::Type),
     LengthOnNonArray(ty::Type),
     MemberUndefined,
-    NoDefaultValue,
 }
 
 impl From<LexingError> for ParsingError {
@@ -97,9 +95,6 @@ impl fmt::Display for ParsingError {
 impl fmt::Display for TranslationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            TranslationError::LetNoTypeNorValue => {
-                write!(f, "Let statement needs a value or a type")
-            }
             TranslationError::FunctionAlreadyDefined(ref func) => {
                 write!(f, "The function '{}' is already defined", func)
             }
@@ -172,7 +167,6 @@ impl fmt::Display for TranslationError {
                 write!(f, "Type '{:?}' doesn't have a length property", ty)
             }
             TranslationError::MemberUndefined => write!(f, "Undefined member"),
-            TranslationError::NoDefaultValue => write!(f, "No default value provided"),
         }
     }
 }

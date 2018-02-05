@@ -5,8 +5,8 @@ return 0 ;
 }
 // iterative factorial
 fn fact (n: int) -> int {
-let i:int;
-let r:int;
+let i:int = 0;
+let r:int = 0;
 i = 1 ;
 r = 1 ;
 while (i <= n) {

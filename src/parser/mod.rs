@@ -416,12 +416,8 @@ impl<'si, 'input> Parser<'si, 'input> {
             None
         };
 
-        let value = if let Token::Equal = self.lexer.peek_token()?.inner {
-            self.lexer.next_token()?;
-            Some(self.parse_expression()?)
-        } else {
-            None
-        };
+        expect!(self.lexer; Token::Equal, "=");
+        let value = self.parse_expression()?;
 
         let end_span = expect!(self.lexer; Token::SemiColon, ";");
         let span = Span::merge(begin_span, end_span);

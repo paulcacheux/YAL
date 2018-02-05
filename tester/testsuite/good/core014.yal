@@ -1,9 +1,9 @@
 /* Fibonacci. */
 
 fn main () -> int {
-let lo: int;
-let hi: int;
-let mx: int;
+let lo: int = 0;
+let hi: int = 0;
+let mx: int = 0;
   lo = 1 ;
   hi = lo ;
   mx = 5000000 ;

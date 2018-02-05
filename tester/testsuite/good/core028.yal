@@ -1,6 +1,6 @@
 fn main() -> int {
     // Arithmetic operations
-let x: int;
+let x: int = 0;
     x++;
     printInt(x);
     x--;

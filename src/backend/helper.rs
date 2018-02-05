@@ -305,28 +305,6 @@ impl IRBuilder {
         unsafe { LLVMBuildTrunc(self.builder, value, dest_ty, c_str(name)) }
     }
 
-    pub fn build_malloc(&self, ty: LLVMTypeRef, name: &[u8]) -> LLVMValueRef {
-        unsafe { LLVMBuildMalloc(self.builder, ty, c_str(name)) }
-    }
-
-    pub fn build_array_malloc(
-        &self,
-        ty: LLVMTypeRef,
-        size: LLVMValueRef,
-        name: &[u8],
-    ) -> LLVMValueRef {
-        unsafe { LLVMBuildArrayMalloc(self.builder, ty, size, c_str(name)) }
-    }
-
-    pub fn build_struct_gep(
-        &self,
-        struct_ptr: LLVMValueRef,
-        index: usize,
-        name: &[u8],
-    ) -> LLVMValueRef {
-        unsafe { LLVMBuildStructGEP(self.builder, struct_ptr, index as _, c_str(name)) }
-    }
-
     pub fn build_gep(
         &self,
         ptr: LLVMValueRef,

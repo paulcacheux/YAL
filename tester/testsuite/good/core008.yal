@@ -2,7 +2,7 @@
 // and possibly initialized in the same statement
 
 fn main() -> int {
-    let x: int;
+    let x: int = 0;
     let y: int = 7;
  x = -1234234;
  printInt(x);

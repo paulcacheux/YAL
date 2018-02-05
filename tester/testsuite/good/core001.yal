@@ -3,7 +3,7 @@ fn main() -> int {
 	printInt(rfac(10));
 	printInt(mfac(10));
     printInt(ifac(10));
-    let r: double; // just to test blocks
+    let r: double = 0.0; // just to test blocks
 	{
         let n: int = 10;
         let r: int = 1;
@@ -20,8 +20,8 @@ fn main() -> int {
 }
 
 fn fac(a: int) -> int {
-    let r: int;
-    let n: int;
+    let r: int = 0;
+    let n: int = 0;
 
 	r = 1;
 	n = a;
@@ -67,7 +67,7 @@ fn ifac2f(l: int, h: int) -> int {
           return l;
         if (l > h)
           return 1;
-        let m: int;
+        let m: int = 0;
         m = (l + h) / 2;
         return ifac2f(l,m) * ifac2f(m+1,h);
 }

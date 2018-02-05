@@ -88,17 +88,6 @@ pub fn unsure_subscriptable(expr: TypedExpression) -> Option<(ty::Type, ir::Expr
     }
 }
 
-pub fn default_value_for_ty(ty: &ty::Type) -> ir::Expression {
-    let lit = match *ty {
-        ty::Type::Int => common::Literal::IntLiteral(0),
-        ty::Type::Double => common::Literal::DoubleLiteral(0.0),
-        ty::Type::Boolean => common::Literal::BooleanLiteral(false),
-        _ => panic!("This type doesn't have a default value"),
-    };
-    // literal_to_texpr(lit)
-    ir::Expression::Literal(lit)
-}
-
 pub fn literal_to_texpr(lit: common::Literal) -> TypedExpression {
     let ty = lit.get_type();
     TypedExpression {

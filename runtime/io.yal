@@ -14,13 +14,13 @@ fn printString(x: string) {
 }
 
 fn readInt() -> int {
-    let res: int;
+    let res = 0;
     scanf("%d", &res);
     return res;
 }
 
 fn readDouble() -> double {
-    let res: double;
+    let res = 0.0;
     scanf("%lf", &res);
     return res;
 }

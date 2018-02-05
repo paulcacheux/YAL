@@ -1,7 +1,6 @@
 fn  main() -> int {
-let x: int;
+let x: int = 5;
 
-    x = 5;
     while (x > 0) {
         printInt(x);
         x--;

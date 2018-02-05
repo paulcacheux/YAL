@@ -212,44 +212,28 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         &mut self,
         ty: Option<ty::Type>,
         name: String,
-        value: Option<Spanned<ast::Expression>>,
+        value: Spanned<ast::Expression>,
         error_span: Span,
     ) -> TranslationResult<()> {
         // first compute the rhs to avoir local shadowing
-        let (ty, rhs) = match (ty, value) {
-            (Some(ty), Some(value)) => {
-                let value_span = value.span;
-                let expr = self.translate_expression(value)?;
-                let expr = utils::lvalue_to_rvalue(expr);
-                utils::check_eq_types(&expr.ty, &ty, value_span)?;
-                (ty, expr.expr)
-            }
-            (Some(ty), None) => {
-                if ty.has_default_value() {
-                    let def = utils::default_value_for_ty(&ty);
-                    (ty, def)
-                } else {
-                    return error!(TranslationError::NoDefaultValue, error_span);
-                }
-            }
-            (None, Some(value)) => {
-                let expr = self.translate_expression(value)?;
-                let expr = utils::lvalue_to_rvalue(expr);
-                (expr.ty, expr.expr)
-            }
-            (None, None) => {
-                return error!(TranslationError::LetNoTypeNorValue, error_span);
-            }
-        };
 
-        if let Some(id) = self.symbol_table.register_local(name.clone(), ty.clone()) {
+        let value_span = value.span;
+        let rhs = self.translate_expression(value)?;
+        let rhs = utils::lvalue_to_rvalue(rhs);
+        if let Some(ty) = ty {
+            utils::check_eq_types(&rhs.ty, &ty, value_span)?;
+        }
+
+        if let Some(id) = self.symbol_table
+            .register_local(name.clone(), rhs.ty.clone())
+        {
             self.func_builder
                 .var_declarations
-                .push(ir::VarDeclaration { ty, id });
+                .push(ir::VarDeclaration { ty: rhs.ty, id });
             self.statements
                 .push(ir::Statement::Expression(utils::build_assign_to_id(
                     id,
-                    rhs,
+                    rhs.expr,
                 )))
         } else {
             return error!(TranslationError::LocalAlreadyDefined(name), error_span);

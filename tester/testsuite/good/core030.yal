@@ -1,13 +1,13 @@
 fn main() -> int {
-let dA: double;
-let dB: double;
+let dA: double = 0.0;
+let dB: double = 0.0;
     dA=1.4e-3;
     dB=0.4e-3;
     if (dA-dB == 0.001) {
         printInt(99);
     }
-let iA: int;
-let iB: int;
+let iA: int = 0;
+let iB: int = 0;
     iA=342;
     iB=5123123;
     printInt(iA-iB);

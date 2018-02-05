@@ -100,9 +100,9 @@ impl BlockStatement {
 
 #[derive(Debug, Clone)]
 pub struct LetStatement {
-    pub ty: Option<Type>,
     pub name: String,
-    pub value: Option<Spanned<Expression>>,
+    pub ty: Option<Type>,
+    pub value: Spanned<Expression>,
 }
 
 #[derive(Debug, Clone)]
