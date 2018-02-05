@@ -46,16 +46,3 @@ pub fn const_real(ty: LLVMTypeRef, r: f64) -> LLVMValueRef {
 pub fn type_of(v: LLVMValueRef) -> LLVMTypeRef {
     unsafe { LLVMTypeOf(v) }
 }
-
-/*pub fn ty_to_string(ty: &ty::Type) -> String {
-    match *ty {
-        ty::Type::Int => "int".to_string(),
-        ty::Type::Double => "double".to_string(),
-        ty::Type::Boolean => "boolean".to_string(),
-        ty::Type::String => "string".to_string(),
-        ty::Type::Void => "void".to_string(),
-        ty::Type::LValue(ref sub) => format!("lvalue.{}", ty_to_string(sub)),
-        ty::Type::Array(ref sub) => format!("array.{}", ty_to_string(sub)),
-        _ => unimplemented!(),
-    }
-}*/
