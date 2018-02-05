@@ -408,14 +408,21 @@ impl<'si, 'input> Parser<'si, 'input> {
     fn parse_let_statement(&mut self) -> ParsingResult<Spanned<ast::Statement>> {
         let begin_span = expect!(self.lexer; Token::LetKeyword, "let");
         let name = self.parse_identifier()?;
-        expect!(self.lexer; Token::Colon, ":");
-        let ty = self.parse_type(false)?.inner;
+
+        let ty = if let Token::Colon = self.lexer.peek_token()?.inner {
+            self.lexer.next_token()?;
+            Some(self.parse_type(false)?.inner)
+        } else {
+            None
+        };
+
         let value = if let Token::Equal = self.lexer.peek_token()?.inner {
             self.lexer.next_token()?;
             Some(self.parse_expression()?)
         } else {
             None
         };
+
         let end_span = expect!(self.lexer; Token::SemiColon, ";");
         let span = Span::merge(begin_span, end_span);
 

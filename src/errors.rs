@@ -21,6 +21,7 @@ pub enum ParsingError {
 
 #[derive(Debug, Clone)]
 pub enum TranslationError {
+    LetNoTypeNorValue,
     FunctionAlreadyDefined(String),
     ParameterAlreadyDefined(String),
     LocalAlreadyDefined(String),
@@ -96,6 +97,9 @@ impl fmt::Display for ParsingError {
 impl fmt::Display for TranslationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            TranslationError::LetNoTypeNorValue => {
+                write!(f, "Let statement needs a value or a type")
+            }
             TranslationError::FunctionAlreadyDefined(ref func) => {
                 write!(f, "The function '{}' is already defined", func)
             }
