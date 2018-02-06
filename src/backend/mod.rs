@@ -15,8 +15,12 @@ mod utils;
 use self::helper::*;
 use self::execution_module::ExecutionModule;
 
-pub fn llvm_codegen_program(program: ir::Program, strings: &Interner<String>) -> ExecutionModule {
-    let mut backend = Backend::new(strings);
+pub fn llvm_codegen_program(
+    program: ir::Program,
+    strings: &Interner<String>,
+    types: &ty::TyContext,
+) -> ExecutionModule {
+    let mut backend = Backend::new(strings, types);
 
     for decl in &program.declarations {
         match *decl {
@@ -37,19 +41,20 @@ pub fn llvm_codegen_program(program: ir::Program, strings: &Interner<String>) ->
 }
 
 #[derive(Debug, Clone)]
-struct Backend<'s> {
+struct Backend<'s, 't> {
     context: Context,
     module: Module,
     builder: IRBuilder,
     ids: HashMap<ir::IdentifierId, LLVMValueRef>,
     strings: &'s Interner<String>,
+    types: &'t ty::TyContext,
     current_func: LLVMValueRef,
     current_break: LLVMBasicBlockRef,
     current_continue: LLVMBasicBlockRef,
 }
 
-impl<'s> Backend<'s> {
-    fn new(strings: &'s Interner<String>) -> Self {
+impl<'s, 't> Backend<'s, 't> {
+    fn new(strings: &'s Interner<String>, types: &'t ty::TyContext) -> Self {
         let context = Context::new();
         let module = Module::new_in_context(&context, b"main\0");
         let builder = IRBuilder::new_in_context(&context);
@@ -60,31 +65,34 @@ impl<'s> Backend<'s> {
             builder,
             ids: HashMap::new(),
             strings,
+            types,
             current_func: ptr::null_mut(),
             current_break: ptr::null_mut(),
             current_continue: ptr::null_mut(),
         }
     }
 
-    fn codegen_type(&self, ty: &ty::Type) -> LLVMTypeRef {
-        match *ty {
-            ty::Type::Void => self.context.void_ty(),
-            ty::Type::Int => self.context.i32_ty(),
-            ty::Type::Double => self.context.double_ty(),
-            ty::Type::Boolean => self.context.i1_ty(),
-            ty::Type::String => utils::pointer_ty(self.context.i8_ty()),
-            ty::Type::LValue(ref sub) => utils::pointer_ty(self.codegen_type(sub)),
-            ty::Type::Pointer(ref sub) => utils::pointer_ty(self.codegen_type(sub)),
+    fn codegen_type(&self, ty: ty::Type) -> LLVMTypeRef {
+        let type_value = self.types.get_typevalue_from_id(ty);
+
+        match type_value {
+            ty::TypeValue::Void => self.context.void_ty(),
+            ty::TypeValue::Int => self.context.i32_ty(),
+            ty::TypeValue::Double => self.context.double_ty(),
+            ty::TypeValue::Boolean => self.context.i1_ty(),
+            ty::TypeValue::String => utils::pointer_ty(self.context.i8_ty()),
+            ty::TypeValue::LValue(sub) => utils::pointer_ty(self.codegen_type(sub)),
+            ty::TypeValue::Pointer(sub) => utils::pointer_ty(self.codegen_type(sub)),
         }
     }
 
     fn pre_codegen_extern_function(&mut self, exfunc: &ir::ExternFunction) {
-        let ret_ty = self.codegen_type(&exfunc.ty.return_ty);
+        let ret_ty = self.codegen_type(exfunc.ty.return_ty);
         let param_types: Vec<_> = exfunc
             .ty
             .parameters_ty
             .iter()
-            .map(|ty| self.codegen_type(ty))
+            .map(|&ty| self.codegen_type(ty))
             .collect();
 
         let func_ty = utils::function_ty(ret_ty, param_types, exfunc.ty.is_vararg);
@@ -94,11 +102,11 @@ impl<'s> Backend<'s> {
     }
 
     fn pre_codegen_function(&mut self, function: &ir::Function) {
-        let ret_ty = self.codegen_type(&function.return_ty);
+        let ret_ty = self.codegen_type(function.return_ty);
         let param_types: Vec<_> = function
             .parameters
             .iter()
-            .map(|&(ref ty, _)| self.codegen_type(ty))
+            .map(|&(ty, _)| self.codegen_type(ty))
             .collect();
 
         let func_ty = utils::function_ty(ret_ty, param_types, false);
@@ -116,11 +124,11 @@ impl<'s> Backend<'s> {
         self.current_func = func_ref;
 
         for (index, (ty, id)) in function.parameters.into_iter().enumerate() {
-            self.codegen_parameter(&ty, id, func_ref, index);
+            self.codegen_parameter(ty, id, func_ref, index);
         }
 
         for decl in function.var_declarations {
-            self.codegen_vardecl(&decl.ty, decl.id)
+            self.codegen_vardecl(decl.ty, decl.id)
         }
 
         if !self.codegen_block_statement(function.body) {
@@ -130,7 +138,7 @@ impl<'s> Backend<'s> {
 
     fn codegen_parameter(
         &mut self,
-        ty: &ty::Type,
+        ty: ty::Type,
         id: ir::IdentifierId,
         func: LLVMValueRef,
         index: usize,
@@ -170,7 +178,7 @@ impl<'s> Backend<'s> {
         }
     }
 
-    fn codegen_vardecl(&mut self, ty: &ty::Type, id: ir::IdentifierId) {
+    fn codegen_vardecl(&mut self, ty: ty::Type, id: ir::IdentifierId) {
         let llvm_ty = self.codegen_type(ty);
         let ptr = self.builder.build_alloca(llvm_ty, b"\0");
         self.ids.insert(id, ptr);
@@ -275,7 +283,7 @@ impl<'s> Backend<'s> {
                 self.codegen_lvalue_unop(lvalue_unop, *sub)
             }
             ir::Expression::Cast { kind, sub } => self.codegen_cast(kind, *sub),
-            ir::Expression::BitCast { dest_ty, sub } => self.codegen_bitcast(&dest_ty, *sub),
+            ir::Expression::BitCast { dest_ty, sub } => self.codegen_bitcast(dest_ty, *sub),
             ir::Expression::FunctionCall { function, args } => {
                 self.codegen_funccall(&function, args)
             }
@@ -298,15 +306,15 @@ impl<'s> Backend<'s> {
     fn codegen_literal(&mut self, literal: common::Literal) -> LLVMValueRef {
         match literal {
             common::Literal::IntLiteral(i) => {
-                let ty = self.codegen_type(&ty::Type::Int);
+                let ty = self.codegen_type(self.types.get_int_ty());
                 utils::const_int(ty, i, true)
             }
             common::Literal::DoubleLiteral(d) => {
-                let ty = self.codegen_type(&ty::Type::Double);
+                let ty = self.codegen_type(self.types.get_double_ty());
                 utils::const_real(ty, d)
             }
             common::Literal::BooleanLiteral(b) => {
-                let ty = self.codegen_type(&ty::Type::Boolean);
+                let ty = self.codegen_type(self.types.get_boolean_ty());
                 utils::const_int(ty, b as _, false)
             }
             common::Literal::StringLiteral(id) => self.codegen_string_literal(id),
@@ -317,7 +325,7 @@ impl<'s> Backend<'s> {
         let s = self.strings.get_ref(id);
 
         let gs = self.builder.build_global_string_ptr(s.to_string(), b"\0");
-        let s_ty = self.codegen_type(&ty::Type::String);
+        let s_ty = self.codegen_type(self.types.get_string_ty());
         self.builder.build_bitcast(gs, s_ty, b"\0")
     }
 
@@ -425,11 +433,11 @@ impl<'s> Backend<'s> {
 
         match unop {
             ir::UnaryOperatorKind::IntMinus => {
-                let const0 = utils::const_int(self.codegen_type(&ty::Type::Int), 0, false);
+                let const0 = utils::const_int(self.codegen_type(self.types.get_int_ty()), 0, false);
                 self.builder.build_sub(const0, sub, b"\0")
             }
             ir::UnaryOperatorKind::DoubleMinus => {
-                let const0 = utils::const_real(self.codegen_type(&ty::Type::Double), 0.0);
+                let const0 = utils::const_real(self.codegen_type(self.types.get_double_ty()), 0.0);
                 self.builder.build_fsub(const0, sub, b"\0")
             }
             ir::UnaryOperatorKind::BooleanNot => self.builder.build_not(sub, b"\0"),
@@ -452,7 +460,7 @@ impl<'s> Backend<'s> {
     fn codegen_incdecrement(&mut self, sub: ir::Expression, inc: bool) -> LLVMValueRef {
         let ptr = self.codegen_expression(sub);
 
-        let c1 = utils::const_int(self.codegen_type(&ty::Type::Int), 1, true);
+        let c1 = utils::const_int(self.codegen_type(self.types.get_int_ty()), 1, true);
 
         let value = self.builder.build_load(ptr, b"\0");
         let value = if inc {
@@ -474,26 +482,27 @@ impl<'s> Backend<'s> {
         let sub = self.codegen_expression(sub);
 
         match kind {
-            ir::CastKind::IntToDouble => {
-                self.builder
-                    .build_si_to_fp(sub, self.codegen_type(&ty::Type::Double), b"\0")
-            }
+            ir::CastKind::IntToDouble => self.builder.build_si_to_fp(
+                sub,
+                self.codegen_type(self.types.get_double_ty()),
+                b"\0",
+            ),
             ir::CastKind::DoubleToInt => {
                 self.builder
-                    .build_fp_to_si(sub, self.codegen_type(&ty::Type::Int), b"\0")
+                    .build_fp_to_si(sub, self.codegen_type(self.types.get_int_ty()), b"\0")
             }
             ir::CastKind::BooleanToInt => {
                 self.builder
-                    .build_zext(sub, self.codegen_type(&ty::Type::Int), b"\0")
+                    .build_zext(sub, self.codegen_type(self.types.get_int_ty()), b"\0")
             }
             ir::CastKind::IntToBoolean => {
                 self.builder
-                    .build_trunc(sub, self.codegen_type(&ty::Type::Boolean), b"\0")
+                    .build_trunc(sub, self.codegen_type(self.types.get_boolean_ty()), b"\0")
             }
         }
     }
 
-    fn codegen_bitcast(&mut self, dest_ty: &ty::Type, sub: ir::Expression) -> LLVMValueRef {
+    fn codegen_bitcast(&mut self, dest_ty: ty::Type, sub: ir::Expression) -> LLVMValueRef {
         let sub = self.codegen_expression(sub);
         self.builder
             .build_bitcast(sub, self.codegen_type(dest_ty), b"\0")

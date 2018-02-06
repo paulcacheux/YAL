@@ -1,4 +1,3 @@
-use ty::*;
 use codemap::{Span, Spanned};
 use common::Literal;
 
@@ -9,30 +8,23 @@ pub struct Program {
 
 #[derive(Debug, Clone)]
 pub enum Declaration {
-    Typedef(Typedef),
     Struct(Struct),
     ExternFunction(ExternFunction),
     Function(Function),
 }
 
 #[derive(Debug, Clone)]
-pub struct Typedef {
-    pub struct_name: String,
-    pub ptr_name: String,
-}
-
-#[derive(Debug, Clone)]
 pub struct Struct {
     pub name: String,
-    pub fields: Vec<(Type, String)>,
+    pub fields: Vec<(Spanned<Type>, String)>,
     pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct ExternFunction {
-    pub return_ty: Type,
+    pub return_ty: Spanned<Type>,
     pub name: String,
-    pub parameters: Vec<Type>,
+    pub parameters: Vec<Spanned<Type>>,
     pub is_vararg: bool,
     pub span: Span,
 }
@@ -51,9 +43,9 @@ impl ExternFunction {
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub return_ty: Type,
+    pub return_ty: Spanned<Type>,
     pub name: String,
-    pub parameters: Vec<(Type, String)>,
+    pub parameters: Vec<(Spanned<Type>, String)>,
     pub body: BlockStatement,
     pub span: Span,
 }
@@ -101,7 +93,7 @@ impl BlockStatement {
 #[derive(Debug, Clone)]
 pub struct LetStatement {
     pub name: String,
-    pub ty: Option<Type>,
+    pub ty: Option<Spanned<Type>>,
     pub value: Spanned<Expression>,
 }
 
@@ -120,7 +112,7 @@ pub struct WhileStatement {
 
 #[derive(Debug, Clone)]
 pub struct ForStatement {
-    pub ty: Type,
+    pub ty: Spanned<Type>,
     pub name: String,
     pub array: Spanned<Expression>,
     pub body: Box<Spanned<Statement>>,
@@ -154,7 +146,7 @@ pub enum Expression {
         sub: Box<Spanned<Expression>>,
     },
     Cast {
-        as_ty: Type,
+        as_ty: Spanned<Type>,
         sub: Box<Spanned<Expression>>,
     },
     Subscript {
@@ -204,4 +196,17 @@ pub enum LValueUnaryOperatorKind {
     Increment,
     Decrement,
     AddressOf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Type {
+    Identifier(String),
+    Pointer(Box<Spanned<Type>>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionType {
+    pub return_ty: Spanned<Type>,
+    pub parameters_ty: Vec<Spanned<Type>>,
+    pub is_vararg: bool,
 }

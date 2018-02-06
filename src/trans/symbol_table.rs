@@ -27,23 +27,17 @@ pub struct Symbol {
 }
 
 #[derive(Debug, Clone)]
-pub struct SymbolTable<'g> {
+pub struct SymbolTable {
     id_counter: usize,
-    globals: &'g GlobalsTable,
     scopes: Vec<HashMap<String, Symbol>>,
 }
 
-impl<'g> SymbolTable<'g> {
-    pub fn new(globals: &GlobalsTable) -> SymbolTable {
+impl SymbolTable {
+    pub fn new() -> SymbolTable {
         SymbolTable {
             id_counter: 0,
-            globals,
             scopes: Vec::new(),
         }
-    }
-
-    pub fn lookup_function(&self, name: &str) -> Option<&ty::FunctionType> {
-        self.globals.lookup_function(name)
     }
 
     pub fn begin_scope(&mut self) {

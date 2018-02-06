@@ -5,20 +5,20 @@ use common;
 use codemap::*;
 use errors::TranslationError;
 
-mod symbol_table;
+pub mod context;
+pub mod symbol_table;
 #[macro_use]
 mod utils;
 mod typeck;
-use self::symbol_table::{GlobalsTable, SymbolTable};
+use self::context::Context;
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
 
 pub fn translate_program(
+    context: &mut Context,
     program: ast::Program,
     runtime: Option<ir::Program>,
 ) -> TranslationResult<ir::Program> {
-    let mut globals_table = GlobalsTable::new();
-
     let mut declarations = if let Some(runtime) = runtime {
         for decl in &runtime.declarations {
             let (name, fty) = match *decl {
@@ -27,7 +27,7 @@ pub fn translate_program(
                 }
                 ir::Declaration::Function(ref func) => (func.name.clone(), func.get_type()),
             };
-            globals_table.register_function(name, fty);
+            context.globals.register_function(name, fty);
         }
 
         runtime.declarations
@@ -40,11 +40,14 @@ pub fn translate_program(
     // pre translation
     for decl in &program.declarations {
         match *decl {
-            ast::Declaration::Typedef(_) => unimplemented!(),
             ast::Declaration::Struct(_) => unimplemented!(),
             ast::Declaration::ExternFunction(ref exfunc) => {
                 let func_ty = exfunc.get_type();
-                if globals_table.register_function(exfunc.name.clone(), func_ty.clone()) {
+                let func_ty = translate_function_type(&mut context.types, func_ty)?;
+                if context
+                    .globals
+                    .register_function(exfunc.name.clone(), func_ty.clone())
+                {
                     return error!(
                         TranslationError::FunctionAlreadyDefined(exfunc.name.clone()),
                         exfunc.span
@@ -58,7 +61,12 @@ pub fn translate_program(
                 }));
             }
             ast::Declaration::Function(ref func) => {
-                if globals_table.register_function(func.name.clone(), func.get_type()) {
+                let func_ty = func.get_type();
+                let func_ty = translate_function_type(&mut context.types, func_ty)?;
+                if context
+                    .globals
+                    .register_function(func.name.clone(), func_ty)
+                {
                     return error!(
                         TranslationError::FunctionAlreadyDefined(func.name.clone()),
                         func.span
@@ -70,11 +78,10 @@ pub fn translate_program(
 
     for decl in program.declarations {
         match decl {
-            ast::Declaration::Typedef(_) => unimplemented!(),
             ast::Declaration::Struct(_) => unimplemented!(),
             ast::Declaration::ExternFunction(_) => {} // already done
             ast::Declaration::Function(func) => declarations.push(ir::Declaration::Function(
-                translate_function(&globals_table, func)?,
+                translate_function(context, func)?,
             )),
         }
     }
@@ -83,15 +90,16 @@ pub fn translate_program(
 }
 
 fn translate_function(
-    globals: &GlobalsTable,
+    context: &mut Context,
     function: ast::Function,
 ) -> TranslationResult<ir::Function> {
-    let mut symbol_table = SymbolTable::new(globals);
-    symbol_table.begin_scope();
+    context.new_locals();
+    context.locals.begin_scope();
 
     let mut parameters = Vec::with_capacity(function.parameters.len());
     for (param_ty, param_name) in function.parameters {
-        if let Some(id) = symbol_table.register_local(param_name.clone(), param_ty.clone()) {
+        let param_ty = translate_type(&mut context.types, param_ty)?;
+        if let Some(id) = context.locals.register_local(param_name.clone(), param_ty) {
             parameters.push((param_ty, id));
         } else {
             return error!(
@@ -101,24 +109,25 @@ fn translate_function(
         }
     }
 
-    symbol_table.begin_scope();
+    context.locals.begin_scope();
 
-    let mut func_builder = FunctionBuilder::new(function.return_ty.clone());
-    let mut body = func_builder.translate_block_statement(&mut symbol_table, function.body)?;
+    let func_return_ty = translate_type(&mut context.types, function.return_ty)?;
+    let mut func_builder = FunctionBuilder::new(func_return_ty);
+    let mut body = func_builder.translate_block_statement(context, function.body)?;
 
     if !utils::check_return_paths(&body) {
-        if function.return_ty != ty::Type::Void {
+        if func_return_ty != context.types.get_void_ty() {
             return error!(TranslationError::NotAllPathsReturn, function.span);
         } else {
             body.push(ir::Statement::Return(None)); // we add a return void
         }
     }
 
-    symbol_table.end_scope();
-    symbol_table.end_scope();
+    context.locals.end_scope();
+    context.locals.end_scope();
 
     Ok(ir::Function {
-        return_ty: function.return_ty,
+        return_ty: func_return_ty,
         name: function.name,
         parameters,
         var_declarations: func_builder.var_declarations,
@@ -145,13 +154,13 @@ impl FunctionBuilder {
 
     fn translate_block_statement(
         &mut self,
-        st: &mut SymbolTable,
+        ctxt: &mut Context,
         block: ast::BlockStatement,
     ) -> TranslationResult<ir::BlockStatement> {
-        st.begin_scope();
+        ctxt.locals.begin_scope();
 
         let block = {
-            let mut builder = BlockBuilder::new(st, self);
+            let mut builder = BlockBuilder::new(ctxt, self);
 
             for stmt in block.statements {
                 builder.translate_statement(stmt)?;
@@ -160,22 +169,22 @@ impl FunctionBuilder {
             builder.collect()
         };
 
-        st.end_scope();
+        ctxt.locals.end_scope();
         Ok(block)
     }
 }
 
 #[derive(Debug)]
-struct BlockBuilder<'a, 'b: 'a, 'c> {
-    symbol_table: &'a mut SymbolTable<'b>,
+struct BlockBuilder<'ctxt, 'fb> {
+    context: &'ctxt mut Context,
     statements: ir::BlockStatement,
-    func_builder: &'c mut FunctionBuilder,
+    func_builder: &'fb mut FunctionBuilder,
 }
 
-impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
-    fn new(st: &'a mut SymbolTable<'b>, fb: &'c mut FunctionBuilder) -> Self {
+impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
+    fn new(context: &'ctxt mut Context, fb: &'fb mut FunctionBuilder) -> Self {
         BlockBuilder {
-            symbol_table: st,
+            context,
             statements: Vec::new(),
             func_builder: fb,
         }
@@ -186,11 +195,15 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
     }
 
     fn register_temp_local(&mut self, ty: ty::Type) -> ir::IdentifierId {
-        let id = self.symbol_table.new_identifier_id();
+        let id = self.context.locals.new_identifier_id();
         self.func_builder
             .var_declarations
             .push(ir::VarDeclaration { ty, id });
         id
+    }
+
+    fn translate_type(&mut self, ty: Spanned<ast::Type>) -> TranslationResult<ty::Type> {
+        translate_type(&mut self.context.types, ty)
     }
 
     fn translate_statement_as_block(
@@ -199,10 +212,11 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
     ) -> TranslationResult<ir::BlockStatement> {
         match statement.inner {
             ast::Statement::Empty => Ok(ir::BlockStatement::new()),
-            ast::Statement::Block(b) => self.func_builder
-                .translate_block_statement(self.symbol_table, b),
+            ast::Statement::Block(b) => {
+                self.func_builder.translate_block_statement(self.context, b)
+            }
             other => self.func_builder.translate_block_statement(
-                self.symbol_table,
+                self.context,
                 ast::BlockStatement::from_vec(vec![Spanned::new(other, statement.span)]),
             ),
         }
@@ -210,7 +224,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
     fn translate_var_decl(
         &mut self,
-        ty: Option<ty::Type>,
+        ty: Option<Spanned<ast::Type>>,
         name: String,
         value: Spanned<ast::Expression>,
         error_span: Span,
@@ -219,12 +233,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
 
         let value_span = value.span;
         let rhs = self.translate_expression(value)?;
-        let rhs = utils::lvalue_to_rvalue(rhs);
+        let rhs = utils::lvalue_to_rvalue(&self.context.types, rhs);
         if let Some(ty) = ty {
-            utils::check_eq_types(&rhs.ty, &ty, value_span)?;
+            let ty = self.translate_type(ty)?;
+            utils::check_eq_types(rhs.ty, ty, value_span)?;
         }
 
-        if let Some(id) = self.symbol_table
+        if let Some(id) = self.context
+            .locals
             .register_local(name.clone(), rhs.ty.clone())
         {
             self.func_builder
@@ -251,7 +267,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Statement::Empty => {}
             ast::Statement::Block(block) => {
                 let block = self.func_builder
-                    .translate_block_statement(self.symbol_table, block)?;
+                    .translate_block_statement(self.context, block)?;
                 self.statements.push(ir::Statement::Block(block));
             }
             ast::Statement::Let(ast::LetStatement { ty, name, value }) => {
@@ -264,8 +280,12 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }) => {
                 let condition_span = condition.span;
                 let condition = self.translate_expression(condition)?;
-                let condition = utils::lvalue_to_rvalue(condition);
-                utils::check_expect_type(&ty::Type::Boolean, &condition.ty, condition_span)?;
+                let condition = utils::lvalue_to_rvalue(&self.context.types, condition);
+                utils::check_expect_type(
+                    self.context.types.get_boolean_ty(),
+                    condition.ty,
+                    condition_span,
+                )?;
 
                 let body = self.translate_statement_as_block(*body)?;
 
@@ -284,8 +304,12 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Statement::While(ast::WhileStatement { condition, body }) => {
                 let condition_span = condition.span;
                 let condition = self.translate_expression(condition)?;
-                let condition = utils::lvalue_to_rvalue(condition);
-                utils::check_expect_type(&ty::Type::Boolean, &condition.ty, condition_span)?;
+                let condition = utils::lvalue_to_rvalue(&self.context.types, condition);
+                utils::check_expect_type(
+                    self.context.types.get_boolean_ty(),
+                    condition.ty,
+                    condition_span,
+                )?;
 
                 let old_in_loop = self.func_builder.in_loop;
                 self.func_builder.in_loop = true;
@@ -302,12 +326,16 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let expr = if let Some(expr) = maybe_expr {
                     let expr_span = expr.span;
                     let expr = self.translate_expression(expr)?;
-                    let expr = utils::lvalue_to_rvalue(expr);
-                    utils::check_eq_types(&expr.ty, &self.func_builder.ret_ty, expr_span)?;
+                    let expr = utils::lvalue_to_rvalue(&self.context.types, expr);
+                    utils::check_eq_types(expr.ty, self.func_builder.ret_ty, expr_span)?;
 
                     Some(expr.expr)
                 } else {
-                    utils::check_eq_types(&ty::Type::Void, &self.func_builder.ret_ty, stmt_span)?;
+                    utils::check_eq_types(
+                        self.context.types.get_void_ty(),
+                        self.func_builder.ret_ty,
+                        stmt_span,
+                    )?;
                     None
                 };
 
@@ -315,7 +343,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
             ast::Statement::Expression(expr) => {
                 let expr = self.translate_expression(expr)?;
-                let expr = utils::lvalue_to_rvalue(expr);
+                let expr = utils::lvalue_to_rvalue(&self.context.types, expr);
                 self.statements.push(ir::Statement::Expression(expr.expr));
             }
             ast::Statement::Break => {
@@ -346,10 +374,14 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         } = expression;
 
         match expression {
-            ast::Expression::Literal(lit) => Ok(utils::literal_to_texpr(lit)),
+            ast::Expression::Literal(lit) => Ok(utils::literal_to_texpr(lit, &self.context.types)),
             ast::Expression::Identifier(id) => {
-                if let Some(symbol) = self.symbol_table.lookup_local(&id) {
-                    Ok(utils::build_texpr_from_id(symbol.ty.clone(), symbol.id))
+                if let Some(symbol) = self.context.locals.lookup_local(&id) {
+                    let lvalue_ty = self.context.types.lvalue_of(symbol.ty);
+                    Ok(utils::TypedExpression {
+                        ty: lvalue_ty,
+                        expr: ir::Expression::Identifier(symbol.id),
+                    })
                 } else {
                     error!(TranslationError::UndefinedLocal(id), expr_span)
                 }
@@ -359,10 +391,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                 let lhs_span = lhs.span;
                 let lhs = self.translate_expression(*lhs)?;
                 let rhs = self.translate_expression(*rhs)?;
-                let rhs = utils::lvalue_to_rvalue(rhs);
+                let rhs = utils::lvalue_to_rvalue(&self.context.types, rhs);
 
-                if let ty::Type::LValue(ref sub) = lhs.ty {
-                    utils::check_eq_types(sub, &rhs.ty, expr_span)?;
+                if let Some(sub) = self.context.types.is_lvalue(lhs.ty) {
+                    utils::check_eq_types(sub, rhs.ty, expr_span)?;
                 } else {
                     return error!(TranslationError::NonLValueAssign, lhs_span);
                 }
@@ -371,11 +403,13 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
             ast::Expression::BinaryOperator { binop, lhs, rhs } => {
                 let lhs = self.translate_expression(*lhs)?;
-                let lhs = utils::lvalue_to_rvalue(lhs);
+                let lhs = utils::lvalue_to_rvalue(&self.context.types, lhs);
                 let rhs = self.translate_expression(*rhs)?;
-                let rhs = utils::lvalue_to_rvalue(rhs);
+                let rhs = utils::lvalue_to_rvalue(&self.context.types, rhs);
 
-                if let Some((ty, op)) = typeck::binop_typeck(binop, &lhs.ty, &rhs.ty) {
+                if let Some((ty, op)) =
+                    typeck::binop_typeck(&self.context.types, binop, lhs.ty, rhs.ty)
+                {
                     let expr = ir::Expression::BinaryOperator {
                         binop: op,
                         lhs: Box::new(lhs.expr),
@@ -394,9 +428,9 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
             ast::Expression::UnaryOperator { unop, sub } => {
                 let sub = self.translate_expression(*sub)?;
-                let sub = utils::lvalue_to_rvalue(sub);
+                let sub = utils::lvalue_to_rvalue(&self.context.types, sub);
 
-                if let Some((ty, op)) = typeck::unop_typeck(unop, &sub.ty) {
+                if let Some((ty, op)) = typeck::unop_typeck(&mut self.context.types, unop, sub.ty) {
                     let expr = ir::Expression::UnaryOperator {
                         unop: op,
                         sub: Box::new(sub.expr),
@@ -409,8 +443,10 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             ast::Expression::LValueUnaryOperator { lvalue_unop, sub } => {
                 let sub = self.translate_expression(*sub)?;
 
-                if let ty::Type::LValue(sub_ty) = sub.ty.clone() {
-                    if let Some((ty, op)) = typeck::lvalue_unop_typeck(lvalue_unop, &sub_ty) {
+                if let Some(sub_ty) = self.context.types.is_lvalue(sub.ty) {
+                    if let Some((ty, op)) =
+                        typeck::lvalue_unop_typeck(&mut self.context.types, lvalue_unop, sub_ty)
+                    {
                         let expr = ir::Expression::LValueUnaryOperator {
                             lvalue_unop: op,
                             sub: Box::new(sub.expr),
@@ -418,7 +454,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                         Ok(utils::TypedExpression { ty, expr })
                     } else {
                         error!(
-                            TranslationError::LValueUnOpUndefined(lvalue_unop, *sub_ty),
+                            TranslationError::LValueUnOpUndefined(lvalue_unop, sub_ty),
                             expr_span
                         )
                     }
@@ -429,9 +465,11 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
             ast::Expression::Cast { as_ty, sub } => {
                 let sub = self.translate_expression(*sub)?;
-                let sub = utils::lvalue_to_rvalue(sub);
+                let sub = utils::lvalue_to_rvalue(&self.context.types, sub);
 
-                match typeck::cast_typeck(&sub.ty, &as_ty) {
+                let as_ty = self.translate_type(as_ty)?;
+
+                match typeck::cast_typeck(&mut self.context.types, sub.ty, as_ty) {
                     typeck::CastTypeckResult::Cast(kind) => {
                         let expr = ir::Expression::Cast {
                             kind,
@@ -459,7 +497,7 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
             ast::Expression::Subscript { array, index } => self.translate_subscript(*array, *index),
             ast::Expression::FunctionCall { function, args } => {
-                if let Some(func_ty) = self.symbol_table.lookup_function(&function).cloned() {
+                if let Some(func_ty) = self.context.globals.lookup_function(&function).cloned() {
                     let mut args_translated = Vec::with_capacity(args.len());
                     if !func_ty.is_vararg && func_ty.parameters_ty.len() != args.len() {
                         return error!(
@@ -484,13 +522,9 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
                     for (index, arg) in args.into_iter().enumerate() {
                         let arg_span = arg.span;
                         let arg = self.translate_expression(arg)?;
-                        let arg = utils::lvalue_to_rvalue(arg);
+                        let arg = utils::lvalue_to_rvalue(&self.context.types, arg);
                         if index < func_ty.parameters_ty.len() {
-                            utils::check_eq_types(
-                                &arg.ty,
-                                &func_ty.parameters_ty[index],
-                                arg_span,
-                            )?;
+                            utils::check_eq_types(arg.ty, func_ty.parameters_ty[index], arg_span)?;
                         }
                         args_translated.push(arg.expr);
                     }
@@ -520,23 +554,19 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         let index_span = index.span;
 
         let array = self.translate_expression(array)?;
-        let array = utils::lvalue_to_rvalue(array);
+        let array = utils::lvalue_to_rvalue(&self.context.types, array);
         let index = self.translate_expression(index)?;
-        let index = utils::lvalue_to_rvalue(index);
+        let index = utils::lvalue_to_rvalue(&self.context.types, index);
         let array_ty = array.ty.clone();
 
-        let (sub_ty, ptr) = if let Some(s) = utils::unsure_subscriptable(array) {
+        let (sub_ty, ptr) = if let Some(s) = utils::unsure_subscriptable(&self.context.types, array)
+        {
             s
         } else {
             return error!(TranslationError::SubscriptNotArray(array_ty), array_span);
         };
 
-        if index.ty != ty::Type::Int {
-            return error!(
-                TranslationError::UnexpectedType(ty::Type::Int, index.ty.clone()),
-                index_span
-            );
-        }
+        utils::check_eq_types(self.context.types.get_int_ty(), index.ty, index_span)?;
 
         Ok(utils::TypedExpression {
             ty: sub_ty,
@@ -559,11 +589,12 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         expr_span: Span,
     ) -> TranslationResult<utils::TypedExpression> {
         let lhs = self.translate_expression(lhs)?;
-        let lhs = utils::lvalue_to_rvalue(lhs);
+        let lhs = utils::lvalue_to_rvalue(&self.context.types, lhs);
         let rhs = self.translate_expression(rhs)?;
-        let rhs = utils::lvalue_to_rvalue(rhs);
+        let rhs = utils::lvalue_to_rvalue(&self.context.types, rhs);
 
-        if lhs.ty != ty::Type::Boolean || rhs.ty != ty::Type::Boolean {
+        let bool_ty = self.context.types.get_boolean_ty();
+        if lhs.ty != bool_ty || rhs.ty != bool_ty {
             return error!(
                 TranslationError::LazyOpUndefined(lazyop, lhs.ty, rhs.ty),
                 expr_span
@@ -587,8 +618,12 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
             }
         };
 
-        let res_id = self.register_temp_local(ty::Type::Boolean);
-        let res_id_expr = utils::build_texpr_from_id(ty::Type::Boolean, res_id);
+        let res_id = self.register_temp_local(bool_ty);
+        let lvalue_bool = self.context.types.lvalue_of(bool_ty);
+        let res_id_expr = utils::TypedExpression {
+            ty: lvalue_bool,
+            expr: ir::Expression::Identifier(res_id),
+        };
 
         let stmts = vec![
             ir::Statement::Expression(utils::build_assign_to_id(res_id, init)),
@@ -602,16 +637,16 @@ impl<'a, 'b: 'a, 'c> BlockBuilder<'a, 'b, 'c> {
         ];
 
         Ok(utils::TypedExpression {
-            ty: ty::Type::Boolean,
+            ty: bool_ty,
             expr: ir::Expression::Block(Box::new(ir::BlockExpression {
                 stmts,
-                final_expr: utils::lvalue_to_rvalue(res_id_expr).expr,
+                final_expr: utils::lvalue_to_rvalue(&self.context.types, res_id_expr).expr,
             })),
         })
     }
 }
 
-pub fn check_if_main_declaration(prog: &ir::Program) -> TranslationResult<()> {
+pub fn check_if_main_declaration(context: &Context, prog: &ir::Program) -> TranslationResult<()> {
     for decl in &prog.declarations {
         let (name, ty, span) = match *decl {
             ir::Declaration::ExternFunction(ref exfunc) => {
@@ -621,7 +656,9 @@ pub fn check_if_main_declaration(prog: &ir::Program) -> TranslationResult<()> {
         };
 
         if name == "main" {
-            if ty.return_ty == ty::Type::Int && ty.parameters_ty.is_empty() && !ty.is_vararg {
+            if ty.return_ty == context.types.get_int_ty() && ty.parameters_ty.is_empty()
+                && !ty.is_vararg
+            {
                 return Ok(());
             } else {
                 return error!(TranslationError::MainWrongType, span);
@@ -629,4 +666,40 @@ pub fn check_if_main_declaration(prog: &ir::Program) -> TranslationResult<()> {
         }
     }
     error!(TranslationError::NoMain, Span::dummy())
+}
+
+fn translate_type(
+    typectxt: &mut ty::TyContext,
+    ty: Spanned<ast::Type>,
+) -> TranslationResult<ty::Type> {
+    match ty.inner {
+        ast::Type::Identifier(id) => {
+            if let Some(ty) = typectxt.lookup_type(&id) {
+                Ok(ty)
+            } else {
+                error!(TranslationError::UndefinedType(id), ty.span)
+            }
+        }
+        ast::Type::Pointer(sub_ty) => {
+            let sub = translate_type(typectxt, *sub_ty)?;
+            Ok(typectxt.pointer_of(sub))
+        }
+    }
+}
+
+fn translate_function_type(
+    typectxt: &mut ty::TyContext,
+    func_ty: ast::FunctionType,
+) -> TranslationResult<ty::FunctionType> {
+    let return_ty = translate_type(typectxt, func_ty.return_ty)?;
+    let parameters_ty = func_ty
+        .parameters_ty
+        .into_iter()
+        .map(|ty| translate_type(typectxt, ty))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ty::FunctionType {
+        return_ty,
+        parameters_ty,
+        is_vararg: func_ty.is_vararg,
+    })
 }

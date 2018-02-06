@@ -27,6 +27,7 @@ pub enum TranslationError {
     MismatchingTypes(ty::Type, ty::Type),
     UnexpectedType(ty::Type, ty::Type), // expected, given
     UndefinedLocal(String),
+    UndefinedType(String),
     NonLValueAssign,
     BinOpUndefined(ast::BinaryOperatorKind, ty::Type, ty::Type),
     LazyOpUndefined(ast::LazyOperatorKind, ty::Type, ty::Type),
@@ -114,6 +115,9 @@ impl fmt::Display for TranslationError {
             ),
             TranslationError::UndefinedLocal(ref local) => {
                 write!(f, "The local '{}' is undefined here", local)
+            }
+            TranslationError::UndefinedType(ref ty) => {
+                write!(f, "The type '{}' is undefined here", ty)
             }
             TranslationError::NonLValueAssign => {
                 write!(f, "Assignment to a value that can't be assigned")

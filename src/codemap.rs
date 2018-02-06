@@ -51,7 +51,7 @@ impl<'name, 'input> CodeMap<'name, 'input> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
@@ -82,7 +82,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Spanned<T> {
     pub inner: T,
     pub span: Span,

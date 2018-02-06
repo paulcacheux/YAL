@@ -18,13 +18,6 @@ pub struct TypedExpression {
     pub expr: ir::Expression,
 }
 
-pub fn build_texpr_from_id(ty: ty::Type, id: IdentifierId) -> TypedExpression {
-    TypedExpression {
-        ty: ty::Type::LValue(Box::new(ty)),
-        expr: ir::Expression::Identifier(id),
-    }
-}
-
 pub fn build_assign_to_id(id: IdentifierId, rhs: ir::Expression) -> ir::Expression {
     ir::Expression::Assign {
         lhs: Box::new(ir::Expression::Identifier(id)),
@@ -42,25 +35,22 @@ pub fn build_assign(lhs: TypedExpression, rhs: TypedExpression) -> TypedExpressi
     }
 }
 
-pub fn check_eq_types(a: &ty::Type, b: &ty::Type, error_span: Span) -> TranslationResult<()> {
+pub fn check_eq_types(a: ty::Type, b: ty::Type, error_span: Span) -> TranslationResult<()> {
     if a != b {
-        error!(
-            TranslationError::MismatchingTypes(a.clone(), b.clone(),),
-            error_span
-        )
+        error!(TranslationError::MismatchingTypes(a, b), error_span) // TODO convert Type to suitable format
     } else {
         Ok(())
     }
 }
 
 pub fn check_expect_type(
-    expected: &ty::Type,
-    given: &ty::Type,
+    expected: ty::Type,
+    given: ty::Type,
     error_span: Span,
 ) -> TranslationResult<()> {
     if expected != given {
         error!(
-            TranslationError::UnexpectedType(expected.clone(), given.clone(),),
+            TranslationError::UnexpectedType(expected, given),
             error_span
         )
     } else {
@@ -68,28 +58,30 @@ pub fn check_expect_type(
     }
 }
 
-pub fn lvalue_to_rvalue(expression: TypedExpression) -> TypedExpression {
-    match expression.ty {
-        ty::Type::LValue(sub) => TypedExpression {
-            ty: *sub,
+pub fn lvalue_to_rvalue(tyctxt: &ty::TyContext, expression: TypedExpression) -> TypedExpression {
+    if let Some(sub) = tyctxt.is_lvalue(expression.ty) {
+        TypedExpression {
+            ty: sub,
             expr: ir::Expression::LValueToRValue(Box::new(expression.expr)),
-        },
-        other => TypedExpression {
-            ty: other,
-            expr: expression.expr,
-        },
+        }
+    } else {
+        expression
     }
 }
 
-pub fn unsure_subscriptable(expr: TypedExpression) -> Option<(ty::Type, ir::Expression)> {
-    match expr.ty.clone() {
-        ty::Type::Pointer(sub) => Some((*sub, expr.expr)),
-        _ => None,
+pub fn unsure_subscriptable(
+    tyctxt: &ty::TyContext,
+    expr: TypedExpression,
+) -> Option<(ty::Type, ir::Expression)> {
+    if let Some(sub) = tyctxt.is_pointer(expr.ty) {
+        Some((sub, expr.expr))
+    } else {
+        None
     }
 }
 
-pub fn literal_to_texpr(lit: common::Literal) -> TypedExpression {
-    let ty = lit.get_type();
+pub fn literal_to_texpr(lit: common::Literal, tyctxt: &ty::TyContext) -> TypedExpression {
+    let ty = lit.get_type(tyctxt);
     TypedExpression {
         ty,
         expr: ir::Expression::Literal(lit),

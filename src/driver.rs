@@ -156,12 +156,13 @@ fn main() {
 
     let options = Options::from_matches(&matches);
     let mut string_interner = interner::Interner::<String>::new();
+    let mut context = trans::context::Context::new();
 
     // load runtime
     let runtime_input = include_str!("../runtime/io.yal");
     let runtime_lexer = lexer::Lexer::new(&runtime_input);
     let runtime_ast = parser::parse_program(runtime_lexer, &mut string_interner).unwrap();
-    let runtime_ir = trans::translate_program(runtime_ast, None).unwrap();
+    let runtime_ir = trans::translate_program(&mut context, runtime_ast, None).unwrap();
 
     let input = slurp_file(options.input_path).unwrap();
     let codemap = codemap::CodeMap::new(options.input_path, &input);
@@ -179,19 +180,19 @@ fn main() {
     let ir_prog = continue_or_exit(
         options.input_path,
         &codemap,
-        trans::translate_program(ast, Some(runtime_ir)).and_then(|ir_prog| {
-            trans::check_if_main_declaration(&ir_prog)?;
+        trans::translate_program(&mut context, ast, Some(runtime_ir)).and_then(|ir_prog| {
+            trans::check_if_main_declaration(&context, &ir_prog)?;
             Ok(ir_prog)
         }),
     );
 
     if options.print_ir {
         let mut w = std::io::stderr();
-        let mut pp = ir::prettyprinter::PrettyPrinter::new(&mut w);
+        let mut pp = ir::prettyprinter::PrettyPrinter::new(&mut w, &context.types);
         pp.pp_program(&ir_prog).expect("ir_pp error");
     }
 
-    let mut llvm_exec = backend::llvm_codegen_program(ir_prog, &string_interner);
+    let mut llvm_exec = backend::llvm_codegen_program(ir_prog, &string_interner, &context.types);
     llvm_exec.verify_module();
     if options.opt {
         llvm_exec.optimize();

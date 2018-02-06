@@ -6,7 +6,8 @@ use ty;
 use codemap::Span;
 
 #[derive(Debug)]
-pub struct PrettyPrinter<'w, W: Write + 'w> {
+pub struct PrettyPrinter<'ty, 'w, W: Write + 'w> {
+    tyctxt: &'ty ty::TyContext,
     writer: &'w mut W,
     expr_counter: usize,
     tab: usize,
@@ -24,9 +25,10 @@ macro_rules! writeln_pp {
     }
 }
 
-impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
-    pub fn new(writer: &'w mut W) -> Self {
+impl<'ty, 'w, W: Write + 'w> PrettyPrinter<'ty, 'w, W> {
+    pub fn new(writer: &'w mut W, tyctxt: &'ty ty::TyContext) -> Self {
         PrettyPrinter {
+            tyctxt,
             writer,
             expr_counter: 0,
             tab: 0,
@@ -56,17 +58,18 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
 
     fn pp_func_header(
         &mut self,
-        ret_ty: &ty::Type,
+        ret_ty: ty::Type,
         params: &[String],
         name: &str,
         span: Span,
         is_extern: bool,
     ) -> io::Result<()> {
+        let ret_ty_str = self.ty_to_string(ret_ty);
         writeln_pp!(
             self,
             "{}{} {}({}) // {:?}",
             if is_extern { "extern " } else { "" },
-            ty_to_string(&ret_ty),
+            ret_ty_str,
             name,
             params.join(", "),
             span
@@ -78,10 +81,10 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
             .ty
             .parameters_ty
             .iter()
-            .map(|ty| ty_to_string(ty))
+            .map(|&ty| self.ty_to_string(ty))
             .collect();
         self.pp_func_header(
-            &exfunc.ty.return_ty,
+            exfunc.ty.return_ty,
             &params,
             &exfunc.name,
             exfunc.span,
@@ -92,9 +95,9 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
     pub fn pp_function(&mut self, func: &ir::Function) -> io::Result<()> {
         let params: Vec<_> = func.parameters
             .iter()
-            .map(|&(ref ty, id)| ty_to_string(ty) + " " + &idid_to_string(id))
+            .map(|&(ty, id)| self.ty_to_string(ty) + " " + &idid_to_string(id))
             .collect();
-        self.pp_func_header(&func.return_ty, &params, &func.name, func.span, false)?;
+        self.pp_func_header(func.return_ty, &params, &func.name, func.span, false)?;
 
         for decl in &func.var_declarations {
             self.pp_var_decl(decl)?;
@@ -105,12 +108,8 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
     }
 
     pub fn pp_var_decl(&mut self, vardecl: &ir::VarDeclaration) -> io::Result<()> {
-        writeln_pp!(
-            self,
-            "let {}: {};",
-            idid_to_string(vardecl.id),
-            ty_to_string(&vardecl.ty),
-        )
+        let ty_str = self.ty_to_string(vardecl.ty);
+        writeln_pp!(self, "let {}: {};", idid_to_string(vardecl.id), ty_str)
     }
 
     pub fn pp_block_statement(&mut self, block: &[ir::Statement]) -> io::Result<()> {
@@ -212,12 +211,9 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
                 let sub = self.pp_expression_percent(sub)?;
                 format!("{:?}({})", kind, sub)
             }
-            ir::Expression::BitCast {
-                ref dest_ty,
-                ref sub,
-            } => {
+            ir::Expression::BitCast { dest_ty, ref sub } => {
                 let sub = self.pp_expression_percent(sub)?;
-                format!("bitcast {} to {}", sub, ty_to_string(dest_ty))
+                format!("bitcast {} to {}", sub, self.ty_to_string(dest_ty))
             }
             ir::Expression::FunctionCall {
                 ref function,
@@ -256,6 +252,19 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
         writeln_pp!(self, "}} => {}", res)?;
         Ok(res)
     }
+
+    fn ty_to_string(&self, ty: ty::Type) -> String {
+        let ty = self.tyctxt.get_typevalue_from_id(ty);
+        match ty {
+            ty::TypeValue::Int => "int".to_string(),
+            ty::TypeValue::Double => "double".to_string(),
+            ty::TypeValue::Boolean => "boolean".to_string(),
+            ty::TypeValue::String => "string".to_string(),
+            ty::TypeValue::Void => "void".to_string(),
+            ty::TypeValue::LValue(sub) => format!("&{}", self.ty_to_string(sub)),
+            ty::TypeValue::Pointer(sub) => format!("*{}", self.ty_to_string(sub)),
+        }
+    }
 }
 
 fn lit_to_string(lit: &ir::Literal) -> String {
@@ -269,16 +278,4 @@ fn lit_to_string(lit: &ir::Literal) -> String {
 
 fn idid_to_string(ir::IdentifierId(id): ir::IdentifierId) -> String {
     format!("@{}", id)
-}
-
-fn ty_to_string(ty: &ty::Type) -> String {
-    match *ty {
-        ty::Type::Int => "int".to_string(),
-        ty::Type::Double => "double".to_string(),
-        ty::Type::Boolean => "boolean".to_string(),
-        ty::Type::String => "string".to_string(),
-        ty::Type::Void => "void".to_string(),
-        ty::Type::LValue(ref sub) => format!("&{}", ty_to_string(sub)),
-        ty::Type::Pointer(ref sub) => format!("*{}", ty_to_string(sub)),
-    }
 }

@@ -40,7 +40,6 @@ pub enum Token<'input> {
     //keywords
     ExternKeyword,
     StructKeyword,
-    TypedefKeyword,
     WhileKeyword,
     ForKeyword,
     IfKeyword,
@@ -52,12 +51,11 @@ pub enum Token<'input> {
     FnKeyword,
     LetKeyword,
 
-    IntKeyword,
+    /*IntKeyword,
     DoubleKeyword,
     BooleanKeyword,
     VoidKeyword,
-    StringKeyword,
-
+    StringKeyword,*/
     Identifier(&'input str),
     IntegerLiteral(i64),
     DoubleLiteral(f64),

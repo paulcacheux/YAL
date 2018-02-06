@@ -10,13 +10,13 @@ pub enum Literal {
 }
 
 impl Literal {
-    pub fn get_type(&self) -> ty::Type {
+    pub fn get_type(&self, ty_ctxt: &ty::TyContext) -> ty::Type {
         use self::Literal::*;
         match *self {
-            IntLiteral(_) => ty::Type::Int,
-            DoubleLiteral(_) => ty::Type::Double,
-            BooleanLiteral(_) => ty::Type::Boolean,
-            StringLiteral(_) => ty::Type::String,
+            IntLiteral(_) => ty_ctxt.get_int_ty(),
+            DoubleLiteral(_) => ty_ctxt.get_double_ty(),
+            BooleanLiteral(_) => ty_ctxt.get_boolean_ty(),
+            StringLiteral(_) => ty_ctxt.get_string_ty(),
         }
     }
 }
