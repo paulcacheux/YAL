@@ -29,12 +29,6 @@ pub fn get_func_param(func: LLVMValueRef, index: usize) -> LLVMValueRef {
     unsafe { LLVMGetParam(func, index as _) }
 }
 
-pub fn remove_bb_from_parent(bb: LLVMBasicBlockRef) {
-    unsafe {
-        LLVMRemoveBasicBlockFromParent(bb);
-    }
-}
-
 pub fn const_int(ty: LLVMTypeRef, c: i64, sign_ext: bool) -> LLVMValueRef {
     unsafe { LLVMConstInt(ty, c as _, sign_ext as _) }
 }

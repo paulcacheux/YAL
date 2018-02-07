@@ -195,7 +195,9 @@ fn main() {
     let mut llvm_exec = backend::llvm_codegen_program(ir_prog, &string_interner, &context.types);
     llvm_exec.verify_module();
     if options.opt {
-        llvm_exec.optimize();
+        llvm_exec.optimize_full();
+    } else {
+        llvm_exec.optimize_required();
     }
     if options.print_llvm {
         llvm_exec.print_module();

@@ -131,9 +131,7 @@ impl<'s, 't> Backend<'s, 't> {
             self.codegen_vardecl(decl.ty, decl.id)
         }
 
-        if !self.codegen_block_statement(function.body) {
-            self.builder.build_unreachable();
-        }
+        self.codegen_block_statement_terminated(function.body);
     }
 
     fn codegen_parameter(
@@ -150,15 +148,24 @@ impl<'s, 't> Backend<'s, 't> {
         self.ids.insert(id, ptr);
     }
 
-    fn codegen_block_statement(&mut self, block: ir::BlockStatement) -> bool {
-        let mut res = false;
-        for statement in block {
-            res = self.codegen_statement(statement);
-        }
-        res
+    fn codegen_vardecl(&mut self, ty: ty::Type, id: ir::IdentifierId) {
+        let llvm_ty = self.codegen_type(ty);
+        let ptr = self.builder.build_alloca(llvm_ty, b"\0");
+        self.ids.insert(id, ptr);
     }
 
-    fn codegen_statement(&mut self, statement: ir::Statement) -> bool {
+    fn codegen_block_statement_terminated(&mut self, block: ir::BlockStatement) {
+        self.codegen_block_statement(block);
+        self.builder.build_unreachable();
+    }
+
+    fn codegen_block_statement(&mut self, block: ir::BlockStatement) {
+        for statement in block {
+            self.codegen_statement(statement);
+        }
+    }
+
+    fn codegen_statement(&mut self, statement: ir::Statement) {
         // return true if the statement end on a terminator
         match statement {
             ir::Statement::Block(block) => self.codegen_block_statement(block),
@@ -171,17 +178,10 @@ impl<'s, 't> Backend<'s, 't> {
             ir::Statement::Return(expr) => self.codegen_return_statement(expr),
             ir::Statement::Expression(expr) => {
                 self.codegen_expression(expr);
-                false
             }
             ir::Statement::Break => self.codegen_break_statement(),
             ir::Statement::Continue => self.codegen_continue_statement(),
         }
-    }
-
-    fn codegen_vardecl(&mut self, ty: ty::Type, id: ir::IdentifierId) {
-        let llvm_ty = self.codegen_type(ty);
-        let ptr = self.builder.build_alloca(llvm_ty, b"\0");
-        self.ids.insert(id, ptr);
     }
 
     fn codegen_if(
@@ -189,7 +189,7 @@ impl<'s, 't> Backend<'s, 't> {
         cond: ir::Expression,
         body: ir::BlockStatement,
         else_clause: ir::BlockStatement,
-    ) -> bool {
+    ) {
         let cond = self.codegen_expression(cond);
         let then_bb = self.context.append_bb_to_func(self.current_func, b"then\0");
         let else_bb = self.context.append_bb_to_func(self.current_func, b"else\0");
@@ -197,31 +197,18 @@ impl<'s, 't> Backend<'s, 't> {
 
         self.builder.build_cond_br(cond, then_bb, else_bb);
 
-        let mut then_res = true;
-        let mut else_res = true;
-
         self.builder.position_at_end(then_bb);
-        if !self.codegen_block_statement(body) {
-            self.builder.build_br(end_bb);
-            then_res = false;
-        }
+        self.codegen_block_statement(body);
+        self.builder.build_br(end_bb);
 
         self.builder.position_at_end(else_bb);
-        if !self.codegen_block_statement(else_clause) {
-            self.builder.build_br(end_bb);
-            else_res = false;
-        }
+        self.codegen_block_statement(else_clause);
+        self.builder.build_br(end_bb);
 
-        let res = then_res && else_res;
-        if res {
-            utils::remove_bb_from_parent(end_bb);
-        } else {
-            self.builder.position_at_end(end_bb);
-        }
-        res
+        self.builder.position_at_end(end_bb);
     }
 
-    fn codegen_while(&mut self, cond: ir::Expression, body: ir::BlockStatement) -> bool {
+    fn codegen_while(&mut self, cond: ir::Expression, body: ir::BlockStatement) {
         let loop_bb = self.context.append_bb_to_func(self.current_func, b"loop\0");
         let then_bb = self.context.append_bb_to_func(self.current_func, b"then\0");
         let end_bb = self.context.append_bb_to_func(self.current_func, b"end\0");
@@ -235,12 +222,10 @@ impl<'s, 't> Backend<'s, 't> {
         self.current_continue = loop_bb;
 
         self.builder.position_at_end(then_bb);
-        if self.codegen_block_statement(body) {
-            self.codegen_next_bb();
-        }
+        self.codegen_block_statement(body);
         self.builder.build_br(loop_bb);
+
         self.builder.position_at_end(end_bb);
-        false
     }
 
     fn codegen_next_bb(&mut self) {
@@ -248,24 +233,25 @@ impl<'s, 't> Backend<'s, 't> {
         self.builder.position_at_end(bb);
     }
 
-    fn codegen_return_statement(&mut self, expr: Option<ir::Expression>) -> bool {
+    fn codegen_return_statement(&mut self, expr: Option<ir::Expression>) {
         if let Some(expr) = expr {
             let expr = self.codegen_expression(expr);
             self.builder.build_ret(expr);
+            self.codegen_next_bb();
         } else {
             self.builder.build_ret_void();
+            self.codegen_next_bb();
         }
-        true
     }
 
-    fn codegen_break_statement(&mut self) -> bool {
+    fn codegen_break_statement(&mut self) {
         self.builder.build_br(self.current_break);
-        true
+        self.codegen_next_bb();
     }
 
-    fn codegen_continue_statement(&mut self) -> bool {
+    fn codegen_continue_statement(&mut self) {
         self.builder.build_br(self.current_continue);
-        true
+        self.codegen_next_bb();
     }
 
     fn codegen_expression(&mut self, expr: ir::Expression) -> LLVMValueRef {
