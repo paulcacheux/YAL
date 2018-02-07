@@ -44,6 +44,7 @@ pub enum TranslationError {
     SubscriptNotArray(ty::Type),
     LengthOnNonArray(ty::Type),
     MemberUndefined,
+    UnexpectedVoid,
 }
 
 impl From<LexingError> for ParsingError {
@@ -171,6 +172,7 @@ impl fmt::Display for TranslationError {
                 write!(f, "Type '{:?}' doesn't have a length property", ty)
             }
             TranslationError::MemberUndefined => write!(f, "Undefined member"),
+            TranslationError::UnexpectedVoid => write!(f, "Void type can't be used here"),
         }
     }
 }

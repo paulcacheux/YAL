@@ -98,7 +98,7 @@ fn translate_function(
 
     let mut parameters = Vec::with_capacity(function.parameters.len());
     for (param_ty, param_name) in function.parameters {
-        let param_ty = translate_type(&mut context.types, param_ty)?;
+        let param_ty = translate_type(&mut context.types, param_ty, false)?;
         if let Some(id) = context.locals.register_local(param_name.clone(), param_ty) {
             parameters.push((param_ty, id));
         } else {
@@ -111,7 +111,7 @@ fn translate_function(
 
     context.locals.begin_scope();
 
-    let func_return_ty = translate_type(&mut context.types, function.return_ty)?;
+    let func_return_ty = translate_type(&mut context.types, function.return_ty, true)?;
     let mut func_builder = FunctionBuilder::new(func_return_ty);
     let mut body = func_builder.translate_block_statement(context, function.body)?;
 
@@ -202,8 +202,12 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
         id
     }
 
-    fn translate_type(&mut self, ty: Spanned<ast::Type>) -> TranslationResult<ty::Type> {
-        translate_type(&mut self.context.types, ty)
+    fn translate_type(
+        &mut self,
+        ty: Spanned<ast::Type>,
+        void: bool,
+    ) -> TranslationResult<ty::Type> {
+        translate_type(&mut self.context.types, ty, void)
     }
 
     fn translate_statement_as_block(
@@ -235,7 +239,7 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
         let rhs = self.translate_expression(value)?;
         let rhs = utils::lvalue_to_rvalue(&self.context.types, rhs);
         if let Some(ty) = ty {
-            let ty = self.translate_type(ty)?;
+            let ty = self.translate_type(ty, false)?;
             utils::check_eq_types(rhs.ty, ty, value_span)?;
         }
 
@@ -374,7 +378,13 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
         } = expression;
 
         match expression {
-            ast::Expression::Literal(lit) => Ok(utils::literal_to_texpr(lit, &self.context.types)),
+            ast::Expression::Literal(lit) => {
+                let ty = lit.get_type(&self.context.types);
+                Ok(utils::TypedExpression {
+                    ty,
+                    expr: ir::Expression::Literal(lit),
+                })
+            }
             ast::Expression::Identifier(id) => {
                 if let Some(symbol) = self.context.locals.lookup_local(&id) {
                     let lvalue_ty = self.context.types.lvalue_of(symbol.ty);
@@ -399,7 +409,13 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
                     return error!(TranslationError::NonLValueAssign, lhs_span);
                 }
 
-                Ok(utils::build_assign(lhs, rhs))
+                Ok(utils::TypedExpression {
+                    ty: rhs.ty,
+                    expr: ir::Expression::Assign {
+                        lhs: Box::new(lhs.expr),
+                        rhs: Box::new(rhs.expr),
+                    },
+                })
             }
             ast::Expression::BinaryOperator { binop, lhs, rhs } => {
                 let lhs = self.translate_expression(*lhs)?;
@@ -467,7 +483,7 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
                 let sub = self.translate_expression(*sub)?;
                 let sub = utils::lvalue_to_rvalue(&self.context.types, sub);
 
-                let as_ty = self.translate_type(as_ty)?;
+                let as_ty = self.translate_type(as_ty, false)?;
 
                 match typeck::cast_typeck(&mut self.context.types, sub.ty, as_ty) {
                     typeck::CastTypeckResult::Cast(kind) => {
@@ -671,17 +687,23 @@ pub fn check_if_main_declaration(context: &Context, prog: &ir::Program) -> Trans
 fn translate_type(
     typectxt: &mut ty::TyContext,
     ty: Spanned<ast::Type>,
+    void: bool,
 ) -> TranslationResult<ty::Type> {
     match ty.inner {
         ast::Type::Identifier(id) => {
+            let ty_span = ty.span;
             if let Some(ty) = typectxt.lookup_type(&id) {
-                Ok(ty)
+                if !void && ty == typectxt.get_void_ty() {
+                    error!(TranslationError::UnexpectedVoid, ty_span)
+                } else {
+                    Ok(ty)
+                }
             } else {
-                error!(TranslationError::UndefinedType(id), ty.span)
+                error!(TranslationError::UndefinedType(id), ty_span)
             }
         }
         ast::Type::Pointer(sub_ty) => {
-            let sub = translate_type(typectxt, *sub_ty)?;
+            let sub = translate_type(typectxt, *sub_ty, true)?;
             Ok(typectxt.pointer_of(sub))
         }
     }
@@ -691,11 +713,11 @@ fn translate_function_type(
     typectxt: &mut ty::TyContext,
     func_ty: ast::FunctionType,
 ) -> TranslationResult<ty::FunctionType> {
-    let return_ty = translate_type(typectxt, func_ty.return_ty)?;
+    let return_ty = translate_type(typectxt, func_ty.return_ty, true)?;
     let parameters_ty = func_ty
         .parameters_ty
         .into_iter()
-        .map(|ty| translate_type(typectxt, ty))
+        .map(|ty| translate_type(typectxt, ty, false))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(ty::FunctionType {
         return_ty,

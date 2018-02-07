@@ -25,16 +25,6 @@ pub fn build_assign_to_id(id: IdentifierId, rhs: ir::Expression) -> ir::Expressi
     }
 }
 
-pub fn build_assign(lhs: TypedExpression, rhs: TypedExpression) -> TypedExpression {
-    TypedExpression {
-        ty: rhs.ty,
-        expr: ir::Expression::Assign {
-            lhs: Box::new(lhs.expr),
-            rhs: Box::new(rhs.expr),
-        },
-    }
-}
-
 pub fn check_eq_types(a: ty::Type, b: ty::Type, error_span: Span) -> TranslationResult<()> {
     if a != b {
         error!(TranslationError::MismatchingTypes(a, b), error_span) // TODO convert Type to suitable format
@@ -77,14 +67,6 @@ pub fn unsure_subscriptable(
         Some((sub, expr.expr))
     } else {
         None
-    }
-}
-
-pub fn literal_to_texpr(lit: common::Literal, tyctxt: &ty::TyContext) -> TypedExpression {
-    let ty = lit.get_type(tyctxt);
-    TypedExpression {
-        ty,
-        expr: ir::Expression::Literal(lit),
     }
 }
 
