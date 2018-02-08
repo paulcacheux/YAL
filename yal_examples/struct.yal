@@ -1,6 +1,9 @@
 struct A {
-    a: int,
-    b: double
+    b: *B
+}
+
+struct B {
+    a: *A
 }
 
 fn main() -> int {
