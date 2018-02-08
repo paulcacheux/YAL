@@ -41,6 +41,12 @@ macro_rules! get_builtin_type {
     }
 }
 
+impl Default for TyContext {
+    fn default() -> Self {
+        TyContext::new()
+    }
+}
+
 impl TyContext {
     pub fn new() -> TyContext {
         let mut ctxt = TyContext {
@@ -84,7 +90,7 @@ impl TyContext {
     }
 
     pub fn lookup_type(&self, name: &str) -> Option<Type> {
-        self.names.get(name).map(|t| *t)
+        self.names.get(name).cloned()
     }
 
     get_builtin_type!(get_void_ty, "void");

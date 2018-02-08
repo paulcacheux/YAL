@@ -3,14 +3,10 @@ use std::collections::HashMap;
 use ty;
 use ir::IdentifierId;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GlobalsTable(HashMap<String, ty::FunctionType>);
 
 impl GlobalsTable {
-    pub fn new() -> GlobalsTable {
-        GlobalsTable(HashMap::new())
-    }
-
     pub fn register_function(&mut self, name: String, ty: ty::FunctionType) -> bool {
         self.0.insert(name, ty).is_some()
     }
@@ -30,6 +26,12 @@ pub struct Symbol {
 pub struct SymbolTable {
     id_counter: usize,
     scopes: Vec<HashMap<String, Symbol>>,
+}
+
+impl Default for SymbolTable {
+    fn default() -> Self {
+        SymbolTable::new()
+    }
 }
 
 impl SymbolTable {

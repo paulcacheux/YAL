@@ -156,11 +156,11 @@ fn main() {
 
     let options = Options::from_matches(&matches);
     let mut string_interner = interner::Interner::<String>::new();
-    let mut context = trans::context::Context::new();
+    let mut context = trans::context::Context::default();
 
     // load runtime
     let runtime_input = include_str!("../runtime/io.yal");
-    let runtime_lexer = lexer::Lexer::new(&runtime_input);
+    let runtime_lexer = lexer::Lexer::new(runtime_input);
     let runtime_ast = parser::parse_program(runtime_lexer, &mut string_interner).unwrap();
     let runtime_ir = trans::translate_program(&mut context, runtime_ast, None).unwrap();
 

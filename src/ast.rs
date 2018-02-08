@@ -32,7 +32,7 @@ pub struct ExternFunction {
 impl ExternFunction {
     pub fn get_type(&self) -> FunctionType {
         let return_ty = self.return_ty.clone();
-        let parameters_ty = self.parameters.iter().map(|ty| ty.clone()).collect();
+        let parameters_ty = self.parameters.clone();
         FunctionType {
             return_ty,
             parameters_ty,

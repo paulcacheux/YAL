@@ -243,10 +243,7 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
             utils::check_eq_types(rhs.ty, ty, value_span)?;
         }
 
-        if let Some(id) = self.context
-            .locals
-            .register_local(name.clone(), rhs.ty.clone())
-        {
+        if let Some(id) = self.context.locals.register_local(name.clone(), rhs.ty) {
             self.func_builder
                 .var_declarations
                 .push(ir::VarDeclaration { ty: rhs.ty, id });
@@ -491,20 +488,14 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
                             kind,
                             sub: Box::new(sub.expr),
                         };
-                        Ok(utils::TypedExpression {
-                            ty: as_ty.clone(),
-                            expr,
-                        })
+                        Ok(utils::TypedExpression { ty: as_ty, expr })
                     }
                     typeck::CastTypeckResult::BitCast => {
                         let expr = ir::Expression::BitCast {
-                            dest_ty: as_ty.clone(),
+                            dest_ty: as_ty,
                             sub: Box::new(sub.expr),
                         };
-                        Ok(utils::TypedExpression {
-                            ty: as_ty.clone(),
-                            expr,
-                        })
+                        Ok(utils::TypedExpression { ty: as_ty, expr })
                     }
                     typeck::CastTypeckResult::Error => {
                         error!(TranslationError::CastUndefined(sub.ty, as_ty), expr_span)
@@ -573,7 +564,7 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
         let array = utils::lvalue_to_rvalue(&self.context.types, array);
         let index = self.translate_expression(index)?;
         let index = utils::lvalue_to_rvalue(&self.context.types, index);
-        let array_ty = array.ty.clone();
+        let array_ty = array.ty;
 
         let (sub_ty, ptr) = if let Some(s) = utils::unsure_subscriptable(&self.context.types, array)
         {

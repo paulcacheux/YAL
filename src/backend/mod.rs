@@ -81,8 +81,9 @@ impl<'s, 't> Backend<'s, 't> {
             ty::TypeValue::Double => self.context.double_ty(),
             ty::TypeValue::Boolean => self.context.i1_ty(),
             ty::TypeValue::String => utils::pointer_ty(self.context.i8_ty()),
-            ty::TypeValue::LValue(sub) => utils::pointer_ty(self.codegen_type(sub)),
-            ty::TypeValue::Pointer(sub) => utils::pointer_ty(self.codegen_type(sub)),
+            ty::TypeValue::LValue(sub) | ty::TypeValue::Pointer(sub) => {
+                utils::pointer_ty(self.codegen_type(sub))
+            }
         }
     }
 
