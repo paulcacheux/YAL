@@ -12,7 +12,7 @@ pub(super) fn translate_types(
     // collect all names
     for s in &structs {
         if context.types.pre_register_struct_type(s.name.clone()) {
-            panic!("type already defined")
+            return error!(TranslationError::TypeAlreadyDefined(s.name.clone()), s.span);
         }
     }
 
