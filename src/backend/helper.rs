@@ -53,6 +53,10 @@ impl Context {
         utils::pointer_ty(raw_array)
     }
 
+    pub fn create_struct_named(&self, name: &[u8]) -> LLVMTypeRef {
+        unsafe { LLVMStructCreateNamed(self.context, c_str(name)) }
+    }
+
     pub fn append_bb_to_func(&self, func: LLVMValueRef, name: &[u8]) -> LLVMBasicBlockRef {
         unsafe { LLVMAppendBasicBlockInContext(self.context, func, c_str(name)) }
     }

@@ -2,6 +2,7 @@ use std::ffi::CString;
 use std::collections::HashMap;
 use std::ptr;
 
+use llvm;
 use llvm::prelude::*;
 
 use ir;
@@ -47,14 +48,15 @@ struct Backend<'s, 't> {
     builder: IRBuilder,
     ids: HashMap<ir::IdentifierId, LLVMValueRef>,
     strings: &'s Interner<String>,
-    types: &'t ty::TyContext,
+    tyctxt: &'t ty::TyContext,
+    ty_cache: HashMap<ty::Type, LLVMTypeRef>,
     current_func: LLVMValueRef,
     current_break: LLVMBasicBlockRef,
     current_continue: LLVMBasicBlockRef,
 }
 
 impl<'s, 't> Backend<'s, 't> {
-    fn new(strings: &'s Interner<String>, types: &'t ty::TyContext) -> Self {
+    fn new(strings: &'s Interner<String>, tyctxt: &'t ty::TyContext) -> Self {
         let context = Context::new();
         let module = Module::new_in_context(&context, b"main\0");
         let builder = IRBuilder::new_in_context(&context);
@@ -65,17 +67,22 @@ impl<'s, 't> Backend<'s, 't> {
             builder,
             ids: HashMap::new(),
             strings,
-            types,
+            tyctxt,
+            ty_cache: HashMap::new(),
             current_func: ptr::null_mut(),
             current_break: ptr::null_mut(),
             current_continue: ptr::null_mut(),
         }
     }
 
-    fn codegen_type(&self, ty: ty::Type) -> LLVMTypeRef {
-        let type_value = self.types.get_typevalue_from_id(ty);
+    fn codegen_type(&mut self, ty: ty::Type) -> LLVMTypeRef {
+        if let Some(&llvm_ty) = self.ty_cache.get(&ty) {
+            return llvm_ty;
+        }
 
-        match type_value {
+        let type_value = self.tyctxt.get_typevalue_from_id(ty);
+
+        let llvm_ty = match type_value {
             ty::TypeValue::Void => self.context.void_ty(),
             ty::TypeValue::Int => self.context.i32_ty(),
             ty::TypeValue::Double => self.context.double_ty(),
@@ -84,7 +91,31 @@ impl<'s, 't> Backend<'s, 't> {
             ty::TypeValue::LValue(sub) | ty::TypeValue::Pointer(sub) => {
                 utils::pointer_ty(self.codegen_type(sub))
             }
-        }
+            ty::TypeValue::Struct(struct_ty) => {
+                let name = CString::new(struct_ty.name).unwrap();
+                let llvm_struct_ty = self.context.create_struct_named(name.as_bytes_with_nul());
+                self.ty_cache.insert(ty, llvm_struct_ty); // for recursive types
+
+                let mut fields: Vec<_> = struct_ty
+                    .fields
+                    .into_iter()
+                    .map(|(ty, _)| self.codegen_type(ty))
+                    .collect();
+
+                unsafe {
+                    llvm::core::LLVMStructSetBody(
+                        llvm_struct_ty,
+                        fields.as_mut_ptr(),
+                        fields.len() as _,
+                        false as _,
+                    )
+                }
+                llvm_struct_ty
+            }
+        };
+
+        self.ty_cache.insert(ty, llvm_ty);
+        llvm_ty
     }
 
     fn pre_codegen_extern_function(&mut self, exfunc: &ir::ExternFunction) {
@@ -293,15 +324,15 @@ impl<'s, 't> Backend<'s, 't> {
     fn codegen_literal(&mut self, literal: common::Literal) -> LLVMValueRef {
         match literal {
             common::Literal::IntLiteral(i) => {
-                let ty = self.codegen_type(self.types.get_int_ty());
+                let ty = self.codegen_type(self.tyctxt.get_int_ty());
                 utils::const_int(ty, i, true)
             }
             common::Literal::DoubleLiteral(d) => {
-                let ty = self.codegen_type(self.types.get_double_ty());
+                let ty = self.codegen_type(self.tyctxt.get_double_ty());
                 utils::const_real(ty, d)
             }
             common::Literal::BooleanLiteral(b) => {
-                let ty = self.codegen_type(self.types.get_boolean_ty());
+                let ty = self.codegen_type(self.tyctxt.get_boolean_ty());
                 utils::const_int(ty, b as _, false)
             }
             common::Literal::StringLiteral(id) => self.codegen_string_literal(id),
@@ -312,7 +343,7 @@ impl<'s, 't> Backend<'s, 't> {
         let s = self.strings.get_ref(id);
 
         let gs = self.builder.build_global_string_ptr(s.to_string(), b"\0");
-        let s_ty = self.codegen_type(self.types.get_string_ty());
+        let s_ty = self.codegen_type(self.tyctxt.get_string_ty());
         self.builder.build_bitcast(gs, s_ty, b"\0")
     }
 
@@ -420,11 +451,12 @@ impl<'s, 't> Backend<'s, 't> {
 
         match unop {
             ir::UnaryOperatorKind::IntMinus => {
-                let const0 = utils::const_int(self.codegen_type(self.types.get_int_ty()), 0, false);
+                let const0 =
+                    utils::const_int(self.codegen_type(self.tyctxt.get_int_ty()), 0, false);
                 self.builder.build_sub(const0, sub, b"\0")
             }
             ir::UnaryOperatorKind::DoubleMinus => {
-                let const0 = utils::const_real(self.codegen_type(self.types.get_double_ty()), 0.0);
+                let const0 = utils::const_real(self.codegen_type(self.tyctxt.get_double_ty()), 0.0);
                 self.builder.build_fsub(const0, sub, b"\0")
             }
             ir::UnaryOperatorKind::BooleanNot => self.builder.build_not(sub, b"\0"),
@@ -447,7 +479,7 @@ impl<'s, 't> Backend<'s, 't> {
     fn codegen_incdecrement(&mut self, sub: ir::Expression, inc: bool) -> LLVMValueRef {
         let ptr = self.codegen_expression(sub);
 
-        let c1 = utils::const_int(self.codegen_type(self.types.get_int_ty()), 1, true);
+        let c1 = utils::const_int(self.codegen_type(self.tyctxt.get_int_ty()), 1, true);
 
         let value = self.builder.build_load(ptr, b"\0");
         let value = if inc {
@@ -468,31 +500,22 @@ impl<'s, 't> Backend<'s, 't> {
     fn codegen_cast(&mut self, kind: ir::CastKind, sub: ir::Expression) -> LLVMValueRef {
         let sub = self.codegen_expression(sub);
 
+        let llvm_double_ty = self.codegen_type(self.tyctxt.get_double_ty());
+        let llvm_int_ty = self.codegen_type(self.tyctxt.get_int_ty());
+        let llvm_boolean_ty = self.codegen_type(self.tyctxt.get_boolean_ty());
+
         match kind {
-            ir::CastKind::IntToDouble => self.builder.build_si_to_fp(
-                sub,
-                self.codegen_type(self.types.get_double_ty()),
-                b"\0",
-            ),
-            ir::CastKind::DoubleToInt => {
-                self.builder
-                    .build_fp_to_si(sub, self.codegen_type(self.types.get_int_ty()), b"\0")
-            }
-            ir::CastKind::BooleanToInt => {
-                self.builder
-                    .build_zext(sub, self.codegen_type(self.types.get_int_ty()), b"\0")
-            }
-            ir::CastKind::IntToBoolean => {
-                self.builder
-                    .build_trunc(sub, self.codegen_type(self.types.get_boolean_ty()), b"\0")
-            }
+            ir::CastKind::IntToDouble => self.builder.build_si_to_fp(sub, llvm_double_ty, b"\0"),
+            ir::CastKind::DoubleToInt => self.builder.build_fp_to_si(sub, llvm_int_ty, b"\0"),
+            ir::CastKind::BooleanToInt => self.builder.build_zext(sub, llvm_int_ty, b"\0"),
+            ir::CastKind::IntToBoolean => self.builder.build_trunc(sub, llvm_boolean_ty, b"\0"),
         }
     }
 
     fn codegen_bitcast(&mut self, dest_ty: ty::Type, sub: ir::Expression) -> LLVMValueRef {
         let sub = self.codegen_expression(sub);
-        self.builder
-            .build_bitcast(sub, self.codegen_type(dest_ty), b"\0")
+        let llvm_dest_ty = self.codegen_type(dest_ty);
+        self.builder.build_bitcast(sub, llvm_dest_ty, b"\0")
     }
 
     fn codegen_funccall(&mut self, func: &str, args: Vec<ir::Expression>) -> LLVMValueRef {

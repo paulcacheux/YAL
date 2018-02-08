@@ -263,6 +263,7 @@ impl<'ty, 'w, W: Write + 'w> PrettyPrinter<'ty, 'w, W> {
             ty::TypeValue::Void => "void".to_string(),
             ty::TypeValue::LValue(sub) => format!("&{}", self.ty_to_string(sub)),
             ty::TypeValue::Pointer(sub) => format!("*{}", self.ty_to_string(sub)),
+            ty::TypeValue::Struct(s) => format!("struct {}", s.name),
         }
     }
 }

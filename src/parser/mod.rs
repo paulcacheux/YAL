@@ -108,26 +108,29 @@ impl<'si, 'input> Parser<'si, 'input> {
         expect!(self.lexer; Token::LeftBracket, "{");
 
         let mut fields = Vec::new();
-        loop {
-            if let Token::RightBracket = self.lexer.peek_token()?.inner {
-                break;
-            }
+        if let Token::RightBracket = self.lexer.peek_token()?.inner {
 
+        } else {
             fields.push(self.parse_field()?);
+            while let Token::Comma = self.lexer.peek_token()?.inner {
+                if let Token::RightBracket = self.lexer.peek_token()?.inner {
+                    break;
+                }
+                self.lexer.next_token()?;
+                fields.push(self.parse_field()?);
+            }
         }
 
-        expect!(self.lexer; Token::RightBracket, "}");
-        let end_span = expect!(self.lexer; Token::SemiColon, ";");
-
+        let end_span = expect!(self.lexer; Token::RightBracket, "}");
         let span = Span::merge(begin_span, end_span);
 
         Ok(ast::Declaration::Struct(ast::Struct { name, fields, span }))
     }
 
     fn parse_field(&mut self) -> ParsingResult<(Spanned<ast::Type>, String)> {
-        let ty = self.parse_type()?;
         let name = self.parse_identifier()?;
-        expect!(self.lexer; Token::SemiColon, ";");
+        expect!(self.lexer; Token::Colon, ":");
+        let ty = self.parse_type()?;
         Ok((ty, name))
     }
 

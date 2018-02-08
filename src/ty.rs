@@ -10,14 +10,15 @@ pub enum TypeValue {
     Boolean,
     String,
     Void,
-    // Struct(StructType),
+    Struct(StructType),
     LValue(Type),
     Pointer(Type),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructType {
-    pub fields: Vec<(String, Type)>,
+    pub name: String,
+    pub fields: Vec<(Type, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,7 +30,7 @@ pub struct FunctionType {
 
 #[derive(Debug, Clone)]
 pub struct TyContext {
-    types: Vec<TypeValue>,
+    types: Vec<Option<TypeValue>>,
     names: HashMap<String, Type>,
 }
 
@@ -63,30 +64,55 @@ impl TyContext {
         ctxt
     }
 
+    fn append_type(&mut self, tv: Option<TypeValue>) -> Type {
+        let id = self.types.len();
+        self.types.push(tv);
+        Type(id)
+    }
+
     fn get_id_from_tv(&mut self, tv: TypeValue) -> Type {
-        if let Some(id) = self.types.iter().position(|vtv| *vtv == tv) {
+        let mut position = None;
+        for (index, vtv) in self.types.iter().enumerate() {
+            if let Some(ref vtv) = *vtv {
+                if *vtv == tv {
+                    position = Some(index);
+                    break;
+                }
+            }
+        }
+
+        if let Some(id) = position {
             Type(id)
         } else {
-            let id = self.types.len();
-            self.types.push(tv);
-            Type(id)
+            self.append_type(Some(tv))
         }
     }
 
     pub fn get_typevalue_from_id(&self, id: Type) -> TypeValue {
-        self.types[id.0].clone()
+        self.types[id.0].clone().unwrap()
     }
 
-    pub fn register_type(&mut self, name: String, tv: TypeValue) -> Option<Type> {
-        // None if a type with the same name is already defined
-
-        let ty_id = self.get_id_from_tv(tv);
+    pub fn pre_register_struct_type(&mut self, name: String) -> bool {
+        // true if a type with the same name is already defined
+        let id = self.append_type(None);
         if let Entry::Vacant(o) = self.names.entry(name) {
-            o.insert(ty_id);
-            Some(ty_id)
+            o.insert(id);
+            false
         } else {
-            None
+            true
         }
+    }
+
+    pub fn register_struct_type(&mut self, name: &str, tv: TypeValue) {
+        let Type(id) = self.lookup_type(name).unwrap();
+        self.types[id] = Some(tv);
+    }
+
+    fn register_type(&mut self, name: String, tv: TypeValue) {
+        // force the insert
+
+        let id = self.append_type(Some(tv));
+        self.names.insert(name, id);
     }
 
     pub fn lookup_type(&self, name: &str) -> Option<Type> {
