@@ -1,0 +1,8 @@
+struct A {
+    a: int,
+    b: double
+}
+
+fn main() -> int {
+    return 0;
+}
