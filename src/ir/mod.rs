@@ -83,7 +83,7 @@ pub type BlockStatement = Vec<Statement>;
 pub enum Expression {
     Block(Box<BlockExpression>),
     LValueToRValue(Box<Expression>),
-    RValueToPtr(Box<Expression>),
+    RValueToLValue(Box<Expression>),
     Literal(Literal),
     Identifier(IdentifierId),
     Assign {

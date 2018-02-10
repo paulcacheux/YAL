@@ -59,6 +59,30 @@ pub fn lvalue_to_rvalue(tyctxt: &ty::TyContext, expression: TypedExpression) -> 
     }
 }
 
+pub fn rvalue_to_lvalue(
+    tyctxt: &mut ty::TyContext,
+    expression: TypedExpression,
+) -> TypedExpression {
+    if tyctxt.is_lvalue(expression.ty).is_some() {
+        expression
+    } else {
+        TypedExpression {
+            ty: tyctxt.lvalue_of(expression.ty),
+            expr: ir::Expression::RValueToLValue(Box::new(expression.expr)),
+        }
+    }
+}
+
+pub fn unsure_workable(tyctxt: &mut ty::TyContext, expr: TypedExpression) -> TypedExpression {
+    if tyctxt.is_lvalue_struct(expr.ty).is_some() {
+        expr
+    } else if tyctxt.is_struct(expr.ty).is_some() {
+        rvalue_to_lvalue(tyctxt, expr)
+    } else {
+        lvalue_to_rvalue(tyctxt, expr)
+    }
+}
+
 pub fn unsure_subscriptable(
     tyctxt: &ty::TyContext,
     expr: TypedExpression,

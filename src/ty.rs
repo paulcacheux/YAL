@@ -150,4 +150,21 @@ impl TyContext {
             None
         }
     }
+
+    pub fn is_struct(&self, ty: Type) -> Option<StructType> {
+        if let TypeValue::Struct(s) = self.get_typevalue_from_id(ty) {
+            Some(s)
+        } else {
+            None
+        }
+    }
+
+    pub fn is_lvalue_struct(&self, ty: Type) -> Option<StructType> {
+        if let Some(sub) = self.is_lvalue(ty) {
+            if let Some(s) = self.is_struct(sub) {
+                return Some(s);
+            }
+        }
+        None
+    }
 }

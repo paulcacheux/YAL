@@ -176,9 +176,9 @@ impl<'ty, 'w, W: Write + 'w> PrettyPrinter<'ty, 'w, W> {
                 let sub = self.pp_expression_percent(sub)?;
                 format!("deref({})", sub)
             }
-            ir::Expression::RValueToPtr(ref sub) => {
+            ir::Expression::RValueToLValue(ref sub) => {
                 let sub = self.pp_expression_percent(sub)?;
-                format!("rvalue2ptr({})", sub)
+                format!("rvalue2lvalue({})", sub)
             }
             ir::Expression::Literal(ref lit) => lit_to_string(lit),
             ir::Expression::Identifier(id) => idid_to_string(id),
