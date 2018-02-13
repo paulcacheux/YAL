@@ -1,37 +1,36 @@
 use std::collections::hash_map::{Entry, HashMap};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Type(usize);
+pub type Type<'ctxt> = &'ctxt TypeValue<'ctxt>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TypeValue {
+pub enum TypeValue<'ctxt> {
     Int,
     Double,
     Boolean,
     String,
     Void,
-    Struct(StructType),
-    LValue(Type),
-    Pointer(Type),
+    Struct(StructType<'ctxt>),
+    LValue(Type<'ctxt>),
+    Pointer(Type<'ctxt>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructType {
+pub struct StructType<'ctxt> {
     pub name: String,
-    pub fields: Vec<(Type, String)>,
+    pub fields: Vec<(String, Type<'ctxt>)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionType {
-    pub return_ty: Type,
-    pub parameters_ty: Vec<Type>,
+pub struct FunctionType<'ctxt> {
+    pub return_ty: Type<'ctxt>,
+    pub parameters_ty: Vec<Type<'ctxt>>,
     pub is_vararg: bool,
 }
 
+/*
 #[derive(Debug, Clone)]
-pub struct TyContext {
-    types: Vec<Option<TypeValue>>,
-    names: HashMap<String, Type>,
+pub struct TypeContext {
+    types: Arena<TypeValue>,
 }
 
 macro_rules! get_builtin_type {
@@ -167,4 +166,4 @@ impl TyContext {
         }
         None
     }
-}
+}*/
