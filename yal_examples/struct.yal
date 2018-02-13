@@ -6,6 +6,10 @@ struct B {
     a: *A
 }
 
+fn test(a: A) -> A {
+    return a;
+} 
+
 fn main() -> int {
     return 0;
 }
