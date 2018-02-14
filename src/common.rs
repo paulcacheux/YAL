@@ -1,5 +1,6 @@
 use interner::InternerId;
 use ty;
+use trans::tables::TypeTable;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Literal {
@@ -10,7 +11,7 @@ pub enum Literal {
 }
 
 impl Literal {
-    pub fn get_type(&self, ty_ctxt: &ty::TyContext) -> ty::Type {
+    pub fn get_type(&self, ty_ctxt: &TypeTable) -> ty::Type {
         use self::Literal::*;
         match *self {
             IntLiteral(_) => ty_ctxt.get_int_ty(),

@@ -127,11 +127,11 @@ impl<'si, 'input> Parser<'si, 'input> {
         Ok(ast::Declaration::Struct(ast::Struct { name, fields, span }))
     }
 
-    fn parse_field(&mut self) -> ParsingResult<(Spanned<ast::Type>, String)> {
+    fn parse_field(&mut self) -> ParsingResult<(String, Spanned<ast::Type>)> {
         let name = self.parse_identifier()?;
         expect!(self.lexer; Token::Colon, ":");
         let ty = self.parse_type()?;
-        Ok((ty, name))
+        Ok((name, ty))
     }
 
     fn parse_extern_function_declaration(&mut self) -> ParsingResult<ast::Declaration> {

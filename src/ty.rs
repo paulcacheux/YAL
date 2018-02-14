@@ -1,29 +1,61 @@
-use std::collections::hash_map::{Entry, HashMap};
+use std::hash::{Hash, Hasher};
 
-pub type Type<'ctxt> = &'ctxt TypeValue<'ctxt>;
+#[derive(Debug, Clone, Copy)]
+pub struct Type(*mut TypeValue);
+
+impl Type {
+    pub fn from_raw(tv: *mut TypeValue) -> Self {
+        Type(tv)
+    }
+
+    pub fn to_type_value(self) -> TypeValue {
+        unsafe { (*self.0).clone() }
+    }
+
+    pub fn update(&self, new_tv: TypeValue) {
+        unsafe { *self.0 = new_tv }
+    }
+}
+
+impl PartialEq for Type {
+    fn eq(&self, other: &Type) -> bool {
+        unsafe { *self.0 == *other.0 }
+    }
+}
+
+impl Eq for Type {}
+
+impl Hash for Type {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        unsafe {
+            (*self.0).hash(state);
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TypeValue<'ctxt> {
+pub enum TypeValue {
+    Incomplete,
     Int,
     Double,
     Boolean,
     String,
     Void,
-    Struct(StructType<'ctxt>),
-    LValue(Type<'ctxt>),
-    Pointer(Type<'ctxt>),
+    Struct(StructType),
+    LValue(Type),
+    Pointer(Type),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructType<'ctxt> {
+pub struct StructType {
     pub name: String,
-    pub fields: Vec<(String, Type<'ctxt>)>,
+    pub fields: Vec<(String, Type)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionType<'ctxt> {
-    pub return_ty: Type<'ctxt>,
-    pub parameters_ty: Vec<Type<'ctxt>>,
+pub struct FunctionType {
+    pub return_ty: Type,
+    pub parameters_ty: Vec<Type>,
     pub is_vararg: bool,
 }
 

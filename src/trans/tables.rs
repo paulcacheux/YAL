@@ -1,55 +1,55 @@
-use std::collections::HashMap;
+use std::collections::hash_map::{Entry, HashMap};
 
 use typed_arena::Arena;
 
 use ty;
 use ir::IdentifierId;
 
-#[derive(Debug, Clone, Default)]
-pub struct Tables<'ctxt> {
-    pub globals: GlobalsTable<'ctxt>,
-    pub locals: SymbolTable<'ctxt>,
-    pub types: TypeTable<'ctxt>,
+#[derive(Debug, Default)]
+pub struct Tables {
+    pub globals: GlobalsTable,
+    pub locals: SymbolTable,
+    pub types: TypeTable,
 }
 
-impl<'ctxt> Tables<'ctxt> {
+impl Tables {
     pub fn new_locals(&mut self) {
         self.locals = SymbolTable::new();
     }
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct GlobalsTable<'ctxt>(HashMap<String, ty::FunctionType<'ctxt>>);
+pub struct GlobalsTable(HashMap<String, ty::FunctionType>);
 
-impl<'ctxt> GlobalsTable<'ctxt> {
-    pub fn register_function(&mut self, name: String, ty: ty::FunctionType<'ctxt>) -> bool {
+impl GlobalsTable {
+    pub fn register_function(&mut self, name: String, ty: ty::FunctionType) -> bool {
         self.0.insert(name, ty).is_some()
     }
 
-    pub fn lookup_function(&self, name: &str) -> Option<&ty::FunctionType<'ctxt>> {
+    pub fn lookup_function(&self, name: &str) -> Option<&ty::FunctionType> {
         self.0.get(name)
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Symbol<'ctxt> {
-    pub ty: ty::Type<'ctxt>,
+pub struct Symbol {
+    pub ty: ty::Type,
     pub id: IdentifierId,
 }
 
 #[derive(Debug, Clone)]
-pub struct SymbolTable<'ctxt> {
+pub struct SymbolTable {
     id_counter: usize,
-    scopes: Vec<HashMap<String, Symbol<'ctxt>>>,
+    scopes: Vec<HashMap<String, Symbol>>,
 }
 
-impl<'ctxt> Default for SymbolTable<'ctxt> {
+impl Default for SymbolTable {
     fn default() -> Self {
         SymbolTable::new()
     }
 }
 
-impl<'ctxt> SymbolTable<'ctxt> {
+impl SymbolTable {
     pub fn new() -> Self {
         SymbolTable {
             id_counter: 0,
@@ -101,24 +101,40 @@ impl<'ctxt> SymbolTable<'ctxt> {
     }
 }
 
-#[derive(Clone)]
-pub struct TypeTable<'ctxt> {
-    arena: &'ctxt Arena<ty::TypeValue<'ctxt>>,
-    names: HashMap<String, &'ctxt mut ty::TypeValue<'ctxt>>,
+pub struct TypeTable {
+    arena: Arena<ty::TypeValue>,
+    names: HashMap<String, ty::Type>,
 }
 
 macro_rules! get_builtin_type {
     ($name:ident, $ty:tt) => {
-        pub fn $name(&self) -> ty::Type<'ctxt> {
+        pub fn $name(&self) -> ty::Type {
             self.lookup_type($ty).unwrap()
         }
     }
 }
 
-impl<'ctxt> TypeTable<'ctxt> {
-    pub fn new(arena: &'ctxt Arena<ty::TypeValue<'ctxt>>) -> Self {
+impl Default for TypeTable {
+    fn default() -> Self {
+        TypeTable::new()
+    }
+}
+
+use std::fmt;
+
+impl fmt::Debug for TypeTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("TypeTable")
+            .field("arena", &"...".to_string())
+            .field("names", &self.names)
+            .finish()
+    }
+}
+
+impl TypeTable {
+    pub fn new() -> Self {
         let mut table = TypeTable {
-            arena,
+            arena: Arena::new(),
             names: HashMap::new(),
         };
 
@@ -130,13 +146,18 @@ impl<'ctxt> TypeTable<'ctxt> {
         table
     }
 
-    fn register_type(&mut self, name: String, tv: ty::TypeValue) {
-        // force the insert
-        let ty = self.arena.alloc(tv);
-        self.names.insert(name, tv);
+    fn append_type(&self, tv: ty::TypeValue) -> ty::Type {
+        let ptr = self.arena.alloc(tv);
+        ty::Type::from_raw(ptr)
     }
 
-    pub fn lookup_type(&self, name: &str) -> Option<ty::Type<'ctxt>> {
+    fn register_type(&mut self, name: String, tv: ty::TypeValue) {
+        // force the insert
+        let ty = self.append_type(tv);
+        self.names.insert(name, ty);
+    }
+
+    pub fn lookup_type(&self, name: &str) -> Option<ty::Type> {
         self.names.get(name).cloned()
     }
 
@@ -145,4 +166,30 @@ impl<'ctxt> TypeTable<'ctxt> {
     get_builtin_type!(get_double_ty, "double");
     get_builtin_type!(get_boolean_ty, "boolean");
     get_builtin_type!(get_string_ty, "string");
+
+    pub fn pre_register_struct_type(&mut self, name: String) -> bool {
+        // true if a type with the same name is already defined
+        let ty = self.append_type(ty::TypeValue::Incomplete);
+        if let Entry::Vacant(o) = self.names.entry(name) {
+            o.insert(ty);
+            false
+        } else {
+            true
+        }
+    }
+
+    pub fn register_struct_type(&mut self, name: &str, tv: ty::TypeValue) {
+        let ty = self.lookup_type(name).unwrap();
+        ty.update(tv);
+    }
+
+    pub fn lvalue_of(&self, sub_ty: ty::Type) -> ty::Type {
+        let tv = ty::TypeValue::LValue(sub_ty);
+        self.append_type(tv)
+    }
+
+    pub fn pointer_of(&self, sub_ty: ty::Type) -> ty::Type {
+        let tv = ty::TypeValue::Pointer(sub_ty);
+        self.append_type(tv)
+    }
 }

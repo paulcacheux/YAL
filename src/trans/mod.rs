@@ -5,8 +5,7 @@ use common;
 use codemap::*;
 use errors::TranslationError;
 
-pub mod context;
-pub mod symbol_table;
+pub mod tables;
 #[macro_use]
 mod utils;
 mod typeck;
@@ -14,12 +13,12 @@ mod block_trans;
 mod pretrans;
 
 use self::block_trans::*;
-use self::context::Context;
+use self::tables::{Tables, TypeTable};
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
 
 pub fn translate_program(
-    context: &mut Context,
+    tables: &mut Tables,
     program: ast::Program,
     runtime: Option<ir::Program>,
 ) -> TranslationResult<ir::Program> {
@@ -39,13 +38,13 @@ pub fn translate_program(
     }
 
     // type building TODO check for cycles
-    pretrans::translate_types(context, structs)?;
+    pretrans::translate_types(tables, structs)?;
 
     // translate extern functions and collect names
     for exfunc in exfunctions {
         let func_ty = exfunc.get_type();
-        let func_ty = translate_function_type(&mut context.types, func_ty)?;
-        if context
+        let func_ty = translate_function_type(&mut tables.types, func_ty)?;
+        if tables
             .globals
             .register_function(exfunc.name.clone(), func_ty.clone())
         {
@@ -65,11 +64,8 @@ pub fn translate_program(
     // collect names for local functions
     for func in &functions {
         let func_ty = func.get_type();
-        let func_ty = translate_function_type(&mut context.types, func_ty)?;
-        if context
-            .globals
-            .register_function(func.name.clone(), func_ty)
-        {
+        let func_ty = translate_function_type(&mut tables.types, func_ty)?;
+        if tables.globals.register_function(func.name.clone(), func_ty) {
             return error!(
                 TranslationError::FunctionAlreadyDefined(func.name.clone()),
                 func.span
@@ -79,26 +75,23 @@ pub fn translate_program(
 
     // translate local functions
     for func in functions {
-        declarations.push(ir::Declaration::Function(translate_function(
-            context,
-            func,
-        )?))
+        declarations.push(ir::Declaration::Function(translate_function(tables, func)?))
     }
 
     Ok(ir::Program { declarations })
 }
 
 fn translate_function(
-    context: &mut Context,
+    tables: &mut Tables,
     function: ast::Function,
 ) -> TranslationResult<ir::Function> {
-    context.new_locals();
-    context.locals.begin_scope();
+    tables.new_locals();
+    tables.locals.begin_scope();
 
     let mut parameters = Vec::with_capacity(function.parameters.len());
     for (param_ty, param_name) in function.parameters {
-        let param_ty = translate_type(&mut context.types, param_ty, false)?;
-        if let Some(id) = context.locals.register_local(param_name.clone(), param_ty) {
+        let param_ty = translate_type(&mut tables.types, param_ty, false)?;
+        if let Some(id) = tables.locals.register_local(param_name.clone(), param_ty) {
             parameters.push((param_ty, id));
         } else {
             return error!(
@@ -108,22 +101,22 @@ fn translate_function(
         }
     }
 
-    context.locals.begin_scope();
+    tables.locals.begin_scope();
 
-    let func_return_ty = translate_type(&mut context.types, function.return_ty, true)?;
+    let func_return_ty = translate_type(&mut tables.types, function.return_ty, true)?;
     let mut func_builder = FunctionBuilder::new(func_return_ty);
-    let mut body = func_builder.translate_block_statement(context, function.body)?;
+    let mut body = func_builder.translate_block_statement(tables, function.body)?;
 
     if !utils::check_return_paths(&body) {
-        if func_return_ty != context.types.get_void_ty() {
+        if func_return_ty != tables.types.get_void_ty() {
             return error!(TranslationError::NotAllPathsReturn, function.span);
         } else {
             body.push(ir::Statement::Return(None)); // we add a return void
         }
     }
 
-    context.locals.end_scope();
-    context.locals.end_scope();
+    tables.locals.end_scope();
+    tables.locals.end_scope();
 
     Ok(ir::Function {
         return_ty: func_return_ty,
@@ -153,13 +146,13 @@ impl FunctionBuilder {
 
     fn translate_block_statement(
         &mut self,
-        ctxt: &mut Context,
+        tables: &mut Tables,
         block: ast::BlockStatement,
     ) -> TranslationResult<ir::BlockStatement> {
-        ctxt.locals.begin_scope();
+        tables.locals.begin_scope();
 
         let block = {
-            let mut builder = BlockBuilder::new(ctxt, self);
+            let mut builder = BlockBuilder::new(tables, self);
 
             for stmt in block.statements {
                 builder.translate_statement(stmt)?;
@@ -168,12 +161,12 @@ impl FunctionBuilder {
             builder.collect()
         };
 
-        ctxt.locals.end_scope();
+        tables.locals.end_scope();
         Ok(block)
     }
 }
 
-pub fn check_if_main_declaration(context: &Context, prog: &ir::Program) -> TranslationResult<()> {
+pub fn check_if_main_declaration(tables: &Tables, prog: &ir::Program) -> TranslationResult<()> {
     for decl in &prog.declarations {
         let (name, ty, span) = match *decl {
             ir::Declaration::ExternFunction(ref exfunc) => {
@@ -183,7 +176,7 @@ pub fn check_if_main_declaration(context: &Context, prog: &ir::Program) -> Trans
         };
 
         if name == "main" {
-            if ty.return_ty == context.types.get_int_ty() && ty.parameters_ty.is_empty()
+            if ty.return_ty == tables.types.get_int_ty() && ty.parameters_ty.is_empty()
                 && !ty.is_vararg
             {
                 return Ok(());
@@ -196,7 +189,7 @@ pub fn check_if_main_declaration(context: &Context, prog: &ir::Program) -> Trans
 }
 
 fn translate_type(
-    typectxt: &mut ty::TyContext,
+    typectxt: &mut TypeTable,
     ty: Spanned<ast::Type>,
     void: bool,
 ) -> TranslationResult<ty::Type> {
@@ -221,7 +214,7 @@ fn translate_type(
 }
 
 fn translate_function_type(
-    typectxt: &mut ty::TyContext,
+    typectxt: &mut TypeTable,
     func_ty: ast::FunctionType,
 ) -> TranslationResult<ty::FunctionType> {
     let return_ty = translate_type(typectxt, func_ty.return_ty, true)?;

@@ -9,7 +9,6 @@ pub struct IdentifierId(pub usize);
 
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub types: TypeContext,
     pub declarations: Vec<Declaration>,
 }
 
