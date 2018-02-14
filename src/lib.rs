@@ -5,6 +5,7 @@ extern crate lazy_static;
 extern crate libc;
 extern crate llvm_sys as llvm;
 extern crate regex;
+extern crate typed_arena;
 
 pub mod errors;
 pub mod interner;

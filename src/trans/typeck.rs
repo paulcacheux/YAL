@@ -1,15 +1,16 @@
 use ty;
 use ast;
 use ir;
+use trans;
 
 pub fn binop_typeck(
-    type_ctxt: &ty::TyContext,
+    type_ctxt: &trans::tables::TypeTable,
     binop: ast::BinaryOperatorKind,
     lhs: ty::Type,
     rhs: ty::Type,
 ) -> Option<(ty::Type, ir::BinaryOperatorKind)> {
-    let lhs_tv = type_ctxt.get_typevalue_from_id(lhs);
-    let rhs_tv = type_ctxt.get_typevalue_from_id(rhs);
+    let lhs_tv = lhs.to_type_value();
+    let rhs_tv = rhs.to_type_value();
 
     let int_ty = type_ctxt.get_int_ty();
     let double_ty = type_ctxt.get_double_ty();
@@ -106,11 +107,11 @@ pub fn binop_typeck(
 }
 
 pub fn unop_typeck(
-    type_ctxt: &mut ty::TyContext,
+    type_ctxt: &trans::tables::TypeTable,
     unop: ast::UnaryOperatorKind,
     sub: ty::Type,
 ) -> Option<(ty::Type, ir::UnaryOperatorKind)> {
-    let sub_tv = type_ctxt.get_typevalue_from_id(sub);
+    let sub_tv = sub.to_type_value();
 
     let int_ty = type_ctxt.get_int_ty();
     let double_ty = type_ctxt.get_double_ty();
@@ -131,11 +132,11 @@ pub fn unop_typeck(
 }
 
 pub fn lvalue_unop_typeck(
-    type_ctxt: &mut ty::TyContext,
+    type_ctxt: &trans::tables::TypeTable,
     lvalue_unop: ast::LValueUnaryOperatorKind,
     sub: ty::Type,
 ) -> Option<(ty::Type, ir::LValueUnaryOperatorKind)> {
-    let sub_tv = type_ctxt.get_typevalue_from_id(sub);
+    let sub_tv = sub.to_type_value();
 
     let int_ty = type_ctxt.get_int_ty();
 
@@ -164,13 +165,9 @@ pub enum CastTypeckResult {
     Error,
 }
 
-pub fn cast_typeck(
-    type_ctxt: &mut ty::TyContext,
-    src_ty: ty::Type,
-    target_ty: ty::Type,
-) -> CastTypeckResult {
-    let src_ty_tv = type_ctxt.get_typevalue_from_id(src_ty);
-    let target_ty_tv = type_ctxt.get_typevalue_from_id(target_ty);
+pub fn cast_typeck(src_ty: ty::Type, target_ty: ty::Type) -> CastTypeckResult {
+    let src_ty_tv = src_ty.to_type_value();
+    let target_ty_tv = target_ty.to_type_value();
 
     use self::CastTypeckResult::*;
     match (src_ty_tv, target_ty_tv) {

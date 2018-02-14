@@ -3,15 +3,15 @@ use ty;
 use codemap::Spanned;
 use errors::TranslationError;
 use trans::{self, TranslationResult};
-use trans::context::Context;
+use trans::tables::Tables;
 
 pub(super) fn translate_types(
-    context: &mut Context,
+    tables: &mut Tables,
     structs: Vec<ast::Struct>,
 ) -> TranslationResult<()> {
     // collect all names
     for s in &structs {
-        if context.types.pre_register_struct_type(s.name.clone()) {
+        if tables.types.pre_register_struct_type(s.name.clone()) {
             return error!(TranslationError::TypeAlreadyDefined(s.name.clone()), s.span);
         }
     }
@@ -20,9 +20,9 @@ pub(super) fn translate_types(
     for s in structs {
         let fields = s.fields
             .iter()
-            .map(|&(ref aty, ref name)| {
-                trans::translate_type(&mut context.types, aty.clone(), false)
-                    .map(|ty| (ty, name.clone()))
+            .map(|&(ref name, ref aty)| {
+                trans::translate_type(&mut tables.types, aty.clone(), false)
+                    .map(|ty| (name.clone(), ty))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -30,7 +30,7 @@ pub(super) fn translate_types(
             name: s.name.clone(),
             fields,
         });
-        context.types.register_struct_type(&s.name, tv);
+        tables.types.register_struct_type(&s.name, tv);
     }
 
     Ok(())

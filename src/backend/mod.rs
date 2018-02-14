@@ -9,6 +9,7 @@ use ir;
 use ty;
 use common;
 use interner::{Interner, InternerId};
+use trans;
 
 mod helper;
 pub mod execution_module;
@@ -19,7 +20,7 @@ use self::execution_module::ExecutionModule;
 pub fn llvm_codegen_program(
     program: ir::Program,
     strings: &Interner<String>,
-    types: &ty::TyContext,
+    types: &trans::tables::TypeTable,
 ) -> ExecutionModule {
     let mut backend = Backend::new(strings, types);
 
@@ -48,7 +49,7 @@ struct Backend<'s, 't> {
     builder: IRBuilder,
     ids: HashMap<ir::IdentifierId, LLVMValueRef>,
     strings: &'s Interner<String>,
-    tyctxt: &'t ty::TyContext,
+    tyctxt: &'t trans::tables::TypeTable,
     ty_cache: HashMap<ty::Type, LLVMTypeRef>,
     current_func: LLVMValueRef,
     current_break: LLVMBasicBlockRef,
@@ -56,7 +57,7 @@ struct Backend<'s, 't> {
 }
 
 impl<'s, 't> Backend<'s, 't> {
-    fn new(strings: &'s Interner<String>, tyctxt: &'t ty::TyContext) -> Self {
+    fn new(strings: &'s Interner<String>, tyctxt: &'t trans::tables::TypeTable) -> Self {
         let context = Context::new();
         let module = Module::new_in_context(&context, b"main\0");
         let builder = IRBuilder::new_in_context(&context);
@@ -80,9 +81,10 @@ impl<'s, 't> Backend<'s, 't> {
             return llvm_ty;
         }
 
-        let type_value = self.tyctxt.get_typevalue_from_id(ty);
+        let type_value = ty.to_type_value();
 
         let llvm_ty = match type_value {
+            ty::TypeValue::Incomplete => panic!("Incomplete type in backend"),
             ty::TypeValue::Void => self.context.void_ty(),
             ty::TypeValue::Int => self.context.i32_ty(),
             ty::TypeValue::Double => self.context.double_ty(),
@@ -99,7 +101,7 @@ impl<'s, 't> Backend<'s, 't> {
                 let mut fields: Vec<_> = struct_ty
                     .fields
                     .into_iter()
-                    .map(|(ty, _)| self.codegen_type(ty))
+                    .map(|(_, ty)| self.codegen_type(ty))
                     .collect();
 
                 unsafe {

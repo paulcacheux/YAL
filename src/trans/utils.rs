@@ -3,7 +3,7 @@ use ir;
 use common;
 use ir::IdentifierId;
 use errors::TranslationError;
-use trans::TranslationResult;
+use trans::{self, TranslationResult};
 use codemap::{Span, Spanned};
 
 macro_rules! error {
@@ -48,8 +48,9 @@ pub fn check_expect_type(
     }
 }
 
-pub fn lvalue_to_rvalue(tyctxt: &ty::TyContext, expression: TypedExpression) -> TypedExpression {
-    if let Some(sub) = tyctxt.is_lvalue(expression.ty) {
+pub fn lvalue_to_rvalue(expression: TypedExpression) -> TypedExpression {
+    let tv = expression.ty.to_type_value();
+    if let ty::TypeValue::LValue(sub) = tv {
         TypedExpression {
             ty: sub,
             expr: ir::Expression::LValueToRValue(Box::new(expression.expr)),
@@ -60,34 +61,42 @@ pub fn lvalue_to_rvalue(tyctxt: &ty::TyContext, expression: TypedExpression) -> 
 }
 
 pub fn rvalue_to_lvalue(
-    tyctxt: &mut ty::TyContext,
+    ty_table: &trans::tables::TypeTable,
     expression: TypedExpression,
 ) -> TypedExpression {
-    if tyctxt.is_lvalue(expression.ty).is_some() {
+    let tv = expression.ty.to_type_value();
+    if let ty::TypeValue::LValue(_) = tv {
         expression
     } else {
         TypedExpression {
-            ty: tyctxt.lvalue_of(expression.ty),
+            ty: ty_table.lvalue_of(expression.ty),
             expr: ir::Expression::RValueToLValue(Box::new(expression.expr)),
         }
     }
 }
 
-pub fn unsure_workable(tyctxt: &mut ty::TyContext, expr: TypedExpression) -> TypedExpression {
-    if tyctxt.is_lvalue_struct(expr.ty).is_some() {
-        expr
-    } else if tyctxt.is_struct(expr.ty).is_some() {
-        rvalue_to_lvalue(tyctxt, expr)
-    } else {
-        lvalue_to_rvalue(tyctxt, expr)
+pub fn unsure_workable(
+    ty_table: &trans::tables::TypeTable,
+    expression: TypedExpression,
+) -> TypedExpression {
+    let tv = expression.ty.to_type_value();
+    match tv {
+        ty::TypeValue::LValue(sub) => {
+            let sub_tv = sub.to_type_value();
+            if let ty::TypeValue::Struct(_) = sub_tv {
+                expression
+            } else {
+                lvalue_to_rvalue(expression)
+            }
+        }
+        ty::TypeValue::Struct(_) => rvalue_to_lvalue(ty_table, expression),
+        _ => lvalue_to_rvalue(expression),
     }
 }
 
-pub fn unsure_subscriptable(
-    tyctxt: &ty::TyContext,
-    expr: TypedExpression,
-) -> Option<(ty::Type, ir::Expression)> {
-    if let Some(sub) = tyctxt.is_pointer(expr.ty) {
+pub fn unsure_subscriptable(expr: TypedExpression) -> Option<(ty::Type, ir::Expression)> {
+    let tv = expr.ty.to_type_value();
+    if let ty::TypeValue::Pointer(sub) = tv {
         Some((sub, expr.expr))
     } else {
         None

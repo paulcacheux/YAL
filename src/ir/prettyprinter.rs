@@ -6,8 +6,7 @@ use ty;
 use codemap::Span;
 
 #[derive(Debug)]
-pub struct PrettyPrinter<'ty, 'w, W: Write + 'w> {
-    tyctxt: &'ty ty::TyContext,
+pub struct PrettyPrinter<'w, W: Write + 'w> {
     writer: &'w mut W,
     expr_counter: usize,
     tab: usize,
@@ -25,10 +24,9 @@ macro_rules! writeln_pp {
     }
 }
 
-impl<'ty, 'w, W: Write + 'w> PrettyPrinter<'ty, 'w, W> {
-    pub fn new(writer: &'w mut W, tyctxt: &'ty ty::TyContext) -> Self {
+impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
+    pub fn new(writer: &'w mut W) -> Self {
         PrettyPrinter {
-            tyctxt,
             writer,
             expr_counter: 0,
             tab: 0,
@@ -254,8 +252,9 @@ impl<'ty, 'w, W: Write + 'w> PrettyPrinter<'ty, 'w, W> {
     }
 
     fn ty_to_string(&self, ty: ty::Type) -> String {
-        let ty = self.tyctxt.get_typevalue_from_id(ty);
+        let ty = ty.to_type_value();
         match ty {
+            ty::TypeValue::Incomplete => "incomplete".to_string(),
             ty::TypeValue::Int => "int".to_string(),
             ty::TypeValue::Double => "double".to_string(),
             ty::TypeValue::Boolean => "boolean".to_string(),

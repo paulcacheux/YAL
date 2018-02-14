@@ -1,10 +1,41 @@
-use std::collections::hash_map::{Entry, HashMap};
+use std::hash::{Hash, Hasher};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Type(usize);
+#[derive(Debug, Clone, Copy)]
+pub struct Type(*mut TypeValue);
+
+impl Type {
+    pub fn from_raw(tv: *mut TypeValue) -> Self {
+        Type(tv)
+    }
+
+    pub fn to_type_value(self) -> TypeValue {
+        unsafe { (*self.0).clone() }
+    }
+
+    pub fn update(&self, new_tv: TypeValue) {
+        unsafe { *self.0 = new_tv }
+    }
+}
+
+impl PartialEq for Type {
+    fn eq(&self, other: &Type) -> bool {
+        unsafe { *self.0 == *other.0 }
+    }
+}
+
+impl Eq for Type {}
+
+impl Hash for Type {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        unsafe {
+            (*self.0).hash(state);
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeValue {
+    Incomplete,
     Int,
     Double,
     Boolean,
@@ -18,7 +49,7 @@ pub enum TypeValue {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructType {
     pub name: String,
-    pub fields: Vec<(Type, String)>,
+    pub fields: Vec<(String, Type)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,10 +59,10 @@ pub struct FunctionType {
     pub is_vararg: bool,
 }
 
+/*
 #[derive(Debug, Clone)]
-pub struct TyContext {
-    types: Vec<Option<TypeValue>>,
-    names: HashMap<String, Type>,
+pub struct TypeContext {
+    types: Arena<TypeValue>,
 }
 
 macro_rules! get_builtin_type {
@@ -167,4 +198,4 @@ impl TyContext {
         }
         None
     }
-}
+}*/
