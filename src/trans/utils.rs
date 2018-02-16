@@ -49,8 +49,7 @@ pub fn check_expect_type(
 }
 
 pub fn lvalue_to_rvalue(expression: TypedExpression) -> TypedExpression {
-    let tv = expression.ty.to_type_value();
-    if let ty::TypeValue::LValue(sub) = tv {
+    if let ty::TypeValue::LValue(sub) = *expression.ty {
         TypedExpression {
             ty: sub,
             expr: ir::Expression::LValueToRValue(Box::new(expression.expr)),
@@ -64,8 +63,7 @@ pub fn rvalue_to_lvalue(
     ty_table: &trans::tables::TypeTable,
     expression: TypedExpression,
 ) -> TypedExpression {
-    let tv = expression.ty.to_type_value();
-    if let ty::TypeValue::LValue(_) = tv {
+    if let ty::TypeValue::LValue(_) = *expression.ty {
         expression
     } else {
         TypedExpression {
@@ -79,11 +77,9 @@ pub fn unsure_workable(
     ty_table: &trans::tables::TypeTable,
     expression: TypedExpression,
 ) -> TypedExpression {
-    let tv = expression.ty.to_type_value();
-    match tv {
+    match *expression.ty {
         ty::TypeValue::LValue(sub) => {
-            let sub_tv = sub.to_type_value();
-            if let ty::TypeValue::Struct(_) = sub_tv {
+            if let ty::TypeValue::Struct(_) = *sub {
                 expression
             } else {
                 lvalue_to_rvalue(expression)
@@ -95,8 +91,7 @@ pub fn unsure_workable(
 }
 
 pub fn unsure_subscriptable(expr: TypedExpression) -> Option<(ty::Type, ir::Expression)> {
-    let tv = expr.ty.to_type_value();
-    if let ty::TypeValue::Pointer(sub) = tv {
+    if let ty::TypeValue::Pointer(sub) = *expr.ty {
         Some((sub, expr.expr))
     } else {
         None

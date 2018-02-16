@@ -252,8 +252,7 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
     }
 
     fn ty_to_string(&self, ty: ty::Type) -> String {
-        let ty = ty.to_type_value();
-        match ty {
+        match *ty {
             ty::TypeValue::Incomplete => "incomplete".to_string(),
             ty::TypeValue::Int => "int".to_string(),
             ty::TypeValue::Double => "double".to_string(),
@@ -262,7 +261,7 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
             ty::TypeValue::Void => "void".to_string(),
             ty::TypeValue::LValue(sub) => format!("&{}", self.ty_to_string(sub)),
             ty::TypeValue::Pointer(sub) => format!("*{}", self.ty_to_string(sub)),
-            ty::TypeValue::Struct(s) => format!("struct {}", s.name),
+            ty::TypeValue::Struct(ref s) => format!("struct {}", s.name),
         }
     }
 }

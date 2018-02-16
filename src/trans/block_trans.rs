@@ -227,8 +227,7 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
                 let rhs = self.translate_expression(*rhs)?;
                 let rhs = utils::lvalue_to_rvalue(rhs);
 
-                let lhs_tv = lhs.ty.to_type_value();
-                if let ty::TypeValue::LValue(sub) = lhs_tv {
+                if let ty::TypeValue::LValue(sub) = *lhs.ty {
                     utils::check_eq_types(sub, rhs.ty, expr_span)?;
                 } else {
                     return error!(TranslationError::NonLValueAssign, lhs_span);
@@ -284,7 +283,7 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
             ast::Expression::LValueUnaryOperator { lvalue_unop, sub } => {
                 let sub = self.translate_expression(*sub)?;
 
-                if let ty::TypeValue::LValue(sub_ty) = sub.ty.to_type_value() {
+                if let ty::TypeValue::LValue(sub_ty) = *sub.ty {
                     if let Some((ty, op)) =
                         typeck::lvalue_unop_typeck(&mut self.tables.types, lvalue_unop, sub_ty)
                     {

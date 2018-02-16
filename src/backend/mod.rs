@@ -81,9 +81,7 @@ impl<'s, 't> Backend<'s, 't> {
             return llvm_ty;
         }
 
-        let type_value = ty.to_type_value();
-
-        let llvm_ty = match type_value {
+        let llvm_ty = match *ty {
             ty::TypeValue::Incomplete => panic!("Incomplete type in backend"),
             ty::TypeValue::Void => self.context.void_ty(),
             ty::TypeValue::Int => self.context.i32_ty(),
@@ -93,15 +91,15 @@ impl<'s, 't> Backend<'s, 't> {
             ty::TypeValue::LValue(sub) | ty::TypeValue::Pointer(sub) => {
                 utils::pointer_ty(self.codegen_type(sub))
             }
-            ty::TypeValue::Struct(struct_ty) => {
-                let name = CString::new(struct_ty.name).unwrap();
+            ty::TypeValue::Struct(ref struct_ty) => {
+                let name = CString::new(struct_ty.name.clone()).unwrap();
                 let llvm_struct_ty = self.context.create_struct_named(name.as_bytes_with_nul());
                 self.ty_cache.insert(ty, llvm_struct_ty); // for recursive types
 
                 let mut fields: Vec<_> = struct_ty
                     .fields
-                    .into_iter()
-                    .map(|(_, ty)| self.codegen_type(ty))
+                    .iter()
+                    .map(|&(_, ty)| self.codegen_type(ty))
                     .collect();
 
                 unsafe {

@@ -7,21 +7,29 @@ impl Type {
     pub fn from_raw(tv: *mut TypeValue) -> Self {
         Type(tv)
     }
-
-    pub fn to_type_value(self) -> TypeValue {
-        unsafe { (*self.0).clone() }
-    }
-
-    pub fn update(&mut self, new_tv: TypeValue) {
-        unsafe { *self.0 = new_tv }
-    }
 }
 
 unsafe impl Send for Type {}
 
+use std::ops::{Deref, DerefMut};
+
+impl Deref for Type {
+    type Target = TypeValue;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.0 }
+    }
+}
+
+impl DerefMut for Type {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.0 }
+    }
+}
+
 impl PartialEq for Type {
     fn eq(&self, other: &Type) -> bool {
-        unsafe { *self.0 == *other.0 }
+        **self == **other
     }
 }
 
@@ -29,9 +37,7 @@ impl Eq for Type {}
 
 impl Hash for Type {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        unsafe {
-            (*self.0).hash(state);
-        }
+        (**self).hash(state);
     }
 }
 

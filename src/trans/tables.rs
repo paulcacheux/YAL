@@ -180,7 +180,7 @@ impl TypeTable {
 
     pub fn register_struct_type(&mut self, name: &str, tv: ty::TypeValue) {
         let mut ty = self.lookup_type(name).unwrap();
-        ty.update(tv);
+        *ty = tv;
     }
 
     pub fn lvalue_of(&self, sub_ty: ty::Type) -> ty::Type {
