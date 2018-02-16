@@ -12,10 +12,12 @@ impl Type {
         unsafe { (*self.0).clone() }
     }
 
-    pub fn update(&self, new_tv: TypeValue) {
+    pub fn update(&mut self, new_tv: TypeValue) {
         unsafe { *self.0 = new_tv }
     }
 }
+
+unsafe impl Send for Type {}
 
 impl PartialEq for Type {
     fn eq(&self, other: &Type) -> bool {

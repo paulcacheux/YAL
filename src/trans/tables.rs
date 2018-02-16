@@ -1,7 +1,5 @@
 use std::collections::hash_map::{Entry, HashMap};
 
-use typed_arena::Arena;
-
 use ty;
 use ir::IdentifierId;
 
@@ -101,8 +99,12 @@ impl SymbolTable {
     }
 }
 
+use context::Context;
+lazy_static! {
+    static ref CONTEXT: Context = Context::new();
+}
+
 pub struct TypeTable {
-    arena: Arena<ty::TypeValue>,
     names: HashMap<String, ty::Type>,
 }
 
@@ -134,7 +136,6 @@ impl fmt::Debug for TypeTable {
 impl TypeTable {
     pub fn new() -> Self {
         let mut table = TypeTable {
-            arena: Arena::new(),
             names: HashMap::new(),
         };
 
@@ -147,8 +148,7 @@ impl TypeTable {
     }
 
     fn append_type(&self, tv: ty::TypeValue) -> ty::Type {
-        let ptr = self.arena.alloc(tv);
-        ty::Type::from_raw(ptr)
+        CONTEXT.alloc_type(tv)
     }
 
     fn register_type(&mut self, name: String, tv: ty::TypeValue) {
@@ -179,7 +179,7 @@ impl TypeTable {
     }
 
     pub fn register_struct_type(&mut self, name: &str, tv: ty::TypeValue) {
-        let ty = self.lookup_type(name).unwrap();
+        let mut ty = self.lookup_type(name).unwrap();
         ty.update(tv);
     }
 

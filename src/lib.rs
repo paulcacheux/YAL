@@ -7,6 +7,7 @@ extern crate llvm_sys as llvm;
 extern crate regex;
 extern crate typed_arena;
 
+pub mod context;
 pub mod errors;
 pub mod interner;
 pub mod codemap;
