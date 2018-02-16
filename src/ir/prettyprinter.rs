@@ -137,14 +137,6 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
                 }
                 Ok(())
             }
-            ir::Statement::While {
-                ref condition,
-                ref body,
-            } => {
-                writeln_pp!(self, "while")?;
-                self.pp_expression_as_block(condition)?;
-                self.pp_block_statement(body)
-            }
             ir::Statement::For {
                 ref init,
                 ref condition,
