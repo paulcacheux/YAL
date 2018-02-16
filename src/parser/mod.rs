@@ -286,10 +286,15 @@ impl<'si, 'input> Parser<'si, 'input> {
     }
 
     fn parse_expression_statement(&mut self) -> ParsingResult<Spanned<ast::Statement>> {
-        let expr = self.parse_expression()?;
-        let end_span = expect!(self.lexer; Token::SemiColon, ";");
-        let span = Span::merge(expr.span, end_span);
-        Ok(Spanned::new(ast::Statement::Expression(expr), span))
+        if let Token::SemiColon = self.lexer.peek_token()?.inner {
+            let span = expect!(self.lexer; Token::SemiColon, ";");
+            Ok(Spanned::new(ast::Statement::Empty, span))
+        } else {
+            let expr = self.parse_expression()?;
+            let end_span = expect!(self.lexer; Token::SemiColon, ";");
+            let span = Span::merge(expr.span, end_span);
+            Ok(Spanned::new(ast::Statement::Expression(expr), span))
+        }
     }
 
     fn parse_if_statement(&mut self) -> ParsingResult<Spanned<ast::Statement>> {
@@ -342,10 +347,22 @@ impl<'si, 'input> Parser<'si, 'input> {
     fn parse_for_statement(&mut self) -> ParsingResult<Spanned<ast::Statement>> {
         let begin_span = expect!(self.lexer; Token::ForKeyword, "for");
         expect!(self.lexer; Token::LeftParenthesis, "(");
-        let ty = self.parse_type()?;
-        let name = self.parse_identifier()?;
-        expect!(self.lexer; Token::Colon, ":");
-        let array = self.parse_expression()?;
+
+        let init = if let Token::LetKeyword = self.lexer.peek_token()?.inner {
+            self.parse_let_statement()?
+        } else {
+            self.parse_expression_statement()?
+        };
+        let init = Box::new(init);
+
+        let condition = self.parse_expression()?;
+        expect!(self.lexer; Token::SemiColon, ";");
+        let step = if let Token::RightParenthesis = self.lexer.peek_token()?.inner {
+            None
+        } else {
+            Some(self.parse_expression()?)
+        };
+
         expect!(self.lexer; Token::RightParenthesis, ")");
         let body = Box::new(self.parse_statement()?);
 
@@ -353,9 +370,9 @@ impl<'si, 'input> Parser<'si, 'input> {
 
         Ok(Spanned::new(
             ast::Statement::For(ast::ForStatement {
-                ty,
-                name,
-                array,
+                init,
+                condition,
+                step,
                 body,
             }),
             span,

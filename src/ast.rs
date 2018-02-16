@@ -112,9 +112,9 @@ pub struct WhileStatement {
 
 #[derive(Debug, Clone)]
 pub struct ForStatement {
-    pub ty: Spanned<Type>,
-    pub name: String,
-    pub array: Spanned<Expression>,
+    pub init: Box<Spanned<Statement>>,
+    pub condition: Spanned<Expression>,
+    pub step: Option<Spanned<Expression>>,
     pub body: Box<Spanned<Statement>>,
 }
 

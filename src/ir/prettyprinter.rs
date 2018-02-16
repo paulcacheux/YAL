@@ -145,6 +145,20 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
                 self.pp_expression_as_block(condition)?;
                 self.pp_block_statement(body)
             }
+            ir::Statement::For {
+                ref init,
+                ref condition,
+                ref step,
+                ref body,
+            } => {
+                writeln_pp!(self, "for")?;
+                self.pp_statement(init)?;
+                self.pp_expression_as_block(condition)?;
+                if let Some(ref step) = *step {
+                    self.pp_expression_as_block(step)?;
+                }
+                self.pp_block_statement(body)
+            }
             ir::Statement::Return(ref expr) => {
                 if let Some(ref expr) = *expr {
                     let expr = self.pp_expression_percent(expr)?;

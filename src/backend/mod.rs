@@ -207,6 +207,12 @@ impl<'s, 't> Backend<'s, 't> {
                 else_clause,
             } => self.codegen_if(condition, body, else_clause),
             ir::Statement::While { condition, body } => self.codegen_while(condition, body),
+            ir::Statement::For {
+                init,
+                condition,
+                step,
+                body,
+            } => self.codegen_for(*init, condition, step, body),
             ir::Statement::Return(expr) => self.codegen_return_statement(expr),
             ir::Statement::Expression(expr) => {
                 self.codegen_expression(expr);
@@ -255,6 +261,36 @@ impl<'s, 't> Backend<'s, 't> {
 
         self.builder.position_at_end(then_bb);
         self.codegen_block_statement(body);
+        self.builder.build_br(loop_bb);
+
+        self.builder.position_at_end(end_bb);
+    }
+
+    fn codegen_for(
+        &mut self,
+        init: ir::Statement,
+        cond: ir::Expression,
+        step: Option<ir::Expression>,
+        body: ir::BlockStatement,
+    ) {
+        let loop_bb = self.context.append_bb_to_func(self.current_func, b"loop\0");
+        let then_bb = self.context.append_bb_to_func(self.current_func, b"then\0");
+        let end_bb = self.context.append_bb_to_func(self.current_func, b"end\0");
+
+        self.codegen_statement(init);
+        self.builder.build_br(loop_bb);
+        self.builder.position_at_end(loop_bb);
+        let cond = self.codegen_expression(cond);
+        self.builder.build_cond_br(cond, then_bb, end_bb);
+
+        self.current_break = end_bb;
+        self.current_continue = loop_bb;
+
+        self.builder.position_at_end(then_bb);
+        self.codegen_block_statement(body);
+        if let Some(step) = step {
+            self.codegen_expression(step);
+        }
         self.builder.build_br(loop_bb);
 
         self.builder.position_at_end(end_bb);

@@ -1,30 +1,26 @@
 use trans::*;
 
 #[derive(Debug)]
-pub(super) struct BlockBuilder<'ctxt, 'fb> {
+pub(super) struct FunctionBuilder<'ctxt> {
     tables: &'ctxt mut tables::Tables,
-    statements: ir::BlockStatement,
-    func_builder: &'fb mut FunctionBuilder,
+    ret_ty: ty::Type,
+    in_loop: bool,
+    pub var_declarations: Vec<ir::VarDeclaration>,
 }
 
-impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
-    pub(super) fn new(tables: &'ctxt mut tables::Tables, fb: &'fb mut FunctionBuilder) -> Self {
-        BlockBuilder {
+impl<'ctxt> FunctionBuilder<'ctxt> {
+    pub(super) fn new(tables: &'ctxt mut tables::Tables, ret_ty: ty::Type) -> Self {
+        FunctionBuilder {
             tables,
-            statements: Vec::new(),
-            func_builder: fb,
+            ret_ty,
+            in_loop: false,
+            var_declarations: Vec::new(),
         }
-    }
-
-    pub(super) fn collect(self) -> ir::BlockStatement {
-        self.statements
     }
 
     pub(super) fn register_temp_local(&mut self, ty: ty::Type) -> ir::IdentifierId {
         let id = self.tables.locals.new_identifier_id();
-        self.func_builder
-            .var_declarations
-            .push(ir::VarDeclaration { ty, id });
+        self.var_declarations.push(ir::VarDeclaration { ty, id });
         id
     }
 
@@ -36,17 +32,30 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
         translate_type(&mut self.tables.types, ty, void)
     }
 
+    pub(super) fn translate_block_statement(
+        &mut self,
+        block: ast::BlockStatement,
+    ) -> TranslationResult<ir::BlockStatement> {
+        self.tables.locals.begin_scope();
+
+        let mut ir_block = Vec::new();
+        for stmt in block.statements {
+            ir_block.push(self.translate_statement(stmt)?);
+        }
+
+        self.tables.locals.end_scope();
+        Ok(ir_block)
+    }
+
     pub(super) fn translate_statement_as_block(
         &mut self,
         statement: Spanned<ast::Statement>,
     ) -> TranslationResult<ir::BlockStatement> {
-        match statement.inner {
-            ast::Statement::Empty => Ok(ir::BlockStatement::new()),
-            ast::Statement::Block(b) => self.func_builder.translate_block_statement(self.tables, b),
-            other => self.func_builder.translate_block_statement(
-                self.tables,
-                ast::BlockStatement::from_vec(vec![Spanned::new(other, statement.span)]),
-            ),
+        let ir_stmt = self.translate_statement(statement)?;
+        if let ir::Statement::Block(block) = ir_stmt {
+            Ok(block)
+        } else {
+            Ok(vec![ir_stmt])
         }
     }
 
@@ -56,7 +65,7 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
         name: String,
         value: Spanned<ast::Expression>,
         error_span: Span,
-    ) -> TranslationResult<()> {
+    ) -> TranslationResult<ir::Statement> {
         // first compute the rhs to avoir local shadowing
 
         let value_span = value.span;
@@ -68,38 +77,33 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
         }
 
         if let Some(id) = self.tables.locals.register_local(name.clone(), rhs.ty) {
-            self.func_builder
-                .var_declarations
+            self.var_declarations
                 .push(ir::VarDeclaration { ty: rhs.ty, id });
-            self.statements
-                .push(ir::Statement::Expression(utils::build_assign_to_id(
-                    id,
-                    rhs.expr,
-                )))
+            Ok(ir::Statement::Expression(utils::build_assign_to_id(
+                id,
+                rhs.expr,
+            )))
         } else {
-            return error!(TranslationError::LocalAlreadyDefined(name), error_span);
+            error!(TranslationError::LocalAlreadyDefined(name), error_span)
         }
-
-        Ok(())
     }
 
     pub(super) fn translate_statement(
         &mut self,
         statement: Spanned<ast::Statement>,
-    ) -> TranslationResult<()> {
+    ) -> TranslationResult<ir::Statement> {
         let Spanned {
             inner: statement,
             span: stmt_span,
         } = statement;
         match statement {
-            ast::Statement::Empty => {}
+            ast::Statement::Empty => Ok(ir::Statement::Block(vec![])),
             ast::Statement::Block(block) => {
-                let block = self.func_builder
-                    .translate_block_statement(self.tables, block)?;
-                self.statements.push(ir::Statement::Block(block));
+                let block = self.translate_block_statement(block)?;
+                Ok(ir::Statement::Block(block))
             }
             ast::Statement::Let(ast::LetStatement { ty, name, value }) => {
-                self.translate_var_decl(ty, name, value, stmt_span)?
+                self.translate_var_decl(ty, name, value, stmt_span)
             }
             ast::Statement::If(ast::IfStatement {
                 condition,
@@ -123,7 +127,7 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
                     ir::BlockStatement::new()
                 };
 
-                self.statements.push(ir::Statement::If {
+                Ok(ir::Statement::If {
                     condition: condition.expr,
                     body,
                     else_clause,
@@ -139,57 +143,86 @@ impl<'ctxt, 'fb> BlockBuilder<'ctxt, 'fb> {
                     condition_span,
                 )?;
 
-                let old_in_loop = self.func_builder.in_loop;
-                self.func_builder.in_loop = true;
+                let old_in_loop = self.in_loop;
+                self.in_loop = true;
                 let body = self.translate_statement_as_block(*body)?;
-                self.func_builder.in_loop = old_in_loop;
+                self.in_loop = old_in_loop;
 
-                self.statements.push(ir::Statement::While {
+                Ok(ir::Statement::While {
                     condition: condition.expr,
                     body,
                 })
             }
-            ast::Statement::For(_) => unimplemented!(),
+            ast::Statement::For(ast::ForStatement {
+                init,
+                condition,
+                step,
+                body,
+            }) => {
+                let init = Box::new(self.translate_statement(*init)?);
+
+                let condition_span = condition.span;
+                let condition = self.translate_expression(condition)?;
+                let condition = utils::lvalue_to_rvalue(condition);
+                utils::check_expect_type(
+                    self.tables.types.get_boolean_ty(),
+                    condition.ty,
+                    condition_span,
+                )?;
+
+                let step = if let Some(step) = step {
+                    Some(self.translate_expression(step)?.expr)
+                } else {
+                    None
+                };
+
+                let old_in_loop = self.in_loop;
+                self.in_loop = true;
+                let body = self.translate_statement_as_block(*body)?;
+                self.in_loop = old_in_loop;
+
+                Ok(ir::Statement::For {
+                    init,
+                    condition: condition.expr,
+                    step,
+                    body,
+                })
+            }
             ast::Statement::Return(maybe_expr) => {
                 let expr = if let Some(expr) = maybe_expr {
                     let expr_span = expr.span;
                     let expr = self.translate_expression(expr)?;
                     let expr = utils::lvalue_to_rvalue(expr);
-                    utils::check_eq_types(expr.ty, self.func_builder.ret_ty, expr_span)?;
+                    utils::check_eq_types(expr.ty, self.ret_ty, expr_span)?;
 
                     Some(expr.expr)
                 } else {
-                    utils::check_eq_types(
-                        self.tables.types.get_void_ty(),
-                        self.func_builder.ret_ty,
-                        stmt_span,
-                    )?;
+                    utils::check_eq_types(self.tables.types.get_void_ty(), self.ret_ty, stmt_span)?;
                     None
                 };
 
-                self.statements.push(ir::Statement::Return(expr));
+                Ok(ir::Statement::Return(expr))
             }
             ast::Statement::Expression(expr) => {
                 let expr = self.translate_expression(expr)?;
                 let expr = utils::lvalue_to_rvalue(expr);
-                self.statements.push(ir::Statement::Expression(expr.expr));
+                Ok(ir::Statement::Expression(expr.expr))
             }
             ast::Statement::Break => {
-                if self.func_builder.in_loop {
-                    self.statements.push(ir::Statement::Break);
+                if self.in_loop {
+                    Ok(ir::Statement::Break)
                 } else {
-                    return error!(TranslationError::BreakContinueOutOfLoop, stmt_span);
+                    error!(TranslationError::BreakContinueOutOfLoop, stmt_span)
                 }
             }
             ast::Statement::Continue => {
-                if self.func_builder.in_loop {
-                    self.statements.push(ir::Statement::Continue);
+                if self.in_loop {
+                    Ok(ir::Statement::Continue)
                 } else {
-                    return error!(TranslationError::BreakContinueOutOfLoop, stmt_span);
+                    error!(TranslationError::BreakContinueOutOfLoop, stmt_span)
                 }
             }
         }
-        Ok(())
     }
 
     pub(super) fn translate_expression(

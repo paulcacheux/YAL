@@ -9,10 +9,10 @@ pub mod tables;
 #[macro_use]
 mod utils;
 mod typeck;
-mod block_trans;
+mod func_trans;
 mod pretrans;
 
-use self::block_trans::*;
+use self::func_trans::*;
 use self::tables::{Tables, TypeTable};
 
 pub type TranslationResult<T> = Result<T, Spanned<TranslationError>>;
@@ -104,8 +104,12 @@ fn translate_function(
     tables.locals.begin_scope();
 
     let func_return_ty = translate_type(&mut tables.types, function.return_ty, true)?;
-    let mut func_builder = FunctionBuilder::new(func_return_ty);
-    let mut body = func_builder.translate_block_statement(tables, function.body)?;
+
+    let (mut body, var_declarations) = {
+        let mut func_builder = FunctionBuilder::new(tables, func_return_ty);
+        let mut body = func_builder.translate_block_statement(function.body)?;
+        (body, func_builder.var_declarations)
+    };
 
     if !utils::check_return_paths(&body) {
         if func_return_ty != tables.types.get_void_ty() {
@@ -122,48 +126,10 @@ fn translate_function(
         return_ty: func_return_ty,
         name: function.name,
         parameters,
-        var_declarations: func_builder.var_declarations,
+        var_declarations,
         body,
         span: function.span,
     })
-}
-
-#[derive(Debug)]
-struct FunctionBuilder {
-    ret_ty: ty::Type,
-    in_loop: bool,
-    var_declarations: Vec<ir::VarDeclaration>,
-}
-
-impl FunctionBuilder {
-    fn new(ret_ty: ty::Type) -> Self {
-        FunctionBuilder {
-            ret_ty,
-            in_loop: false,
-            var_declarations: Vec::new(),
-        }
-    }
-
-    fn translate_block_statement(
-        &mut self,
-        tables: &mut Tables,
-        block: ast::BlockStatement,
-    ) -> TranslationResult<ir::BlockStatement> {
-        tables.locals.begin_scope();
-
-        let block = {
-            let mut builder = BlockBuilder::new(tables, self);
-
-            for stmt in block.statements {
-                builder.translate_statement(stmt)?;
-            }
-
-            builder.collect()
-        };
-
-        tables.locals.end_scope();
-        Ok(block)
-    }
 }
 
 pub fn check_if_main_declaration(tables: &Tables, prog: &ir::Program) -> TranslationResult<()> {

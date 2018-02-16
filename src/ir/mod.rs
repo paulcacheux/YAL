@@ -65,12 +65,12 @@ pub enum Statement {
         condition: Expression,
         body: BlockStatement,
     },
-    /*For {
-        init: Expression,
+    For {
+        init: Box<Statement>,
         condition: Expression,
-        step: Expression,
+        step: Option<Expression>,
         body: BlockStatement,
-    },*/
+    },
     Return(Option<Expression>), // None for void
     Expression(Expression),
     Break,
