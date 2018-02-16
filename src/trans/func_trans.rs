@@ -1,4 +1,5 @@
 use trans::*;
+use codemap::Span;
 
 #[derive(Debug)]
 pub(super) struct FunctionBuilder<'ctxt> {
@@ -134,24 +135,15 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                 })
             }
             ast::Statement::While(ast::WhileStatement { condition, body }) => {
-                let condition_span = condition.span;
-                let condition = self.translate_expression(condition)?;
-                let condition = utils::lvalue_to_rvalue(condition);
-                utils::check_expect_type(
-                    self.tables.types.get_boolean_ty(),
-                    condition.ty,
-                    condition_span,
-                )?;
-
-                let old_in_loop = self.in_loop;
-                self.in_loop = true;
-                let body = self.translate_statement_as_block(*body)?;
-                self.in_loop = old_in_loop;
-
-                Ok(ir::Statement::While {
-                    condition: condition.expr,
+                let fake_ast_for = ast::ForStatement {
+                    init: Box::new(Spanned::new(ast::Statement::Empty, Span::dummy())),
+                    condition,
+                    step: None,
                     body,
-                })
+                };
+
+                let spanned = Spanned::new(ast::Statement::For(fake_ast_for), stmt_span);
+                self.translate_statement(spanned)
             }
             ast::Statement::For(ast::ForStatement {
                 init,
