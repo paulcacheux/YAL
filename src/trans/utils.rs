@@ -118,7 +118,7 @@ pub fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
             }
             _ => check_return_paths(body) && check_return_paths(else_clause),
         },
-        ir::Statement::While { ref condition, .. } => {
+        ir::Statement::For { ref condition, .. } => {
             if let ir::Expression::Literal(common::Literal::BooleanLiteral(true)) = *condition {
                 true
             } else {

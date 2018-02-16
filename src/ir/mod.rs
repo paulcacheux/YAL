@@ -61,10 +61,6 @@ pub enum Statement {
         body: BlockStatement,
         else_clause: BlockStatement,
     },
-    While {
-        condition: Expression,
-        body: BlockStatement,
-    },
     For {
         init: Box<Statement>,
         condition: Expression,
