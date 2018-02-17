@@ -223,12 +223,15 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
                 ref function,
                 ref args,
             } => {
-                let args: Result<Vec<_>, _> = args.iter()
+                let args = args.iter()
                     .map(|arg| self.pp_expression_percent(arg))
-                    .collect();
-                let args = args?;
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 format!("call {}({})", function, args.join(", "))
+            }
+            ir::Expression::FieldAccess { ref sub, index } => {
+                let sub = self.pp_expression_percent(sub)?;
+                format!("get_field #{} of {}", index, sub)
             }
         };
 

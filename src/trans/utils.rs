@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ty;
 use ir;
 use common;
@@ -127,5 +129,57 @@ pub fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
         }
         ir::Statement::Return(_) => true,
         _ => false,
+    }
+}
+
+#[derive(Debug)]
+pub struct StructLitChecker {
+    struct_name: String,
+    fields: HashMap<String, (ty::Type, usize, bool)>,
+    span: Span,
+}
+
+impl StructLitChecker {
+    pub fn new(value: ty::StructTypeValue, span: Span) -> Self {
+        let mut fields = HashMap::new();
+        for (index, (f_name, f_ty)) in value.fields.into_iter().enumerate() {
+            fields.insert(f_name, (f_ty, index, false));
+        }
+
+        StructLitChecker {
+            struct_name: value.name,
+            fields,
+            span,
+        }
+    }
+
+    pub fn set_field(
+        &mut self,
+        field: &str,
+        expr_ty: ty::Type,
+        span: Span,
+    ) -> TranslationResult<usize> {
+        if let Some(&mut (ty, index, ref mut set)) = self.fields.get_mut(field) {
+            if *set {
+                return error!(TranslationError::FieldAreadySet(field.to_string()), span);
+            }
+            check_eq_types(ty, expr_ty, span)?;
+            *set = true;
+            Ok(index)
+        } else {
+            error!(
+                TranslationError::UndefinedField(field.to_string(), self.struct_name.clone()),
+                span
+            )
+        }
+    }
+
+    pub fn final_check(self) -> TranslationResult<()> {
+        for &(_, _, set) in self.fields.values() {
+            if !set {
+                return error!(TranslationError::FieldNotSet, self.span);
+            }
+        }
+        Ok(())
     }
 }

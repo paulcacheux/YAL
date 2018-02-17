@@ -28,9 +28,13 @@ pub enum TranslationError {
     FieldAlreadyDefined(String),
     MismatchingTypes(ty::Type, ty::Type),
     UnexpectedType(ty::Type, ty::Type), // expected, given
+    NonStructType(String),
     UndefinedLocal(String),
     UndefinedType(String),
     NonLValueAssign,
+    FieldAreadySet(String),
+    FieldNotSet,
+    UndefinedField(String, String), // field, struct_name
     BinOpUndefined(ast::BinaryOperatorKind, ty::Type, ty::Type),
     LazyOpUndefined(ast::LazyOperatorKind, ty::Type, ty::Type),
     UnOpUndefined(ast::UnaryOperatorKind, ty::Type),
@@ -122,6 +126,9 @@ impl fmt::Display for TranslationError {
                 "Unexpected type '{:?}' ('{:?}' expected).",
                 given, expected
             ),
+            TranslationError::NonStructType(ref name) => {
+                write!(f, "'{}' is not a struct type", name)
+            }
             TranslationError::UndefinedLocal(ref local) => {
                 write!(f, "The local '{}' is undefined here", local)
             }
@@ -131,6 +138,19 @@ impl fmt::Display for TranslationError {
             TranslationError::NonLValueAssign => {
                 write!(f, "Assignment to a value that can't be assigned")
             }
+            TranslationError::FieldAreadySet(ref field) => write!(
+                f,
+                "The field '{}' has already been set in this literal",
+                field
+            ),
+            TranslationError::FieldNotSet => {
+                write!(f, "Not all fields are set in this struct literal")
+            }
+            TranslationError::UndefinedField(ref field, ref name) => write!(
+                f,
+                "The field '{}' doesn't exist in '{}' struct",
+                field, name
+            ),
             TranslationError::BinOpUndefined(binop, ref a, ref b) => write!(
                 f,
                 "The binary operator '{:?}' can't be applied to '{:?}' and '{:?}'",

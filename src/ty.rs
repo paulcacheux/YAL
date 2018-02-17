@@ -1,45 +1,52 @@
 use std::hash::{Hash, Hasher};
-
-#[derive(Debug, Clone, Copy)]
-pub struct Type(*mut TypeValue);
-
-impl Type {
-    pub fn from_raw(tv: *mut TypeValue) -> Self {
-        Type(tv)
-    }
-}
-
-unsafe impl Send for Type {}
-
 use std::ops::{Deref, DerefMut};
 
-impl Deref for Type {
-    type Target = TypeValue;
+macro_rules! wrapper {
+    ($name:ident -> $sub_ty:ty) => {
 
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.0 }
+        #[derive(Debug, Clone, Copy)]
+        pub struct $name(*mut $sub_ty);
+
+        impl $name {
+            pub fn from_raw(sub: *mut $sub_ty) -> Self {
+                $name(sub)
+            }
+        }
+
+        unsafe impl Send for $name {}
+
+        impl Deref for $name {
+            type Target = $sub_ty;
+
+            fn deref(&self) -> &Self::Target {
+                unsafe { &*self.0 }
+            }
+        }
+
+        impl DerefMut for $name {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                unsafe { &mut *self.0 }
+            }
+        }
+
+        impl PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                **self == **other
+            }
+        }
+
+        impl Eq for $name {}
+
+        impl Hash for $name {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                (**self).hash(state);
+            }
+        }
     }
 }
 
-impl DerefMut for Type {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *self.0 }
-    }
-}
-
-impl PartialEq for Type {
-    fn eq(&self, other: &Type) -> bool {
-        **self == **other
-    }
-}
-
-impl Eq for Type {}
-
-impl Hash for Type {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        (**self).hash(state);
-    }
-}
+wrapper!(Type -> TypeValue);
+wrapper!(StructType -> StructTypeValue);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeValue {
@@ -55,7 +62,7 @@ pub enum TypeValue {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructType {
+pub struct StructTypeValue {
     pub name: String,
     pub fields: Vec<(String, Type)>,
 }

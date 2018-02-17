@@ -30,11 +30,11 @@ pub(super) fn translate_types(
             fields.push((field_name, ty));
         }
 
-        let tv = ty::TypeValue::Struct(ty::StructType {
+        let s_tv = ty::StructTypeValue {
             name: s.name.clone(),
             fields,
-        });
-        tables.types.register_struct_type(&s.name, tv);
+        };
+        tables.types.register_struct_type(&s.name, s_tv);
     }
 
     Ok(())

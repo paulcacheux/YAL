@@ -153,7 +153,7 @@ impl TypeTable {
 
     fn register_type(&mut self, name: String, tv: ty::TypeValue) {
         // force the insert
-        let ty = self.append_type(tv);
+        let ty = CONTEXT.alloc_type(tv);
         self.names.insert(name, ty);
     }
 
@@ -178,18 +178,18 @@ impl TypeTable {
         }
     }
 
-    pub fn register_struct_type(&mut self, name: &str, tv: ty::TypeValue) {
+    pub fn register_struct_type(&mut self, name: &str, struct_tv: ty::StructTypeValue) {
         let mut ty = self.lookup_type(name).unwrap();
-        *ty = tv;
+        *ty = ty::TypeValue::Struct(CONTEXT.alloc_struct_type(struct_tv));
     }
 
     pub fn lvalue_of(&self, sub_ty: ty::Type) -> ty::Type {
         let tv = ty::TypeValue::LValue(sub_ty);
-        self.append_type(tv)
+        CONTEXT.alloc_type(tv)
     }
 
     pub fn pointer_of(&self, sub_ty: ty::Type) -> ty::Type {
         let tv = ty::TypeValue::Pointer(sub_ty);
-        self.append_type(tv)
+        CONTEXT.alloc_type(tv)
     }
 }

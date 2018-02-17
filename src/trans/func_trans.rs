@@ -400,6 +400,31 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                     error!(TranslationError::FunctionUndefined(function), expr_span)
                 }
             }
+            ast::Expression::StructLiteral {
+                struct_name,
+                fields,
+            } => {
+                let struct_tv = if let Some(ty) = self.tables.types.lookup_type(&struct_name) {
+                    if let ty::TypeValue::Struct(s) = *ty {
+                        (&*s).clone()
+                    } else {
+                        return error!(TranslationError::NonStructType(struct_name), expr_span);
+                    }
+                } else {
+                    return error!(TranslationError::UndefinedType(struct_name), expr_span);
+                };
+                let mut checker = utils::StructLitChecker::new(struct_tv, expr_span);
+
+                for (field_name, field_expr) in fields {
+                    let expr = self.translate_expression(field_expr)?;
+                    let expr = utils::lvalue_to_rvalue(expr);
+                    let index = checker.set_field(&field_name.inner, expr.ty, field_name.span)?;
+                    // TODO add set field stmt
+                }
+                checker.final_check()?;
+
+                unimplemented!()
+            }
             _ => unimplemented!(),
         }
     }

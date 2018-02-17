@@ -111,6 +111,10 @@ pub enum Expression {
         function: String,
         args: Vec<Expression>,
     },
+    FieldAccess {
+        sub: Box<Expression>,
+        index: usize,
+    },
 }
 
 #[derive(Debug, Clone)]
