@@ -89,7 +89,7 @@ fn translate_function(
     tables.locals.begin_scope();
 
     let mut parameters = Vec::with_capacity(function.parameters.len());
-    for (param_ty, param_name) in function.parameters {
+    for (param_name, param_ty) in function.parameters {
         let param_ty = translate_type(&mut tables.types, param_ty, false)?;
         if let Some(id) = tables.locals.register_local(param_name.clone(), param_ty) {
             parameters.push((param_ty, id));

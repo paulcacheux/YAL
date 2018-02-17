@@ -212,7 +212,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         }))
     }
 
-    fn parse_parameter_list(&mut self) -> ParsingResult<Vec<(Spanned<ast::Type>, String)>> {
+    fn parse_parameter_list(&mut self) -> ParsingResult<Vec<(String, Spanned<ast::Type>)>> {
         let mut result = Vec::new();
 
         if let Token::RightParenthesis = self.lexer.peek_token()?.inner {
@@ -229,11 +229,11 @@ impl<'si, 'input> Parser<'si, 'input> {
         Ok(result)
     }
 
-    fn parse_parameter(&mut self) -> ParsingResult<(Spanned<ast::Type>, String)> {
+    fn parse_parameter(&mut self) -> ParsingResult<(String, Spanned<ast::Type>)> {
         let name = self.parse_identifier()?;
         expect!(self.lexer; Token::Colon, ":");
         let ty = self.parse_type()?;
-        Ok((ty, name))
+        Ok((name, ty))
     }
 
     fn parse_identifier(&mut self) -> ParsingResult<String> {
@@ -560,25 +560,51 @@ impl<'si, 'input> Parser<'si, 'input> {
             }
             Token::Identifier(id) => {
                 let name = id.to_string();
-                if let Token::LeftParenthesis = self.lexer.peek_token()?.inner {
-                    self.lexer.next_token()?;
-                    let args = self.parse_expression_list()?;
-                    let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
-                    let span = Span::merge(span, end_span);
-                    let expr = ast::Expression::FunctionCall {
-                        function: name,
-                        args,
-                    };
-                    Ok(Spanned::new(expr, span))
-                } else {
-                    let expr = ast::Expression::Identifier(name);
-                    Ok(Spanned::new(expr, span))
+                match self.lexer.peek_token()?.inner {
+                    Token::LeftParenthesis => self.parse_function_call(name, span),
+                    Token::LeftBracket => self.parse_struct_literal(name, span),
+                    _ => {
+                        let expr = ast::Expression::Identifier(name);
+                        Ok(Spanned::new(expr, span))
+                    }
                 }
             }
             _ => {
                 return_unexpected!(span, "literal", "(", "-", "!", "identifier");
             }
         }
+    }
+
+    fn parse_function_call(
+        &mut self,
+        name: String,
+        start_span: Span,
+    ) -> ParsingResult<Spanned<ast::Expression>> {
+        expect!(self.lexer; Token::LeftParenthesis, "(");
+        let args = self.parse_expression_list()?;
+        let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
+        let span = Span::merge(start_span, end_span);
+        let expr = ast::Expression::FunctionCall {
+            function: name,
+            args,
+        };
+        Ok(Spanned::new(expr, span))
+    }
+
+    fn parse_struct_literal(
+        &mut self,
+        name: String,
+        start_span: Span,
+    ) -> ParsingResult<Spanned<ast::Expression>> {
+        expect!(self.lexer; Token::LeftBracket, "{");
+        let fields = self.parse_expression_fields()?;
+        let end_span = expect!(self.lexer; Token::RightBracket, "}");
+        let span = Span::merge(start_span, end_span);
+        let expr = ast::Expression::StructLiteral {
+            struct_name: name,
+            fields,
+        };
+        Ok(Spanned::new(expr, span))
     }
 
     fn parse_expression_list(&mut self) -> ParsingResult<Vec<Spanned<ast::Expression>>> {
@@ -596,6 +622,37 @@ impl<'si, 'input> Parser<'si, 'input> {
         }
 
         Ok(result)
+    }
+
+    fn parse_expression_fields(
+        &mut self,
+    ) -> ParsingResult<Vec<(Spanned<String>, Spanned<ast::Expression>)>> {
+        let mut result = Vec::new();
+
+        if let Token::RightBracket = self.lexer.peek_token()?.inner {
+            return Ok(result);
+        }
+
+        result.push(self.parse_field_literal()?);
+        while let Token::Comma = self.lexer.peek_token()?.inner {
+            self.lexer.next_token()?;
+
+            result.push(self.parse_field_literal()?);
+        }
+
+        Ok(result)
+    }
+
+    fn parse_field_literal(
+        &mut self,
+    ) -> ParsingResult<(Spanned<String>, Spanned<ast::Expression>)> {
+        let (name, span) =
+            accept!(self.lexer; Token::Identifier(id) => id.to_string(), "identifier");
+
+        let name = Spanned::new(name, span);
+        expect!(self.lexer; Token::Colon, ":");
+        let field_expr = self.parse_expression()?;
+        Ok((name, field_expr))
     }
 }
 

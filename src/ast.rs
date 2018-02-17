@@ -45,7 +45,7 @@ impl ExternFunction {
 pub struct Function {
     pub return_ty: Spanned<Type>,
     pub name: String,
-    pub parameters: Vec<(Spanned<Type>, String)>,
+    pub parameters: Vec<(String, Spanned<Type>)>,
     pub body: BlockStatement,
     pub span: Span,
 }
@@ -55,7 +55,7 @@ impl Function {
         let return_ty = self.return_ty.clone();
         let parameters_ty = self.parameters
             .iter()
-            .map(|&(ref a, _)| a.clone())
+            .map(|&(_, ref a)| a.clone())
             .collect();
         FunctionType {
             return_ty,
@@ -156,6 +156,10 @@ pub enum Expression {
     FunctionCall {
         function: String,
         args: Vec<Spanned<Expression>>,
+    },
+    StructLiteral {
+        struct_name: String,
+        fields: Vec<(Spanned<String>, Spanned<Expression>)>,
     },
     MemberAccess {
         expr: Box<Spanned<Expression>>,
