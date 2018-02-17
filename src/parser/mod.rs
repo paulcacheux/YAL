@@ -127,8 +127,10 @@ impl<'si, 'input> Parser<'si, 'input> {
         Ok(ast::Declaration::Struct(ast::Struct { name, fields, span }))
     }
 
-    fn parse_field(&mut self) -> ParsingResult<(String, Spanned<ast::Type>)> {
-        let name = self.parse_identifier()?;
+    fn parse_field(&mut self) -> ParsingResult<(Spanned<String>, Spanned<ast::Type>)> {
+        let (name, span) =
+            accept!(self.lexer; Token::Identifier(id) => id.to_string(), "identifier");
+        let name = Spanned::new(name, span);
         expect!(self.lexer; Token::Colon, ":");
         let ty = self.parse_type()?;
         Ok((name, ty))

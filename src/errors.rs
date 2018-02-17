@@ -25,6 +25,7 @@ pub enum TranslationError {
     ParameterAlreadyDefined(String),
     LocalAlreadyDefined(String),
     TypeAlreadyDefined(String),
+    FieldAlreadyDefined(String),
     MismatchingTypes(ty::Type, ty::Type),
     UnexpectedType(ty::Type, ty::Type), // expected, given
     UndefinedLocal(String),
@@ -109,6 +110,9 @@ impl fmt::Display for TranslationError {
             }
             TranslationError::TypeAlreadyDefined(ref ty) => {
                 write!(f, "The type '{}' is already defined", ty)
+            }
+            TranslationError::FieldAlreadyDefined(ref field) => {
+                write!(f, "The field '{}' is already defined", field)
             }
             TranslationError::MismatchingTypes(ref a, ref b) => {
                 write!(f, "Mismatching types between '{:?}' and '{:?}'", a, b)

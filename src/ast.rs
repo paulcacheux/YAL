@@ -16,7 +16,7 @@ pub enum Declaration {
 #[derive(Debug, Clone)]
 pub struct Struct {
     pub name: String,
-    pub fields: Vec<(String, Spanned<Type>)>,
+    pub fields: Vec<(Spanned<String>, Spanned<Type>)>,
     pub span: Span,
 }
 

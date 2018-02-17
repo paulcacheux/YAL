@@ -4,6 +4,7 @@ use codemap::Spanned;
 use errors::TranslationError;
 use trans::{self, TranslationResult};
 use trans::tables::Tables;
+use std::collections::HashSet;
 
 pub(super) fn translate_types(
     tables: &mut Tables,
@@ -18,13 +19,16 @@ pub(super) fn translate_types(
 
     // really build structs
     for s in structs {
-        let fields = s.fields
-            .iter()
-            .map(|&(ref name, ref aty)| {
-                trans::translate_type(&mut tables.types, aty.clone(), false)
-                    .map(|ty| (name.clone(), ty))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut fields_set = HashSet::new();
+        let mut fields = Vec::new();
+        for &(ref name, ref aty) in &s.fields {
+            let ty = trans::translate_type(&mut tables.types, aty.clone(), false)?;
+            let field_name = name.inner.clone();
+            if !fields_set.insert(field_name.clone()) {
+                return error!(TranslationError::FieldAlreadyDefined(field_name), name.span);
+            }
+            fields.push((field_name, ty));
+        }
 
         let tv = ty::TypeValue::Struct(ty::StructType {
             name: s.name.clone(),
