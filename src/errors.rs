@@ -34,7 +34,7 @@ pub enum TranslationError {
     NonLValueAssign,
     FieldAreadySet(String),
     FieldNotSet,
-    UndefinedField(String, String), // field, struct_name
+    UndefinedField(String),
     BinOpUndefined(ast::BinaryOperatorKind, ty::Type, ty::Type),
     LazyOpUndefined(ast::LazyOperatorKind, ty::Type, ty::Type),
     UnOpUndefined(ast::UnaryOperatorKind, ty::Type),
@@ -146,11 +146,9 @@ impl fmt::Display for TranslationError {
             TranslationError::FieldNotSet => {
                 write!(f, "Not all fields are set in this struct literal")
             }
-            TranslationError::UndefinedField(ref field, ref name) => write!(
-                f,
-                "The field '{}' doesn't exist in '{}' struct",
-                field, name
-            ),
+            TranslationError::UndefinedField(ref field) => {
+                write!(f, "The field '{}' doesn't exist here", field)
+            }
             TranslationError::BinOpUndefined(binop, ref a, ref b) => write!(
                 f,
                 "The binary operator '{:?}' can't be applied to '{:?}' and '{:?}'",

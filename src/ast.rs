@@ -161,9 +161,9 @@ pub enum Expression {
         struct_name: String,
         fields: Vec<(Spanned<String>, Spanned<Expression>)>,
     },
-    MemberAccess {
+    FieldAccess {
         expr: Box<Spanned<Expression>>,
-        member: String,
+        field: String,
     },
 }
 

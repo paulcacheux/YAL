@@ -61,6 +61,21 @@ pub enum TypeValue {
     Pointer(Type),
 }
 
+impl TypeValue {
+    pub fn has_field(&self, field_name: &str) -> Option<(usize, Type)> {
+        if let TypeValue::Struct(st) = *self {
+            for (index, &(ref name, ty)) in st.fields.iter().enumerate() {
+                if name == field_name {
+                    return Some((index, ty));
+                }
+            }
+            None
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructTypeValue {
     pub name: String,

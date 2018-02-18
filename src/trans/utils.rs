@@ -78,14 +78,18 @@ pub fn lvalue_to_rvalue(expression: TypedExpression) -> TypedExpression {
 pub fn rvalue_to_lvalue(
     ty_table: &trans::tables::TypeTable,
     expression: TypedExpression,
-) -> TypedExpression {
-    if let ty::TypeValue::LValue(_, _) = *expression.ty {
-        expression
+) -> (TypedExpression, ty::Type) {
+    if let ty::TypeValue::LValue(sub_ty, _) = *expression.ty {
+        (expression, sub_ty)
     } else {
-        TypedExpression {
-            ty: ty_table.lvalue_of(expression.ty, false),
-            expr: ir::Expression::RValueToLValue(Box::new(expression.expr)),
-        }
+        let sub_ty = expression.ty;
+        (
+            TypedExpression {
+                ty: ty_table.lvalue_of(sub_ty, false),
+                expr: ir::Expression::RValueToLValue(Box::new(expression.expr)),
+            },
+            sub_ty,
+        )
     }
 }
 
@@ -164,10 +168,7 @@ impl StructLitChecker {
             *set = true;
             Ok(index)
         } else {
-            error!(
-                TranslationError::UndefinedField(field.to_string(), self.struct_name.clone()),
-                span
-            )
+            error!(TranslationError::UndefinedField(field.to_string()), span)
         }
     }
 

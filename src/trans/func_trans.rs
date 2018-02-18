@@ -403,47 +403,70 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
             ast::Expression::StructLiteral {
                 struct_name,
                 fields,
-            } => {
-                let ty = if let Some(ty) = self.tables.types.lookup_type(&struct_name) {
-                    ty
+            } => self.translate_struct_literal(struct_name, fields, expr_span),
+            ast::Expression::FieldAccess { expr, field } => {
+                let expr = self.translate_expression(*expr)?;
+                let (expr, sub_ty) = utils::rvalue_to_lvalue(&self.tables.types, expr);
+
+                if let Some((index, ty)) = sub_ty.has_field(&field) {
+                    let lvalue_ty = self.tables.types.lvalue_of(ty, true);
+                    Ok(utils::TypedExpression {
+                        ty: lvalue_ty,
+                        expr: ir::Expression::FieldAccess {
+                            sub: Box::new(expr.expr),
+                            index,
+                        },
+                    })
                 } else {
-                    return error!(TranslationError::UndefinedType(struct_name), expr_span);
-                };
-
-                let struct_tv = if let ty::TypeValue::Struct(s) = *ty {
-                    (&*s).clone()
-                } else {
-                    return error!(TranslationError::NonStructType(struct_name), expr_span);
-                };
-
-                let res_id = self.register_temp_local(ty);
-                let lvalue_ty = self.tables.types.lvalue_of(ty, false);
-                let res_id_expr = ir::Expression::Identifier(res_id);
-                let mut stmts = Vec::new();
-
-                let mut checker = utils::StructLitChecker::new(struct_tv, expr_span);
-                for (field_name, field_expr) in fields {
-                    let expr = self.translate_expression(field_expr)?;
-                    let expr = utils::lvalue_to_rvalue(expr);
-                    let index = checker.set_field(&field_name.inner, expr.ty, field_name.span)?;
-                    stmts.push(ir::Statement::Expression(utils::build_assign_to_field(
-                        res_id_expr.clone(),
-                        index,
-                        expr.expr,
-                    )));
+                    error!(TranslationError::UndefinedField(field), expr_span)
                 }
-                checker.final_check()?;
-
-                Ok(utils::TypedExpression {
-                    ty: lvalue_ty,
-                    expr: ir::Expression::Block(Box::new(ir::BlockExpression {
-                        stmts,
-                        final_expr: res_id_expr,
-                    })),
-                })
             }
-            _ => unimplemented!(),
         }
+    }
+
+    pub(super) fn translate_struct_literal(
+        &mut self,
+        struct_name: String,
+        fields: Vec<(Spanned<String>, Spanned<ast::Expression>)>,
+        expr_span: Span,
+    ) -> TranslationResult<utils::TypedExpression> {
+        let ty = if let Some(ty) = self.tables.types.lookup_type(&struct_name) {
+            ty
+        } else {
+            return error!(TranslationError::UndefinedType(struct_name), expr_span);
+        };
+
+        let struct_tv = if let ty::TypeValue::Struct(s) = *ty {
+            (&*s).clone()
+        } else {
+            return error!(TranslationError::NonStructType(struct_name), expr_span);
+        };
+
+        let res_id = self.register_temp_local(ty);
+        let lvalue_ty = self.tables.types.lvalue_of(ty, false);
+        let res_id_expr = ir::Expression::Identifier(res_id);
+        let mut stmts = Vec::new();
+
+        let mut checker = utils::StructLitChecker::new(struct_tv, expr_span);
+        for (field_name, field_expr) in fields {
+            let expr = self.translate_expression(field_expr)?;
+            let expr = utils::lvalue_to_rvalue(expr);
+            let index = checker.set_field(&field_name.inner, expr.ty, field_name.span)?;
+            stmts.push(ir::Statement::Expression(utils::build_assign_to_field(
+                res_id_expr.clone(),
+                index,
+                expr.expr,
+            )));
+        }
+        checker.final_check()?;
+
+        Ok(utils::TypedExpression {
+            ty: lvalue_ty,
+            expr: ir::Expression::Block(Box::new(ir::BlockExpression {
+                stmts,
+                final_expr: res_id_expr,
+            })),
+        })
     }
 
     pub(super) fn translate_subscript(
