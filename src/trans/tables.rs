@@ -183,8 +183,8 @@ impl TypeTable {
         *ty = ty::TypeValue::Struct(CONTEXT.alloc_struct_type(struct_tv));
     }
 
-    pub fn lvalue_of(&self, sub_ty: ty::Type) -> ty::Type {
-        let tv = ty::TypeValue::LValue(sub_ty);
+    pub fn lvalue_of(&self, sub_ty: ty::Type, assignable: bool) -> ty::Type {
+        let tv = ty::TypeValue::LValue(sub_ty, assignable);
         CONTEXT.alloc_type(tv)
     }
 

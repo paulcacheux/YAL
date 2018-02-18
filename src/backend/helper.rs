@@ -325,4 +325,8 @@ impl IRBuilder {
             )
         }
     }
+
+    pub fn build_struct_gep(&self, ptr: LLVMValueRef, index: usize, name: &[u8]) -> LLVMValueRef {
+        unsafe { LLVMBuildStructGEP(self.builder, ptr, index as _, c_str(name)) }
+    }
 }

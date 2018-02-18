@@ -88,11 +88,12 @@ impl<'s, 't> Backend<'s, 't> {
             ty::TypeValue::Double => self.context.double_ty(),
             ty::TypeValue::Boolean => self.context.i1_ty(),
             ty::TypeValue::String => utils::pointer_ty(self.context.i8_ty()),
-            ty::TypeValue::LValue(sub) | ty::TypeValue::Pointer(sub) => {
+            ty::TypeValue::LValue(sub, _) | ty::TypeValue::Pointer(sub) => {
                 utils::pointer_ty(self.codegen_type(sub))
             }
             ty::TypeValue::Struct(ref struct_ty) => {
-                let name = CString::new(struct_ty.name.clone()).unwrap();
+                let name = format!("struct.{}", struct_ty.name);
+                let name = CString::new(name.clone()).unwrap();
                 let llvm_struct_ty = self.context.create_struct_named(name.as_bytes_with_nul());
                 self.ty_cache.insert(ty, llvm_struct_ty); // for recursive types
 
@@ -320,6 +321,7 @@ impl<'s, 't> Backend<'s, 't> {
             ir::Expression::FunctionCall { function, args } => {
                 self.codegen_funccall(&function, args)
             }
+            ir::Expression::FieldAccess { sub, index } => self.codegen_field_access(*sub, index),
             _ => unimplemented!(),
         }
     }
@@ -541,6 +543,11 @@ impl<'s, 't> Backend<'s, 't> {
             .collect();
 
         self.builder.build_call(func, args, b"\0")
+    }
+
+    fn codegen_field_access(&mut self, indexed: ir::Expression, index: usize) -> LLVMValueRef {
+        let indexed = self.codegen_expression(indexed);
+        self.builder.build_struct_gep(indexed, index, b"\0")
     }
 
     fn into_exec_module(self) -> ExecutionModule {

@@ -27,6 +27,20 @@ pub fn build_assign_to_id(id: IdentifierId, rhs: ir::Expression) -> ir::Expressi
     }
 }
 
+pub fn build_assign_to_field(
+    struct_expr: ir::Expression,
+    index: usize,
+    expr: ir::Expression,
+) -> ir::Expression {
+    ir::Expression::Assign {
+        lhs: Box::new(ir::Expression::FieldAccess {
+            sub: Box::new(struct_expr),
+            index,
+        }),
+        rhs: Box::new(expr),
+    }
+}
+
 pub fn check_eq_types(a: ty::Type, b: ty::Type, error_span: Span) -> TranslationResult<()> {
     if a != b {
         error!(TranslationError::MismatchingTypes(a, b), error_span) // TODO convert Type to suitable format
@@ -51,7 +65,7 @@ pub fn check_expect_type(
 }
 
 pub fn lvalue_to_rvalue(expression: TypedExpression) -> TypedExpression {
-    if let ty::TypeValue::LValue(sub) = *expression.ty {
+    if let ty::TypeValue::LValue(sub, _) = *expression.ty {
         TypedExpression {
             ty: sub,
             expr: ir::Expression::LValueToRValue(Box::new(expression.expr)),
@@ -65,30 +79,13 @@ pub fn rvalue_to_lvalue(
     ty_table: &trans::tables::TypeTable,
     expression: TypedExpression,
 ) -> TypedExpression {
-    if let ty::TypeValue::LValue(_) = *expression.ty {
+    if let ty::TypeValue::LValue(_, _) = *expression.ty {
         expression
     } else {
         TypedExpression {
-            ty: ty_table.lvalue_of(expression.ty),
+            ty: ty_table.lvalue_of(expression.ty, false),
             expr: ir::Expression::RValueToLValue(Box::new(expression.expr)),
         }
-    }
-}
-
-pub fn unsure_workable(
-    ty_table: &trans::tables::TypeTable,
-    expression: TypedExpression,
-) -> TypedExpression {
-    match *expression.ty {
-        ty::TypeValue::LValue(sub) => {
-            if let ty::TypeValue::Struct(_) = *sub {
-                expression
-            } else {
-                lvalue_to_rvalue(expression)
-            }
-        }
-        ty::TypeValue::Struct(_) => rvalue_to_lvalue(ty_table, expression),
-        _ => lvalue_to_rvalue(expression),
     }
 }
 

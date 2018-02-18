@@ -236,7 +236,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
             }
             ast::Expression::Identifier(id) => {
                 if let Some(symbol) = self.tables.locals.lookup_local(&id) {
-                    let lvalue_ty = self.tables.types.lvalue_of(symbol.ty);
+                    let lvalue_ty = self.tables.types.lvalue_of(symbol.ty, true);
                     Ok(utils::TypedExpression {
                         ty: lvalue_ty,
                         expr: ir::Expression::Identifier(symbol.id),
@@ -252,7 +252,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                 let rhs = self.translate_expression(*rhs)?;
                 let rhs = utils::lvalue_to_rvalue(rhs);
 
-                if let ty::TypeValue::LValue(sub) = *lhs.ty {
+                if let ty::TypeValue::LValue(sub, true) = *lhs.ty {
                     utils::check_eq_types(sub, rhs.ty, expr_span)?;
                 } else {
                     return error!(TranslationError::NonLValueAssign, lhs_span);
@@ -308,7 +308,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
             ast::Expression::LValueUnaryOperator { lvalue_unop, sub } => {
                 let sub = self.translate_expression(*sub)?;
 
-                if let ty::TypeValue::LValue(sub_ty) = *sub.ty {
+                if let ty::TypeValue::LValue(sub_ty, true) = *sub.ty {
                     if let Some((ty, op)) =
                         typeck::lvalue_unop_typeck(&mut self.tables.types, lvalue_unop, sub_ty)
                     {
@@ -404,26 +404,43 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                 struct_name,
                 fields,
             } => {
-                let struct_tv = if let Some(ty) = self.tables.types.lookup_type(&struct_name) {
-                    if let ty::TypeValue::Struct(s) = *ty {
-                        (&*s).clone()
-                    } else {
-                        return error!(TranslationError::NonStructType(struct_name), expr_span);
-                    }
+                let ty = if let Some(ty) = self.tables.types.lookup_type(&struct_name) {
+                    ty
                 } else {
                     return error!(TranslationError::UndefinedType(struct_name), expr_span);
                 };
-                let mut checker = utils::StructLitChecker::new(struct_tv, expr_span);
 
+                let struct_tv = if let ty::TypeValue::Struct(s) = *ty {
+                    (&*s).clone()
+                } else {
+                    return error!(TranslationError::NonStructType(struct_name), expr_span);
+                };
+
+                let res_id = self.register_temp_local(ty);
+                let lvalue_ty = self.tables.types.lvalue_of(ty, false);
+                let res_id_expr = ir::Expression::Identifier(res_id);
+                let mut stmts = Vec::new();
+
+                let mut checker = utils::StructLitChecker::new(struct_tv, expr_span);
                 for (field_name, field_expr) in fields {
                     let expr = self.translate_expression(field_expr)?;
                     let expr = utils::lvalue_to_rvalue(expr);
                     let index = checker.set_field(&field_name.inner, expr.ty, field_name.span)?;
-                    // TODO add set field stmt
+                    stmts.push(ir::Statement::Expression(utils::build_assign_to_field(
+                        res_id_expr.clone(),
+                        index,
+                        expr.expr,
+                    )));
                 }
                 checker.final_check()?;
 
-                unimplemented!()
+                Ok(utils::TypedExpression {
+                    ty: lvalue_ty,
+                    expr: ir::Expression::Block(Box::new(ir::BlockExpression {
+                        stmts,
+                        final_expr: res_id_expr,
+                    })),
+                })
             }
             _ => unimplemented!(),
         }
@@ -502,7 +519,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
         };
 
         let res_id = self.register_temp_local(bool_ty);
-        let lvalue_bool = self.tables.types.lvalue_of(bool_ty);
+        let lvalue_bool = self.tables.types.lvalue_of(bool_ty, true);
         let res_id_expr = utils::TypedExpression {
             ty: lvalue_bool,
             expr: ir::Expression::Identifier(res_id),

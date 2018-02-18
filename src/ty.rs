@@ -57,7 +57,7 @@ pub enum TypeValue {
     String,
     Void,
     Struct(StructType),
-    LValue(Type),
+    LValue(Type, bool), // assignable
     Pointer(Type),
 }
 

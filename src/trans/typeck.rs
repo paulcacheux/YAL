@@ -119,7 +119,7 @@ pub fn unop_typeck(
         (Minus, &ty::TypeValue::Double) => Some((double_ty, ir::UnaryOperatorKind::DoubleMinus)),
         (LogicalNot, &ty::TypeValue::Boolean) => Some((bool_ty, ir::UnaryOperatorKind::BooleanNot)),
         (PtrDeref, &ty::TypeValue::Pointer(sub)) if sub != void_ty => Some((
-            type_ctxt.lvalue_of(sub),
+            type_ctxt.lvalue_of(sub, true),
             ir::UnaryOperatorKind::PointerDeref,
         )),
         _ => None,
@@ -136,11 +136,11 @@ pub fn lvalue_unop_typeck(
     use ast::LValueUnaryOperatorKind::*;
     match (lvalue_unop, &*sub) {
         (Increment, &ty::TypeValue::Int) => Some((
-            type_ctxt.lvalue_of(int_ty),
+            type_ctxt.lvalue_of(int_ty, true),
             ir::LValueUnaryOperatorKind::IntIncrement,
         )),
         (Decrement, &ty::TypeValue::Int) => Some((
-            type_ctxt.lvalue_of(int_ty),
+            type_ctxt.lvalue_of(int_ty, true),
             ir::LValueUnaryOperatorKind::IntDecrement,
         )),
         (AddressOf, _) => Some((

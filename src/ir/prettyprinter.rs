@@ -268,7 +268,9 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
             ty::TypeValue::Boolean => "boolean".to_string(),
             ty::TypeValue::String => "string".to_string(),
             ty::TypeValue::Void => "void".to_string(),
-            ty::TypeValue::LValue(sub) => format!("&{}", self.ty_to_string(sub)),
+            ty::TypeValue::LValue(sub, ass) => {
+                format!("&{} assignable: {}", self.ty_to_string(sub), ass)
+            }
             ty::TypeValue::Pointer(sub) => format!("*{}", self.ty_to_string(sub)),
             ty::TypeValue::Struct(ref s) => format!("struct {}", s.name),
         }
