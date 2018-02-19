@@ -400,7 +400,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                     error!(TranslationError::FunctionUndefined(function), expr_span)
                 }
             }
-            ast::Expression::ArrayLiteral { .. } => unimplemented!(),
+            ast::Expression::ArrayLiteral { values } => self.translate_array_literal(values),
             ast::Expression::StructLiteral {
                 struct_name,
                 fields,
@@ -470,6 +470,58 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
         })
     }
 
+    pub(super) fn translate_array_literal(
+        &mut self,
+        values: Vec<Spanned<ast::Expression>>,
+    ) -> TranslationResult<utils::TypedExpression> {
+        assert!(
+            values.len() >= 1,
+            "You must provide values to build the array type"
+        );
+
+        let array_size = values.len();
+        let mut sub_ty = None;
+        let mut trans_values = Vec::with_capacity(values.len());
+        for value in values {
+            let value_span = value.span;
+            let value = self.translate_expression(value)?;
+            let value = utils::lvalue_to_rvalue(value);
+            if let Some(ty) = sub_ty {
+                utils::check_eq_types(ty, value.ty, value_span)?;
+            } else {
+                sub_ty = Some(value.ty);
+            }
+            trans_values.push(value);
+        }
+
+        let sub_ty = sub_ty.unwrap();
+        let array_ty = self.tables.types.array_of(sub_ty, array_size);
+        let ptr_ty = self.tables.types.pointer_of(sub_ty);
+
+        let res_id = self.register_temp_local(array_ty);
+        let lvalue_ty = self.tables.types.lvalue_of(array_ty, false);
+        let res_id_expr = ir::Expression::Identifier(res_id);
+        let ptr_expr = ir::Expression::BitCast {
+            dest_ty: ptr_ty,
+            sub: Box::new(res_id_expr.clone()),
+        };
+
+        let mut stmts = Vec::new();
+        for (index, value) in trans_values.into_iter().enumerate() {
+            stmts.push(ir::Statement::Expression(
+                utils::build_assign_to_array_index(ptr_expr.clone(), index, value.expr),
+            ));
+        }
+
+        Ok(utils::TypedExpression {
+            ty: lvalue_ty,
+            expr: ir::Expression::Block(Box::new(ir::BlockExpression {
+                stmts,
+                final_expr: res_id_expr,
+            })),
+        })
+    }
+
     pub(super) fn translate_subscript(
         &mut self,
         array: Spanned<ast::Expression>,
@@ -479,29 +531,23 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
         let index_span = index.span;
 
         let array = self.translate_expression(array)?;
-        let array = utils::lvalue_to_rvalue(array);
         let index = self.translate_expression(index)?;
         let index = utils::lvalue_to_rvalue(index);
         let array_ty = array.ty;
 
-        let (sub_ty, ptr) = if let Some(s) = utils::unsure_subscriptable(array) {
+        let (sub_ty, ptr) = if let Some(s) = utils::unsure_subscriptable(&self.tables.types, array)
+        {
             s
         } else {
             return error!(TranslationError::SubscriptNotArray(array_ty), array_span);
         };
 
         utils::check_eq_types(self.tables.types.get_int_ty(), index.ty, index_span)?;
+        let lvalue_ty = self.tables.types.lvalue_of(sub_ty, true);
 
         Ok(utils::TypedExpression {
-            ty: sub_ty,
-            expr: ir::Expression::UnaryOperator {
-                unop: ir::UnaryOperatorKind::PointerDeref,
-                sub: Box::new(ir::Expression::BinaryOperator {
-                    binop: ir::BinaryOperatorKind::PtrPlusOffset,
-                    lhs: Box::new(ptr),
-                    rhs: Box::new(index.expr),
-                }),
-            },
+            ty: lvalue_ty,
+            expr: utils::build_subscript(ptr, index.expr),
         })
     }
 

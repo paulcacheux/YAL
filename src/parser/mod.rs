@@ -191,7 +191,8 @@ impl<'si, 'input> Parser<'si, 'input> {
         let begin_span = expect!(self.lexer; Token::FnKeyword, "fn");
         let name = self.parse_identifier()?;
         expect!(self.lexer; Token::LeftParenthesis, "(");
-        let parameters = self.parse_parameter_list()?;
+        let parameters =
+            self.parse_comma_sep(&Token::RightParenthesis, Parser::parse_parameter, true)?;
         let mut end_span = expect!(self.lexer; Token::RightParenthesis, ")");
 
         let return_ty = if let Token::Arrow = self.lexer.peek_token()?.inner {
@@ -213,10 +214,6 @@ impl<'si, 'input> Parser<'si, 'input> {
             body,
             span,
         }))
-    }
-
-    fn parse_parameter_list(&mut self) -> ParsingResult<Vec<(String, Spanned<ast::Type>)>> {
-        self.parse_comma_sep(&Token::RightParenthesis, Parser::parse_parameter)
     }
 
     fn parse_parameter(&mut self) -> ParsingResult<(String, Spanned<ast::Type>)> {
@@ -549,9 +546,12 @@ impl<'si, 'input> Parser<'si, 'input> {
                 Ok(Spanned::new(expr, span))
             }
             Token::LeftSquare => {
-                let values =
-                    self.parse_comma_sep(&Token::RightParenthesis, Parser::parse_expression)?;
-                let end_span = expect!(self.lexer; Token::LeftSquare, "]");
+                let values = self.parse_comma_sep(
+                    &Token::RightParenthesis,
+                    Parser::parse_expression,
+                    false,
+                )?;
+                let end_span = expect!(self.lexer; Token::RightSquare, "]");
                 let span = Span::merge(span, end_span);
                 let expr = ast::Expression::ArrayLiteral { values };
                 Ok(Spanned::new(expr, span))
@@ -579,7 +579,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         start_span: Span,
     ) -> ParsingResult<Spanned<ast::Expression>> {
         expect!(self.lexer; Token::LeftParenthesis, "(");
-        let args = self.parse_expression_list(&Token::RightParenthesis)?;
+        let args = self.parse_comma_sep(&Token::RightParenthesis, Parser::parse_expression, true)?;
         let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
         let span = Span::merge(start_span, end_span);
         let expr = ast::Expression::FunctionCall {
@@ -595,7 +595,8 @@ impl<'si, 'input> Parser<'si, 'input> {
         start_span: Span,
     ) -> ParsingResult<Spanned<ast::Expression>> {
         expect!(self.lexer; Token::LeftBracket, "{");
-        let fields = self.parse_expression_fields()?;
+        let fields =
+            self.parse_comma_sep(&Token::RightBracket, Parser::parse_field_literal, false)?; // do we allow zero fields struct ?
         let end_span = expect!(self.lexer; Token::RightBracket, "}");
         let span = Span::merge(start_span, end_span);
         let expr = ast::Expression::StructLiteral {
@@ -605,27 +606,19 @@ impl<'si, 'input> Parser<'si, 'input> {
         Ok(Spanned::new(expr, span))
     }
 
-    fn parse_expression_list(
+    #[inline]
+    fn parse_comma_sep<F, T>(
         &mut self,
         stop: &Token<'input>,
-    ) -> ParsingResult<Vec<Spanned<ast::Expression>>> {
-        self.parse_comma_sep(stop, Parser::parse_expression)
-    }
-
-    fn parse_expression_fields(
-        &mut self,
-    ) -> ParsingResult<Vec<(Spanned<String>, Spanned<ast::Expression>)>> {
-        self.parse_comma_sep(&Token::RightBracket, Parser::parse_field_literal)
-    }
-
-    #[inline]
-    fn parse_comma_sep<F, T>(&mut self, stop: &Token<'input>, step: F) -> ParsingResult<Vec<T>>
+        step: F,
+        zero: bool,
+    ) -> ParsingResult<Vec<T>>
     where
         F: Fn(&mut Self) -> ParsingResult<T>,
     {
         let mut result = Vec::new();
 
-        if stop == &self.lexer.peek_token()?.inner {
+        if zero && stop == &self.lexer.peek_token()?.inner {
             return Ok(result);
         }
 

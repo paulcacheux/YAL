@@ -113,7 +113,7 @@ impl<'s, 't> Backend<'s, 't> {
                 }
                 llvm_struct_ty
             }
-            _ => unimplemented!(),
+            ty::TypeValue::Array(sub, size) => utils::array_ty(self.codegen_type(sub), size),
         };
 
         self.ty_cache.insert(ty, llvm_ty);

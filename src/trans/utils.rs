@@ -41,6 +41,31 @@ pub fn build_assign_to_field(
     }
 }
 
+pub fn build_assign_to_array_index(
+    ptr: ir::Expression,
+    index: usize,
+    expr: ir::Expression,
+) -> ir::Expression {
+    ir::Expression::Assign {
+        lhs: Box::new(build_subscript(
+            ptr,
+            ir::Expression::Literal(common::Literal::IntLiteral(index as _)),
+        )),
+        rhs: Box::new(expr),
+    }
+}
+
+pub fn build_subscript(ptr: ir::Expression, index: ir::Expression) -> ir::Expression {
+    ir::Expression::UnaryOperator {
+        unop: ir::UnaryOperatorKind::PointerDeref,
+        sub: Box::new(ir::Expression::BinaryOperator {
+            binop: ir::BinaryOperatorKind::PtrPlusOffset,
+            lhs: Box::new(ptr),
+            rhs: Box::new(index),
+        }),
+    }
+}
+
 pub fn check_eq_types(a: ty::Type, b: ty::Type, error_span: Span) -> TranslationResult<()> {
     if a != b {
         error!(TranslationError::MismatchingTypes(a, b), error_span) // TODO convert Type to suitable format
@@ -93,7 +118,24 @@ pub fn rvalue_to_lvalue(
     }
 }
 
-pub fn unsure_subscriptable(expr: TypedExpression) -> Option<(ty::Type, ir::Expression)> {
+pub fn unsure_subscriptable(
+    type_table: &trans::tables::TypeTable,
+    expr: TypedExpression,
+) -> Option<(ty::Type, ir::Expression)> {
+    let expr = if let ty::TypeValue::LValue(sub, _) = *expr.ty {
+        if let ty::TypeValue::Array(sub, _) = *sub {
+            let ptr = ir::Expression::BitCast {
+                dest_ty: type_table.pointer_of(sub),
+                sub: Box::new(expr.expr),
+            };
+            return Some((sub, ptr));
+        } else {
+            lvalue_to_rvalue(expr)
+        }
+    } else {
+        expr
+    };
+
     if let ty::TypeValue::Pointer(sub) = *expr.ty {
         Some((sub, expr.expr))
     } else {

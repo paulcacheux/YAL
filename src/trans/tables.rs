@@ -192,4 +192,9 @@ impl TypeTable {
         let tv = ty::TypeValue::Pointer(sub_ty);
         CONTEXT.alloc_type(tv)
     }
+
+    pub fn array_of(&self, sub_ty: ty::Type, size: usize) -> ty::Type {
+        let tv = ty::TypeValue::Array(sub_ty, size);
+        CONTEXT.alloc_type(tv)
+    }
 }
