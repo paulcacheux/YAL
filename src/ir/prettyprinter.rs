@@ -273,6 +273,7 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
             }
             ty::TypeValue::Pointer(sub) => format!("*{}", self.ty_to_string(sub)),
             ty::TypeValue::Struct(ref s) => format!("struct {}", s.name),
+            ty::TypeValue::Array(sub, size) => format!("[{}; {}]", self.ty_to_string(sub), size),
         }
     }
 }
