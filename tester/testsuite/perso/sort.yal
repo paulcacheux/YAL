@@ -1,0 +1,46 @@
+fn swap(a: *int, b: *int) {
+    let temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+fn quick_sort(array: *int, first: int, last: int) {
+    if (first < last) {
+        let pivot = first;
+        let i = first;
+        let j = last;
+        while (i < j) {
+            while (array[i] <= array[pivot] && i <= last) {
+                i++;
+            }
+
+            while (array[j] > array[pivot] && j >= first) {
+                j--;
+            }
+
+            if (i < j) {
+                swap(&array[i], &array[j]);
+            }
+        }
+
+        swap(&array[j], &array[pivot]);
+
+        quick_sort(array, first, j - 1);
+        quick_sort(array, j + 1, last);
+    }
+}
+
+fn print_array(array: *int, len: int) {
+    for (let i = 0; i < len; i++) {
+        printInt(array[i]);
+    }
+}
+
+fn main() -> int {
+    let array = [5, 4, 3, 2, 1];
+    print_array(&array[0], 5);
+    quick_sort(&array[0], 0, 4);
+    print_array(&array[0], 5);
+
+    return 0;
+}

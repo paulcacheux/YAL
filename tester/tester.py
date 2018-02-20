@@ -62,6 +62,7 @@ def handle_bad_suite():
 handle_good_suite("good")
 handle_good_suite("extensions/arrays1")
 handle_good_suite("extensions/arrays2")
+handle_good_suite("perso")
 handle_bad_suite()
 
 print("----------------------------------")
