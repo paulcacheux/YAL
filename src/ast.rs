@@ -160,6 +160,10 @@ pub enum Expression {
     ArrayLiteral {
         values: Vec<Spanned<Expression>>,
     },
+    ArrayFillLiteral {
+        value: Box<Spanned<Expression>>,
+        size: usize,
+    },
     StructLiteral {
         struct_name: String,
         fields: Vec<(Spanned<String>, Spanned<Expression>)>,

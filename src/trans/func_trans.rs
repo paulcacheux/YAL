@@ -401,6 +401,9 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                 }
             }
             ast::Expression::ArrayLiteral { values } => self.translate_array_literal(values),
+            ast::Expression::ArrayFillLiteral { value, size } => {
+                self.translate_array_fill_literal(*value, size)
+            }
             ast::Expression::StructLiteral {
                 struct_name,
                 fields,
@@ -512,6 +515,72 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                 utils::build_assign_to_array_index(ptr_expr.clone(), index, value.expr),
             ));
         }
+
+        Ok(utils::TypedExpression {
+            ty: lvalue_ty,
+            expr: ir::Expression::Block(Box::new(ir::BlockExpression {
+                stmts,
+                final_expr: res_id_expr,
+            })),
+        })
+    }
+
+    pub(super) fn translate_array_fill_literal(
+        &mut self,
+        value: Spanned<ast::Expression>,
+        size: usize,
+    ) -> TranslationResult<utils::TypedExpression> {
+        let value = self.translate_expression(value)?;
+        let value = utils::lvalue_to_rvalue(value);
+
+        let zero_literal = ir::Expression::Literal(common::Literal::IntLiteral(0));
+        let size_literal = ir::Expression::Literal(common::Literal::IntLiteral(size as _));
+
+        let sub_ty = value.ty;
+        let array_ty = self.tables.types.array_of(sub_ty, size);
+        let ptr_ty = self.tables.types.pointer_of(sub_ty);
+
+        let res_id = self.register_temp_local(array_ty);
+        let lvalue_ty = self.tables.types.lvalue_of(array_ty, false);
+        let res_id_expr = ir::Expression::Identifier(res_id);
+        let ptr_expr = ir::Expression::BitCast {
+            dest_ty: ptr_ty,
+            sub: Box::new(res_id_expr.clone()),
+        };
+
+        let int_ty = self.tables.types.get_int_ty();
+        let index_id = self.register_temp_local(int_ty);
+        let index_id_expr = ir::Expression::Identifier(index_id);
+        let index_id_rvalue = ir::Expression::LValueToRValue(Box::new(index_id_expr.clone()));
+
+        let init = utils::build_assign_to_id(index_id, zero_literal);
+
+        let condition = ir::Expression::BinaryOperator {
+            binop: ir::BinaryOperatorKind::IntLess,
+            lhs: Box::new(index_id_rvalue.clone()),
+            rhs: Box::new(size_literal),
+        };
+
+        let step = ir::Expression::LValueUnaryOperator {
+            lvalue_unop: ir::LValueUnaryOperatorKind::IntIncrement,
+            sub: Box::new(index_id_expr),
+        };
+
+        let body = vec![
+            ir::Statement::Expression(ir::Expression::Assign {
+                lhs: Box::new(utils::build_subscript(ptr_expr, index_id_rvalue)),
+                rhs: Box::new(value.expr),
+            }),
+        ];
+
+        let stmts = vec![
+            ir::Statement::For {
+                init: Box::new(ir::Statement::Expression(init)),
+                condition,
+                step: Some(step),
+                body,
+            },
+        ];
 
         Ok(utils::TypedExpression {
             ty: lvalue_ty,

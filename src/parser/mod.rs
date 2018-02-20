@@ -546,15 +546,42 @@ impl<'si, 'input> Parser<'si, 'input> {
                 Ok(Spanned::new(expr, span))
             }
             Token::LeftSquare => {
-                let values = self.parse_comma_sep(
-                    &Token::RightParenthesis,
-                    Parser::parse_expression,
-                    false,
-                )?;
-                let end_span = expect!(self.lexer; Token::RightSquare, "]");
-                let span = Span::merge(span, end_span);
-                let expr = ast::Expression::ArrayLiteral { values };
-                Ok(Spanned::new(expr, span))
+                let first_value = self.parse_expression()?;
+                let Spanned {
+                    inner: next_token,
+                    span: next_span,
+                } = self.lexer.next_token()?;
+                match next_token {
+                    Token::RightSquare => {
+                        let values = vec![first_value];
+                        let span = Span::merge(span, next_span);
+                        let expr = ast::Expression::ArrayLiteral { values };
+                        Ok(Spanned::new(expr, span))
+                    }
+                    Token::Comma => {
+                        let mut values = vec![first_value];
+                        values.extend(self.parse_comma_sep(
+                            &Token::RightSquare,
+                            Parser::parse_expression,
+                            false,
+                        )?);
+                        let end_span = expect!(self.lexer; Token::RightSquare, "]");
+                        let span = Span::merge(span, end_span);
+                        let expr = ast::Expression::ArrayLiteral { values };
+                        Ok(Spanned::new(expr, span))
+                    }
+                    Token::SemiColon => {
+                        let (size, _) = accept!(self.lexer; Token::IntegerLiteral(i) => i as usize, "integer literal");
+                        let end_span = expect!(self.lexer; Token::RightSquare, "]");
+                        let span = Span::merge(span, end_span);
+                        let expr = ast::Expression::ArrayFillLiteral {
+                            value: Box::new(first_value),
+                            size,
+                        };
+                        Ok(Spanned::new(expr, span))
+                    }
+                    _ => return_unexpected!(span, ",", ";", "]"),
+                }
             }
             Token::Identifier(id) => {
                 let name = id.to_string();
