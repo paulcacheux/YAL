@@ -34,7 +34,9 @@ pub(super) fn translate_types(
             name: s.name.clone(),
             fields,
         };
-        tables.types.register_struct_type(&s.name, s_tv);
+        if tables.types.register_struct_type(&s.name, s_tv) {
+            return error!(TranslationError::StructCycle(s.name), s.span);
+        }
     }
 
     Ok(())

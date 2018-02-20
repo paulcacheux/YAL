@@ -178,9 +178,15 @@ impl TypeTable {
         }
     }
 
-    pub fn register_struct_type(&mut self, name: &str, struct_tv: ty::StructTypeValue) {
+    pub fn register_struct_type(&mut self, name: &str, struct_tv: ty::StructTypeValue) -> bool {
+        // return true if struct cycle
         let mut ty = self.lookup_type(name).unwrap();
-        *ty = ty::TypeValue::Struct(CONTEXT.alloc_struct_type(struct_tv));
+        if has_cycles(&struct_tv, ty) {
+            true
+        } else {
+            *ty = ty::TypeValue::Struct(CONTEXT.alloc_struct_type(struct_tv));
+            false
+        }
     }
 
     pub fn lvalue_of(&self, sub_ty: ty::Type, assignable: bool) -> ty::Type {
@@ -197,4 +203,19 @@ impl TypeTable {
         let tv = ty::TypeValue::Array(sub_ty, size);
         CONTEXT.alloc_type(tv)
     }
+}
+
+fn has_cycles(struct_tv: &ty::StructTypeValue, ty: ty::Type) -> bool {
+    for &(_, field_ty) in &struct_tv.fields {
+        if field_ty == ty {
+            return true;
+        }
+
+        if let ty::TypeValue::Struct(ref stv) = *field_ty {
+            if has_cycles(stv, ty) {
+                return true;
+            }
+        }
+    }
+    false
 }

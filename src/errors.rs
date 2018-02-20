@@ -29,6 +29,7 @@ pub enum TranslationError {
     MismatchingTypes(ty::Type, ty::Type),
     UnexpectedType(ty::Type, ty::Type), // expected, given
     NonStructType(String),
+    StructCycle(String),
     UndefinedLocal(String),
     UndefinedType(String),
     NonLValueAssign,
@@ -129,6 +130,11 @@ impl fmt::Display for TranslationError {
             TranslationError::NonStructType(ref name) => {
                 write!(f, "'{}' is not a struct type", name)
             }
+            TranslationError::StructCycle(ref name) => write!(
+                f,
+                "The struct '{}' is cyclic (of infinite size), maybe use a pointer",
+                name
+            ),
             TranslationError::UndefinedLocal(ref local) => {
                 write!(f, "The local '{}' is undefined here", local)
             }
