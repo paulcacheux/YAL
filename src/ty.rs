@@ -1,5 +1,6 @@
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
+use std::fmt;
 
 macro_rules! wrapper {
     ($name:ident -> $sub_ty:ty) => {
@@ -47,6 +48,23 @@ macro_rules! wrapper {
 
 wrapper!(Type -> TypeValue);
 wrapper!(StructType -> StructTypeValue);
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match **self {
+            TypeValue::Incomplete => write!(f, "incomplete"),
+            TypeValue::Int => write!(f, "int"),
+            TypeValue::Double => write!(f, "double"),
+            TypeValue::Boolean => write!(f, "boolean"),
+            TypeValue::String => write!(f, "string"),
+            TypeValue::Void => write!(f, "void"),
+            TypeValue::Pointer(ref sub) => write!(f, "*{}", sub),
+            TypeValue::Struct(ref s) => write!(f, "struct {} {{ .. }}", s.name),
+            TypeValue::Array(ref sub, ref size) => write!(f, "[{}; {}]", sub, size),
+            _ => panic!("Type not supposed to be displayed"),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeValue {

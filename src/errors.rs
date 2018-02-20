@@ -120,13 +120,11 @@ impl fmt::Display for TranslationError {
                 write!(f, "The field '{}' is already defined", field)
             }
             TranslationError::MismatchingTypes(ref a, ref b) => {
-                write!(f, "Mismatching types between '{:?}' and '{:?}'", a, b)
+                write!(f, "Mismatching types between '{}' and '{}'", a, b)
             }
-            TranslationError::UnexpectedType(ref expected, ref given) => write!(
-                f,
-                "Unexpected type '{:?}' ('{:?}' expected).",
-                given, expected
-            ),
+            TranslationError::UnexpectedType(ref expected, ref given) => {
+                write!(f, "Unexpected type '{}' ('{}' expected).", given, expected)
+            }
             TranslationError::NonStructType(ref name) => {
                 write!(f, "'{}' is not a struct type", name)
             }
@@ -157,26 +155,26 @@ impl fmt::Display for TranslationError {
             }
             TranslationError::BinOpUndefined(binop, ref a, ref b) => write!(
                 f,
-                "The binary operator '{:?}' can't be applied to '{:?}' and '{:?}'",
+                "The binary operator '{:?}' can't be applied to '{}' and '{}'",
                 binop, a, b
             ),
             TranslationError::LazyOpUndefined(lazyop, ref a, ref b) => write!(
                 f,
-                "The lazy operator '{:?}' can't be applied to '{:?}' and '{:?}'",
+                "The lazy operator '{:?}' can't be applied to '{}' and '{}'",
                 lazyop, a, b
             ),
             TranslationError::UnOpUndefined(unop, ref a) => write!(
                 f,
-                "The unary operator '{:?}' can't be applied to '{:?}'",
+                "The unary operator '{:?}' can't be applied to '{}'",
                 unop, a
             ),
             TranslationError::LValueUnOpUndefined(unop, ref a) => write!(
                 f,
-                "The lvalue unary operator '{:?}' can't be applied to '{:?}'",
+                "The lvalue unary operator '{:?}' can't be applied to '{}'",
                 unop, a
             ),
             TranslationError::CastUndefined(ref a, ref b) => {
-                write!(f, "Undefined cast between '{:?}' and '{:?}'", a, b)
+                write!(f, "Undefined cast between '{}' and '{}'", a, b)
             }
             TranslationError::FunctionCallArityMismatch(a, b) => write!(
                 f,
@@ -198,10 +196,10 @@ impl fmt::Display for TranslationError {
                 write!(f, "A path in this function doesn't return")
             }
             TranslationError::SubscriptNotArray(ref ty) => {
-                write!(f, "Type '{:?}' can't be subscripted", ty)
+                write!(f, "Type '{}' can't be subscripted", ty)
             }
             TranslationError::LengthOnNonArray(ref ty) => {
-                write!(f, "Type '{:?}' doesn't have a length property", ty)
+                write!(f, "Type '{}' doesn't have a length property", ty)
             }
             TranslationError::MemberUndefined => write!(f, "Undefined member"),
             TranslationError::UnexpectedVoid => write!(f, "Void type can't be used here"),
