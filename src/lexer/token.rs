@@ -50,6 +50,7 @@ pub enum Token<'input> {
     AsKeyword,
     FnKeyword,
     LetKeyword,
+    NullptrKeyword,
 
     /*IntKeyword,
     DoubleKeyword,

@@ -146,6 +146,7 @@ impl<'input> Lexer<'input> {
                 "as" => Token::AsKeyword,
                 "fn" => Token::FnKeyword,
                 "let" => Token::LetKeyword,
+                "nullptr" => Token::NullptrKeyword,
                 s => {
                     if s.starts_with("___") {
                         return Err(Spanned::new(

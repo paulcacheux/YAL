@@ -172,6 +172,7 @@ pub enum Expression {
         expr: Box<Spanned<Expression>>,
         field: String,
     },
+    Nullptr,
 }
 
 #[derive(Debug, Clone, Copy)]

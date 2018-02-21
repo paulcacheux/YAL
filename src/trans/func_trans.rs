@@ -429,6 +429,17 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                     error!(TranslationError::UndefinedField(field), expr_span)
                 }
             }
+            ast::Expression::Nullptr => {
+                let void_ty = self.tables.types.get_void_ty();
+                let void_ptr_ty = self.tables.types.pointer_of(void_ty);
+                Ok(utils::TypedExpression {
+                    ty: void_ptr_ty,
+                    expr: ir::Expression::Cast {
+                        kind: ir::CastKind::IntToPtr(void_ptr_ty),
+                        sub: Box::new(ir::Expression::Literal(common::Literal::IntLiteral(0))),
+                    },
+                })
+            }
         }
     }
 

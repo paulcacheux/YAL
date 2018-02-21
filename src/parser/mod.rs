@@ -490,6 +490,7 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let expr = ast::Expression::Literal(common::Literal::StringLiteral(sid));
                 Ok(Spanned::new(expr, span))
             }
+            Token::NullptrKeyword => Ok(Spanned::new(ast::Expression::Nullptr, span)),
             Token::Minus => {
                 let sub = self.parse_mid_expression()?;
                 let span = Span::merge(span, sub.span);
