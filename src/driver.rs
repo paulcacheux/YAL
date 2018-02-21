@@ -8,7 +8,7 @@ use std::path::Path;
 use clap::{App, Arg};
 
 use yal::*;
-use codemap::{CodeMap, Span, Spanned};
+use codemap::{Span, Spanned};
 
 fn slurp_file<P: AsRef<Path>>(path: P) -> io::Result<String> {
     let mut file = File::open(path)?;
@@ -47,25 +47,6 @@ fn print_error_line(input: &str, span: Span) {
     for (n, (line, arrow)) in iter {
         eprintln!("{:05}|{}", n + 1, line);
         eprintln!("     |{}", arrow);
-    }
-}
-
-fn continue_or_exit<T, E: std::fmt::Display>(
-    path: &str,
-    codemap: &CodeMap,
-    res: Result<T, Spanned<E>>,
-) -> T {
-    match res {
-        Ok(v) => v,
-        Err(Spanned { inner: error, span }) => {
-            let source_loc = codemap.bytepos_to_sourceloc(span.start);
-            eprintln!(
-                "{}:{}:{}: {}",
-                path, source_loc.line, source_loc.column, error
-            );
-            print_error_line(codemap.input, span);
-            std::process::exit(1);
-        }
     }
 }
 
@@ -121,6 +102,69 @@ impl<'a> Options<'a> {
     }
 }
 
+fn compile_program(
+    input: &str,
+    string_interner: &mut interner::Interner<String>,
+    tables: &mut trans::tables::Tables,
+    previous: Option<ir::Program>,
+    print_ast: bool,
+) -> Result<ir::Program, Spanned<errors::UserError>> {
+    let lexer = lexer::Lexer::new(input);
+    let ast = parser::parse_program(lexer, string_interner)?;
+
+    if print_ast {
+        eprintln!("{:#?}", ast);
+    }
+
+    let ir = trans::translate_program(tables, ast, previous)?;
+    Ok(ir)
+}
+
+fn do_compilation(
+    options: &Options,
+    input: &str,
+) -> Result<backend::execution_module::ExecutionModule, Spanned<errors::UserError>> {
+    let mut string_interner = interner::Interner::<String>::new();
+    let mut tables = trans::tables::Tables::default();
+
+    // load runtime
+    let runtime_input = include_str!("../runtime/io.yal");
+    let runtime = compile_program(
+        runtime_input,
+        &mut string_interner,
+        &mut tables,
+        None,
+        false,
+    )?;
+
+    let main = compile_program(
+        input,
+        &mut string_interner,
+        &mut tables,
+        Some(runtime),
+        options.print_ast,
+    )?;
+    trans::check_if_main_declaration(&tables, &main)?;
+
+    if options.print_ir {
+        let mut w = std::io::stderr();
+        let mut pp = ir::prettyprinter::PrettyPrinter::new(&mut w);
+        pp.pp_program(&main).expect("ir_pp error");
+    }
+
+    let mut llvm_exec = backend::llvm_codegen_program(main, &string_interner, &tables.types);
+    llvm_exec.verify_module();
+    if options.opt {
+        llvm_exec.optimize_full();
+    } else {
+        llvm_exec.optimize_required();
+    }
+    if options.print_llvm {
+        llvm_exec.print_module();
+    }
+    Ok(llvm_exec)
+}
+
 fn main() {
     let matches = App::new("Javalette interpreter")
         .version("0.1")
@@ -155,53 +199,22 @@ fn main() {
         .get_matches();
 
     let options = Options::from_matches(&matches);
-    let mut string_interner = interner::Interner::<String>::new();
-    let mut tables = trans::tables::Tables::default();
 
-    // load runtime
-    let runtime_input = include_str!("../runtime/io.yal");
-    let runtime_lexer = lexer::Lexer::new(runtime_input);
-    let runtime_ast = parser::parse_program(runtime_lexer, &mut string_interner).unwrap();
-    let runtime_ir = trans::translate_program(&mut tables, runtime_ast, None).unwrap();
-
-    let input = slurp_file(options.input_path).unwrap();
+    let input = slurp_file(options.input_path).unwrap(); // check for errors
     let codemap = codemap::CodeMap::new(options.input_path, &input);
 
-    let lexer = lexer::Lexer::new(&input);
-    let ast = continue_or_exit(
-        options.input_path,
-        &codemap,
-        parser::parse_program(lexer, &mut string_interner),
-    );
-    if options.print_ast {
-        eprintln!("{:#?}", ast);
-    }
-
-    let ir_prog = continue_or_exit(
-        options.input_path,
-        &codemap,
-        trans::translate_program(&mut tables, ast, Some(runtime_ir)).and_then(|ir_prog| {
-            trans::check_if_main_declaration(&tables, &ir_prog)?;
-            Ok(ir_prog)
-        }),
-    );
-
-    if options.print_ir {
-        let mut w = std::io::stderr();
-        let mut pp = ir::prettyprinter::PrettyPrinter::new(&mut w);
-        pp.pp_program(&ir_prog).expect("ir_pp error");
-    }
-
-    let mut llvm_exec = backend::llvm_codegen_program(ir_prog, &string_interner, &tables.types);
-    llvm_exec.verify_module();
-    if options.opt {
-        llvm_exec.optimize_full();
-    } else {
-        llvm_exec.optimize_required();
-    }
-    if options.print_llvm {
-        llvm_exec.print_module();
-    }
+    let llvm_exec = match do_compilation(&options, &input) {
+        Ok(exec) => exec,
+        Err(Spanned { inner: error, span }) => {
+            let source_loc = codemap.bytepos_to_sourceloc(span.start);
+            eprintln!(
+                "{}:{}:{}: {}",
+                options.input_path, source_loc.line, source_loc.column, error
+            );
+            print_error_line(codemap.input, span);
+            std::process::exit(1);
+        }
+    };
 
     match options.backend {
         BackendType::Check => {}

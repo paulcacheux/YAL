@@ -5,6 +5,12 @@ use ty;
 use ast;
 
 #[derive(Debug, Clone)]
+pub enum UserError {
+    Parsing(ParsingError),
+    Translation(TranslationError),
+}
+
+#[derive(Debug, Clone)]
 pub enum LexingError {
     UnparsableNumber,
     ReservedIdentifier(String),
@@ -54,19 +60,47 @@ pub enum TranslationError {
     UnexpectedVoid,
 }
 
+impl From<ParsingError> for UserError {
+    fn from(pe: ParsingError) -> UserError {
+        UserError::Parsing(pe)
+    }
+}
+
+impl From<TranslationError> for UserError {
+    fn from(te: TranslationError) -> UserError {
+        UserError::Translation(te)
+    }
+}
+
 impl From<LexingError> for ParsingError {
     fn from(le: LexingError) -> ParsingError {
         ParsingError::LexingError(le)
     }
 }
 
-// hack needed for error propagation
 use codemap::Spanned;
-impl From<Spanned<LexingError>> for Spanned<ParsingError> {
-    fn from(f: Spanned<LexingError>) -> Spanned<ParsingError> {
-        Spanned {
-            inner: ParsingError::from(f.inner),
-            span: f.span,
+macro_rules! spanned_hack {
+    ($from:ty => $to:ty) => {
+        impl From<Spanned<$from>> for Spanned<$to> {
+            fn from(f: Spanned<$from>) -> Spanned<$to> {
+                Spanned {
+                    inner: f.inner.into(),
+                    span: f.span,
+                }
+            }
+        }
+    }
+}
+
+spanned_hack!(LexingError => ParsingError);
+spanned_hack!(ParsingError => UserError);
+spanned_hack!(TranslationError => UserError);
+
+impl fmt::Display for UserError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            UserError::Parsing(ref pe) => <ParsingError as fmt::Display>::fmt(pe, f),
+            UserError::Translation(ref te) => <TranslationError as fmt::Display>::fmt(te, f),
         }
     }
 }
