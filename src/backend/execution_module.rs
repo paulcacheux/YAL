@@ -50,14 +50,15 @@ impl ExecutionModule {
     }
 
     pub fn optimize_full(&mut self) {
-        self.optimize(3, 2)
+        self.optimize(3, 2);
+        self.final_optimize()
     }
 
     pub fn optimize(&mut self, level: u32, repeat: usize) {
         use llvm::transforms::pass_manager_builder::*;
         unsafe {
             let builder = LLVMPassManagerBuilderCreate();
-            LLVMPassManagerBuilderSetOptLevel(builder, level as _); // TODO make it configurable
+            LLVMPassManagerBuilderSetOptLevel(builder, level as _);
             let pass_manager = LLVMCreatePassManager();
             LLVMPassManagerBuilderPopulateModulePassManager(builder, pass_manager);
             LLVMPassManagerBuilderDispose(builder);
@@ -65,6 +66,19 @@ impl ExecutionModule {
             for _ in 0..repeat {
                 LLVMRunPassManager(pass_manager, self.module.module);
             }
+
+            LLVMDisposePassManager(pass_manager);
+        }
+    }
+
+    pub fn final_optimize(&mut self) {
+        use llvm::transforms::ipo::*;
+        unsafe {
+            let pass_manager = LLVMCreatePassManager();
+            LLVMAddInternalizePass(pass_manager, true as _);
+            LLVMAddGlobalOptimizerPass(pass_manager);
+            LLVMAddGlobalDCEPass(pass_manager);
+            LLVMRunPassManager(pass_manager, self.module.module);
 
             LLVMDisposePassManager(pass_manager);
         }
