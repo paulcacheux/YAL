@@ -155,7 +155,7 @@ pub fn lvalue_unop_typeck(
 pub enum CastTypeckResult {
     Cast(ir::CastKind),
     BitCast,
-    Error,
+    None,
 }
 
 pub fn cast_typeck(src_ty: ty::Type, target_ty: ty::Type) -> CastTypeckResult {
@@ -171,6 +171,20 @@ pub fn cast_typeck(src_ty: ty::Type, target_ty: ty::Type) -> CastTypeckResult {
         }
         (&ty::TypeValue::Pointer(_), &ty::TypeValue::Pointer(_)) => BitCast,
         (ref a, ref b) if a == b => BitCast,
-        _ => Error,
+        _ => None,
+    }
+}
+
+pub fn auto_cast(src_ty: ty::Type, target_ty: ty::Type) -> CastTypeckResult {
+    use self::CastTypeckResult::*;
+    match (&*src_ty, &*target_ty) {
+        (&ty::TypeValue::Pointer(src), &ty::TypeValue::Pointer(_)) => {
+            if let ty::TypeValue::Void = *src {
+                BitCast
+            } else {
+                None
+            }
+        }
+        _ => None,
     }
 }

@@ -5,7 +5,7 @@ use ir;
 use common;
 use ir::IdentifierId;
 use errors::TranslationError;
-use trans::{self, TranslationResult};
+use trans::{self, typeck, TranslationResult};
 use codemap::{Span, Spanned};
 
 macro_rules! error {
@@ -63,6 +63,33 @@ pub fn build_subscript(ptr: ir::Expression, index: ir::Expression) -> ir::Expres
             lhs: Box::new(ptr),
             rhs: Box::new(index),
         }),
+    }
+}
+
+pub fn check_eq_types_auto_cast(
+    expr: TypedExpression,
+    target_ty: ty::Type,
+    error_span: Span,
+) -> TranslationResult<TypedExpression> {
+    match typeck::auto_cast(expr.ty, target_ty) {
+        typeck::CastTypeckResult::Cast(kind) => Ok(TypedExpression {
+            ty: target_ty,
+            expr: ir::Expression::Cast {
+                kind,
+                sub: Box::new(expr.expr),
+            },
+        }),
+        typeck::CastTypeckResult::BitCast => Ok(TypedExpression {
+            ty: target_ty,
+            expr: ir::Expression::BitCast {
+                dest_ty: target_ty,
+                sub: Box::new(expr.expr),
+            },
+        }),
+        typeck::CastTypeckResult::None => {
+            check_eq_types(expr.ty, target_ty, error_span)?;
+            Ok(expr)
+        }
     }
 }
 

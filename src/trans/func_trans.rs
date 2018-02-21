@@ -70,11 +70,11 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
         // first compute the rhs to avoir local shadowing
 
         let value_span = value.span;
-        let rhs = self.translate_expression(value)?;
-        let rhs = utils::lvalue_to_rvalue(rhs);
+        let mut rhs = self.translate_expression(value)?;
+        rhs = utils::lvalue_to_rvalue(rhs);
         if let Some(ty) = ty {
             let ty = self.translate_type(ty, false)?;
-            utils::check_eq_types(rhs.ty, ty, value_span)?;
+            rhs = utils::check_eq_types_auto_cast(rhs, ty, value_span)?;
         }
 
         if let Some(id) = self.tables.locals.register_local(name.clone(), rhs.ty) {
@@ -185,7 +185,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                     let expr_span = expr.span;
                     let expr = self.translate_expression(expr)?;
                     let expr = utils::lvalue_to_rvalue(expr);
-                    utils::check_eq_types(expr.ty, self.ret_ty, expr_span)?;
+                    let expr = utils::check_eq_types_auto_cast(expr, self.ret_ty, expr_span)?;
 
                     Some(expr.expr)
                 } else {
@@ -249,11 +249,11 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
             ast::Expression::Assign { lhs, rhs } => {
                 let lhs_span = lhs.span;
                 let lhs = self.translate_expression(*lhs)?;
-                let rhs = self.translate_expression(*rhs)?;
-                let rhs = utils::lvalue_to_rvalue(rhs);
+                let mut rhs = self.translate_expression(*rhs)?;
+                rhs = utils::lvalue_to_rvalue(rhs);
 
                 if let ty::TypeValue::LValue(sub, true) = *lhs.ty {
-                    utils::check_eq_types(sub, rhs.ty, expr_span)?;
+                    rhs = utils::check_eq_types_auto_cast(rhs, sub, expr_span)?;
                 } else {
                     return error!(TranslationError::NonLValueAssign, lhs_span);
                 }
@@ -349,7 +349,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                         };
                         Ok(utils::TypedExpression { ty: as_ty, expr })
                     }
-                    typeck::CastTypeckResult::Error => {
+                    typeck::CastTypeckResult::None => {
                         error!(TranslationError::CastUndefined(sub.ty, as_ty), expr_span)
                     }
                 }
@@ -380,10 +380,14 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
 
                     for (index, arg) in args.into_iter().enumerate() {
                         let arg_span = arg.span;
-                        let arg = self.translate_expression(arg)?;
-                        let arg = utils::lvalue_to_rvalue(arg);
+                        let mut arg = self.translate_expression(arg)?;
+                        arg = utils::lvalue_to_rvalue(arg);
                         if index < func_ty.parameters_ty.len() {
-                            utils::check_eq_types(arg.ty, func_ty.parameters_ty[index], arg_span)?;
+                            arg = utils::check_eq_types_auto_cast(
+                                arg,
+                                func_ty.parameters_ty[index],
+                                arg_span,
+                            )?;
                         }
                         args_translated.push(arg.expr);
                     }
@@ -487,10 +491,10 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
         let mut trans_values = Vec::with_capacity(values.len());
         for value in values {
             let value_span = value.span;
-            let value = self.translate_expression(value)?;
-            let value = utils::lvalue_to_rvalue(value);
+            let mut value = self.translate_expression(value)?;
+            value = utils::lvalue_to_rvalue(value);
             if let Some(ty) = sub_ty {
-                utils::check_eq_types(ty, value.ty, value_span)?;
+                value = utils::check_eq_types_auto_cast(value, ty, value_span)?;
             } else {
                 sub_ty = Some(value.ty);
             }
@@ -600,8 +604,8 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
         let index_span = index.span;
 
         let array = self.translate_expression(array)?;
-        let index = self.translate_expression(index)?;
-        let index = utils::lvalue_to_rvalue(index);
+        let mut index = self.translate_expression(index)?;
+        index = utils::lvalue_to_rvalue(index);
         let array_ty = array.ty;
 
         let (sub_ty, ptr) = if let Some(s) = utils::unsure_subscriptable(&self.tables.types, array)
@@ -611,7 +615,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
             return error!(TranslationError::SubscriptNotArray(array_ty), array_span);
         };
 
-        utils::check_eq_types(self.tables.types.get_int_ty(), index.ty, index_span)?;
+        index = utils::check_eq_types_auto_cast(index, self.tables.types.get_int_ty(), index_span)?;
         let lvalue_ty = self.tables.types.lvalue_of(sub_ty, true);
 
         Ok(utils::TypedExpression {
