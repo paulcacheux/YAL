@@ -107,19 +107,7 @@ impl<'si, 'input> Parser<'si, 'input> {
         let name = self.parse_identifier()?;
         expect!(self.lexer; Token::LeftBracket, "{");
 
-        let mut fields = Vec::new();
-        if let Token::RightBracket = self.lexer.peek_token()?.inner {
-
-        } else {
-            fields.push(self.parse_field()?);
-            while let Token::Comma = self.lexer.peek_token()?.inner {
-                if let Token::RightBracket = self.lexer.peek_token()?.inner {
-                    break;
-                }
-                self.lexer.next_token()?;
-                fields.push(self.parse_field()?);
-            }
-        }
+        let fields = self.parse_comma_sep(&Token::RightBracket, Parser::parse_field, true)?;
 
         let end_span = expect!(self.lexer; Token::RightBracket, "}");
         let span = Span::merge(begin_span, end_span);

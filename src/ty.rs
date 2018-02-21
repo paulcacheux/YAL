@@ -96,10 +96,22 @@ impl TypeValue {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Eq)]
 pub struct StructTypeValue {
     pub name: String,
     pub fields: Vec<(String, Type)>,
+}
+
+impl PartialEq for StructTypeValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name // currently we eq on name because we don't have any module/namespace. Maybe use an id
+    }
+}
+
+impl Hash for StructTypeValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
