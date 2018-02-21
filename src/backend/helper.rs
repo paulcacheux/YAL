@@ -329,4 +329,22 @@ impl IRBuilder {
     pub fn build_struct_gep(&self, ptr: LLVMValueRef, index: usize, name: &[u8]) -> LLVMValueRef {
         unsafe { LLVMBuildStructGEP(self.builder, ptr, index as _, c_str(name)) }
     }
+
+    pub fn build_ptr_to_int(
+        &self,
+        ptr: LLVMValueRef,
+        int_ty: LLVMTypeRef,
+        name: &[u8],
+    ) -> LLVMValueRef {
+        unsafe { LLVMBuildPtrToInt(self.builder, ptr, int_ty, c_str(name)) }
+    }
+
+    pub fn build_int_to_ptr(
+        &self,
+        value: LLVMValueRef,
+        dest_ty: LLVMTypeRef,
+        name: &[u8],
+    ) -> LLVMValueRef {
+        unsafe { LLVMBuildIntToPtr(self.builder, value, dest_ty, c_str(name)) }
+    }
 }

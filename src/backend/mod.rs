@@ -527,6 +527,11 @@ impl<'s, 't> Backend<'s, 't> {
             ir::CastKind::DoubleToInt => self.builder.build_fp_to_si(sub, llvm_int_ty, b"\0"),
             ir::CastKind::BooleanToInt => self.builder.build_zext(sub, llvm_int_ty, b"\0"),
             ir::CastKind::IntToBoolean => self.builder.build_trunc(sub, llvm_boolean_ty, b"\0"),
+            ir::CastKind::PtrToInt => self.builder.build_ptr_to_int(sub, llvm_int_ty, b"\0"),
+            ir::CastKind::IntToPtr(ptr) => {
+                let llvm_ptr_ty = self.codegen_type(ptr);
+                self.builder.build_int_to_ptr(sub, llvm_ptr_ty, b"\0")
+            }
         }
     }
 

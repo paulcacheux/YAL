@@ -175,4 +175,6 @@ pub enum CastKind {
     DoubleToInt,
     BooleanToInt,
     IntToBoolean,
+    PtrToInt,
+    IntToPtr(Type),
 }

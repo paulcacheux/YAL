@@ -57,11 +57,18 @@ enum BackendType {
     Interpreter,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OptOption {
+    None,
+    Default,
+    Aggressive,
+}
+
 #[derive(Debug, Clone)]
 struct Options<'a> {
     input_path: &'a str,
     backend: BackendType,
-    opt: bool,
+    opt: OptOption,
     print_ir: bool,
     print_ast: bool,
     print_llvm: bool,
@@ -70,7 +77,6 @@ struct Options<'a> {
 impl<'a> Options<'a> {
     fn from_matches(matches: &'a clap::ArgMatches) -> Self {
         let input_path = matches.value_of("INPUT").unwrap();
-        let opt = matches.is_present("OPT");
         let mut print_ast = false;
         let mut print_ir = false;
         let mut print_llvm = false;
@@ -89,6 +95,12 @@ impl<'a> Options<'a> {
             Some("jit") => BackendType::JIT,
             Some("interpreter") => BackendType::Interpreter,
             _ => BackendType::Check,
+        };
+
+        let opt = match matches.value_of("OPT") {
+            Some("0") => OptOption::None,
+            Some("2") => OptOption::Aggressive,
+            _ => OptOption::Default,
         };
 
         Options {
@@ -154,11 +166,12 @@ fn do_compilation(
 
     let mut llvm_exec = backend::llvm_codegen_program(main, &string_interner, &tables.types);
     llvm_exec.verify_module();
-    if options.opt {
-        llvm_exec.optimize_full();
-    } else {
-        llvm_exec.optimize_required();
+    match options.opt {
+        OptOption::None => {}
+        OptOption::Default => llvm_exec.optimize_required(),
+        OptOption::Aggressive => llvm_exec.optimize_full(),
     }
+
     if options.print_llvm {
         llvm_exec.print_module();
     }
@@ -179,7 +192,9 @@ fn main() {
             Arg::with_name("OPT")
                 .help("Activate optimizations.")
                 .short("O")
-                .long("opt"),
+                .long("opt")
+                .takes_value(true)
+                .possible_values(&["0", "1", "2"]),
         )
         .arg(
             Arg::with_name("BACKEND")

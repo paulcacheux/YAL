@@ -165,6 +165,10 @@ pub fn cast_typeck(src_ty: ty::Type, target_ty: ty::Type) -> CastTypeckResult {
         (&ty::TypeValue::Double, &ty::TypeValue::Int) => Cast(ir::CastKind::DoubleToInt),
         (&ty::TypeValue::Boolean, &ty::TypeValue::Int) => Cast(ir::CastKind::BooleanToInt),
         (&ty::TypeValue::Int, &ty::TypeValue::Boolean) => Cast(ir::CastKind::IntToBoolean),
+        (&ty::TypeValue::Pointer(_), &ty::TypeValue::Int) => Cast(ir::CastKind::PtrToInt),
+        (&ty::TypeValue::Int, &ty::TypeValue::Pointer(_)) => {
+            Cast(ir::CastKind::IntToPtr(target_ty))
+        }
         (&ty::TypeValue::Pointer(_), &ty::TypeValue::Pointer(_)) => BitCast,
         (ref a, ref b) if a == b => BitCast,
         _ => Error,
