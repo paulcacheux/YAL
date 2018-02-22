@@ -416,17 +416,22 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                 let expr = self.translate_expression(*expr)?;
                 let (expr, sub_ty) = utils::rvalue_to_lvalue(&self.tables.types, expr);
 
-                if let Some((index, ty)) = sub_ty.has_field(&field) {
-                    let lvalue_ty = self.tables.types.lvalue_of(ty, true);
-                    Ok(utils::TypedExpression {
-                        ty: lvalue_ty,
-                        expr: ir::Expression::FieldAccess {
-                            sub: Box::new(expr.expr),
-                            index,
-                        },
-                    })
-                } else {
-                    error!(TranslationError::UndefinedField(field), expr_span)
+                match sub_ty.has_field(&field) {
+                    Some(ty::FieldInfo::StructField(index, ty)) => {
+                        let lvalue_ty = self.tables.types.lvalue_of(ty, true);
+                        Ok(utils::TypedExpression {
+                            ty: lvalue_ty,
+                            expr: ir::Expression::FieldAccess {
+                                sub: Box::new(expr.expr),
+                                index,
+                            },
+                        })
+                    }
+                    Some(ty::FieldInfo::ArrayLen(size)) => Ok(utils::TypedExpression {
+                        ty: self.tables.types.get_int_ty(),
+                        expr: ir::Expression::Literal(common::Literal::IntLiteral(size as _)),
+                    }),
+                    None => error!(TranslationError::UndefinedField(field), expr_span),
                 }
             }
             ast::Expression::Nullptr => {

@@ -80,16 +80,29 @@ pub enum TypeValue {
     Array(Type, usize),
 }
 
+#[derive(Debug, Clone)]
+pub enum FieldInfo {
+    StructField(usize, Type),
+    ArrayLen(usize),
+}
+
 impl TypeValue {
-    pub fn has_field(&self, field_name: &str) -> Option<(usize, Type)> {
+    pub fn has_field(&self, field_name: &str) -> Option<FieldInfo> {
         match *self {
             TypeValue::Struct(st) => {
                 for (index, &(ref name, ty)) in st.fields.iter().enumerate() {
                     if name == field_name {
-                        return Some((index, ty));
+                        return Some(FieldInfo::StructField(index, ty));
                     }
                 }
                 None
+            }
+            TypeValue::Array(_, size) => {
+                if field_name == "len" {
+                    Some(FieldInfo::ArrayLen(size))
+                } else {
+                    None
+                }
             }
             _ => None,
         }
