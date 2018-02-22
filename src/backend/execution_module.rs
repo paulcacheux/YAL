@@ -51,7 +51,7 @@ impl ExecutionModule {
 
     pub fn optimize_full(&mut self) {
         self.optimize(3, 2);
-        self.final_optimize()
+        self.ipo_optimize()
     }
 
     pub fn optimize(&mut self, level: u32, repeat: usize) {
@@ -71,13 +71,15 @@ impl ExecutionModule {
         }
     }
 
-    pub fn final_optimize(&mut self) {
+    pub fn ipo_optimize(&mut self) {
         use llvm::transforms::ipo::*;
         unsafe {
             let pass_manager = LLVMCreatePassManager();
             LLVMAddInternalizePass(pass_manager, true as _);
             LLVMAddGlobalOptimizerPass(pass_manager);
             LLVMAddGlobalDCEPass(pass_manager);
+            LLVMAddFunctionInliningPass(pass_manager);
+
             LLVMRunPassManager(pass_manager, self.module.module);
 
             LLVMDisposePassManager(pass_manager);
