@@ -148,12 +148,12 @@ impl TypeTable {
     }
 
     fn append_type(&self, tv: ty::TypeValue) -> ty::Type {
-        CONTEXT.alloc_type(tv)
+        CONTEXT.get_type(tv)
     }
 
     fn register_type(&mut self, name: String, tv: ty::TypeValue) {
         // force the insert
-        let ty = CONTEXT.alloc_type(tv);
+        let ty = CONTEXT.get_type(tv);
         self.names.insert(name, ty);
     }
 
@@ -191,17 +191,17 @@ impl TypeTable {
 
     pub fn lvalue_of(&self, sub_ty: ty::Type, assignable: bool) -> ty::Type {
         let tv = ty::TypeValue::LValue(sub_ty, assignable);
-        CONTEXT.alloc_type(tv)
+        CONTEXT.get_type(tv)
     }
 
     pub fn pointer_of(&self, sub_ty: ty::Type) -> ty::Type {
         let tv = ty::TypeValue::Pointer(sub_ty);
-        CONTEXT.alloc_type(tv)
+        CONTEXT.get_type(tv)
     }
 
     pub fn array_of(&self, sub_ty: ty::Type, size: usize) -> ty::Type {
         let tv = ty::TypeValue::Array(sub_ty, size);
-        CONTEXT.alloc_type(tv)
+        CONTEXT.get_type(tv)
     }
 }
 
