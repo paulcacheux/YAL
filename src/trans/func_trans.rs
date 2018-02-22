@@ -475,7 +475,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
         for (field_name, field_expr) in fields {
             let expr = self.translate_expression(field_expr)?;
             let expr = utils::lvalue_to_rvalue(expr);
-            let index = checker.set_field(&field_name.inner, expr.ty, field_name.span)?;
+            let (expr, index) = checker.set_field(&field_name.inner, expr, field_name.span)?;
             stmts.push(ir::Statement::Expression(utils::build_assign_to_field(
                 res_id_expr.clone(),
                 index,

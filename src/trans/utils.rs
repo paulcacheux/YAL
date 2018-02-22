@@ -226,16 +226,17 @@ impl StructLitChecker {
     pub fn set_field(
         &mut self,
         field: &str,
-        expr_ty: ty::Type,
+        expr: TypedExpression,
         span: Span,
-    ) -> TranslationResult<usize> {
+    ) -> TranslationResult<(TypedExpression, usize)> {
         if let Some(&mut (ty, index, ref mut set)) = self.fields.get_mut(field) {
             if *set {
                 return error!(TranslationError::FieldAreadySet(field.to_string()), span);
             }
-            check_eq_types(ty, expr_ty, span)?;
+            let expr = check_eq_types_auto_cast(expr, ty, span)?;
+            check_eq_types(ty, expr.ty, span)?;
             *set = true;
-            Ok(index)
+            Ok((expr, index))
         } else {
             error!(TranslationError::UndefinedField(field.to_string()), span)
         }
