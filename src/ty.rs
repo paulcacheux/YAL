@@ -3,7 +3,25 @@ use std::ops::{Deref, DerefMut};
 use std::fmt;
 
 macro_rules! wrapper {
-    ($name:ident -> $sub_ty:ty) => {
+    (@eq_impl @direct_eq $name:ident) => {
+        impl PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                self.0 == other.0
+            }
+        }
+
+        impl Eq for $name {}
+    };
+    (@eq_impl @sub_eq $name:ident) => {
+        impl PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                **self == **other
+            }
+        }
+
+        impl Eq for $name {}
+    };
+    ($name:ident -> $sub_ty:ty, @$eq:ident) => {
 
         #[derive(Debug, Clone, Copy)]
         pub struct $name(*mut $sub_ty);
@@ -24,19 +42,13 @@ macro_rules! wrapper {
             }
         }
 
+        wrapper!(@eq_impl @$eq $name);
+
         impl DerefMut for $name {
             fn deref_mut(&mut self) -> &mut Self::Target {
                 unsafe { &mut *self.0 }
             }
         }
-
-        impl PartialEq for $name {
-            fn eq(&self, other: &Self) -> bool {
-                **self == **other
-            }
-        }
-
-        impl Eq for $name {}
 
         impl Hash for $name {
             fn hash<H: Hasher>(&self, state: &mut H) {
@@ -46,8 +58,8 @@ macro_rules! wrapper {
     }
 }
 
-wrapper!(Type -> TypeValue);
-wrapper!(StructType -> StructTypeValue);
+wrapper!(Type -> TypeValue, @direct_eq);
+wrapper!(StructType -> StructTypeValue, @sub_eq);
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
