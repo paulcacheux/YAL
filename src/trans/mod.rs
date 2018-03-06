@@ -180,6 +180,7 @@ fn translate_type(
             let sub = translate_type(typectxt, *sub_ty, false)?;
             Ok(typectxt.array_of(sub, size))
         }
+        _ => unimplemented!(),
     }
 }
 

@@ -93,6 +93,21 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let span = Span::merge(begin_span, end_span);
                 Ok(Spanned::new(ast::Type::Array(Box::new(ty), size), span))
             }
+            Token::FnKeyword => {
+                let begin_span = self.lexer.next_token()?.span;
+                expect!(self.lexer; Token::LeftParenthesis, "(");
+                let (parameters_ty, is_vararg) = self.parse_extern_parameter_list()?;
+                expect!(self.lexer; Token::RightParenthesis, ")");
+                expect!(self.lexer; Token::Arrow, "->");
+                let return_ty = self.parse_type()?;
+                let span = Span::merge(begin_span, return_ty.span);
+                let func_ty = ast::FunctionType {
+                    return_ty,
+                    parameters_ty,
+                    is_vararg,
+                };
+                Ok(Spanned::new(ast::Type::Function(Box::new(func_ty)), span))
+            }
             _ => {
                 let (id, span) =
                     accept!(self.lexer; Token::Identifier(id) => id.to_owned(), "identifier");

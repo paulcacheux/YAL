@@ -215,9 +215,10 @@ pub enum Type {
     Identifier(String),
     Pointer(Box<Spanned<Type>>),
     Array(Box<Spanned<Type>>, usize),
+    Function(Box<FunctionType>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionType {
     pub return_ty: Spanned<Type>,
     pub parameters_ty: Vec<Spanned<Type>>,
