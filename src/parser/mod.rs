@@ -83,6 +83,16 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let span = Span::merge(begin_span, ty.span);
                 Ok(Spanned::new(ast::Type::Pointer(Box::new(ty)), span))
             }
+            Token::LeftSquare => {
+                let begin_span = self.lexer.next_token()?.span;
+                let ty = self.parse_type()?;
+                expect!(self.lexer; Token::SemiColon, ";");
+                let (size, _) =
+                    accept!(self.lexer; Token::IntegerLiteral(lit) => lit as usize, "integer");
+                let end_span = expect!(self.lexer; Token::RightSquare, "]");
+                let span = Span::merge(begin_span, end_span);
+                Ok(Spanned::new(ast::Type::Array(Box::new(ty), size), span))
+            }
             _ => {
                 let (id, span) =
                     accept!(self.lexer; Token::Identifier(id) => id.to_owned(), "identifier");

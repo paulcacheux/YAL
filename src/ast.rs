@@ -214,6 +214,7 @@ pub enum LValueUnaryOperatorKind {
 pub enum Type {
     Identifier(String),
     Pointer(Box<Spanned<Type>>),
+    Array(Box<Spanned<Type>>, usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
