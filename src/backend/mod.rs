@@ -114,6 +114,18 @@ impl<'s, 't> Backend<'s, 't> {
                 llvm_struct_ty
             }
             ty::TypeValue::Array(sub, size) => utils::array_ty(self.codegen_type(sub), size),
+            ty::TypeValue::Function(ref func_ty) => {
+                let params: Vec<_> = func_ty
+                    .parameters_ty
+                    .iter()
+                    .map(|&ty| self.codegen_type(ty))
+                    .collect();
+                utils::function_ty(
+                    self.codegen_type(func_ty.return_ty),
+                    params,
+                    func_ty.is_vararg,
+                )
+            }
         };
 
         self.ty_cache.insert(ty, llvm_ty);

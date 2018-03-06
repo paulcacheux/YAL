@@ -90,6 +90,7 @@ pub enum TypeValue {
     LValue(Type, bool), // assignable
     Pointer(Type),
     Array(Type, usize),
+    Function(FunctionType),
 }
 
 #[derive(Debug, Clone)]
@@ -139,7 +140,7 @@ impl Hash for StructTypeValue {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionType {
     pub return_ty: Type,
     pub parameters_ty: Vec<Type>,

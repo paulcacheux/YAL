@@ -43,16 +43,6 @@ impl Context {
         unsafe { LLVMDoubleTypeInContext(self.context) }
     }
 
-    pub fn raw_array_ty(&self, sub: LLVMTypeRef, index: LLVMTypeRef) -> LLVMTypeRef {
-        let mut fields = [utils::pointer_ty(sub), index];
-        unsafe { LLVMStructTypeInContext(self.context, fields.as_mut_ptr(), 2, 0 as _) }
-    }
-
-    pub fn array_ty(&self, sub: LLVMTypeRef, index: LLVMTypeRef) -> LLVMTypeRef {
-        let raw_array = self.raw_array_ty(sub, index);
-        utils::pointer_ty(raw_array)
-    }
-
     pub fn create_struct_named(&self, name: &[u8]) -> LLVMTypeRef {
         unsafe { LLVMStructCreateNamed(self.context, c_str(name)) }
     }
