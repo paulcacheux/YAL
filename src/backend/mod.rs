@@ -114,17 +114,9 @@ impl<'s, 't> Backend<'s, 't> {
                 llvm_struct_ty
             }
             ty::TypeValue::Array(sub, size) => utils::array_ty(self.codegen_type(sub), size),
-            ty::TypeValue::Function(ref func_ty) => {
-                let params: Vec<_> = func_ty
-                    .parameters_ty
-                    .iter()
-                    .map(|&ty| self.codegen_type(ty))
-                    .collect();
-                utils::function_ty(
-                    self.codegen_type(func_ty.return_ty),
-                    params,
-                    func_ty.is_vararg,
-                )
+            ty::TypeValue::FunctionPtr(ref func_ty) => {
+                let func_ty = self.codegen_function_type(func_ty);
+                utils::pointer_ty(func_ty)
             }
         };
 
@@ -132,16 +124,19 @@ impl<'s, 't> Backend<'s, 't> {
         llvm_ty
     }
 
-    fn pre_codegen_extern_function(&mut self, exfunc: &ir::ExternFunction) {
-        let ret_ty = self.codegen_type(exfunc.ty.return_ty);
-        let param_types: Vec<_> = exfunc
-            .ty
+    fn codegen_function_type(&mut self, func_ty: &ty::FunctionType) -> LLVMTypeRef {
+        let ret_ty = self.codegen_type(func_ty.return_ty);
+        let params: Vec<_> = func_ty
             .parameters_ty
             .iter()
             .map(|&ty| self.codegen_type(ty))
             .collect();
 
-        let func_ty = utils::function_ty(ret_ty, param_types, exfunc.ty.is_vararg);
+        utils::function_ty(ret_ty, params, func_ty.is_vararg)
+    }
+
+    fn pre_codegen_extern_function(&mut self, exfunc: &ir::ExternFunction) {
+        let func_ty = self.codegen_function_type(&exfunc.ty);
         let c_name = CString::new(exfunc.name.clone()).unwrap();
 
         self.module.add_function(&c_name, func_ty);
@@ -319,8 +314,7 @@ impl<'s, 't> Backend<'s, 't> {
         match expr {
             ir::Expression::Block(block) => self.codegen_expr_block(*block),
             ir::Expression::LValueToRValue(sub) => self.codegen_l2r_expr(*sub),
-            ir::Expression::Literal(lit) => self.codegen_literal(lit),
-            ir::Expression::Identifier(id) => self.codegen_identifier(id),
+            ir::Expression::Value(value) => self.codegen_value(value),
             ir::Expression::Assign { lhs, rhs } => self.codegen_assign(*lhs, *rhs),
             ir::Expression::BinaryOperator { binop, lhs, rhs } => {
                 self.codegen_binop(binop, *lhs, *rhs)
@@ -332,10 +326,22 @@ impl<'s, 't> Backend<'s, 't> {
             ir::Expression::Cast { kind, sub } => self.codegen_cast(kind, *sub),
             ir::Expression::BitCast { dest_ty, sub } => self.codegen_bitcast(dest_ty, *sub),
             ir::Expression::FunctionCall { function, args } => {
-                self.codegen_funccall(&function, args)
+                self.codegen_funccall(*function, args)
             }
             ir::Expression::FieldAccess { sub, index } => self.codegen_field_access(*sub, index),
             _ => unimplemented!(),
+        }
+    }
+
+    fn codegen_value(&mut self, value: ir::Value) -> LLVMValueRef {
+        match value {
+            ir::Value::Literal(lit) => self.codegen_literal(lit),
+            ir::Value::Local(id) => self.codegen_identifier(id),
+            ir::Value::Global(global_name) => {
+                // TODO: currently globals can only be functions
+                self.module
+                    .get_named_function(&CString::new(global_name.to_string()).unwrap())
+            }
         }
     }
 
@@ -553,9 +559,12 @@ impl<'s, 't> Backend<'s, 't> {
         self.builder.build_bitcast(sub, llvm_dest_ty, b"\0")
     }
 
-    fn codegen_funccall(&mut self, func: &str, args: Vec<ir::Expression>) -> LLVMValueRef {
-        let func = self.module
-            .get_named_function(&CString::new(func.to_string()).unwrap());
+    fn codegen_funccall(
+        &mut self,
+        func: ir::Expression,
+        args: Vec<ir::Expression>,
+    ) -> LLVMValueRef {
+        let func = self.codegen_expression(func);
         let args: Vec<_> = args.into_iter()
             .map(|e| self.codegen_expression(e))
             .collect();

@@ -166,8 +166,8 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
     }
 
     pub fn pp_expression_percent(&mut self, expr: &ir::Expression) -> io::Result<String> {
-        if let ir::Expression::Identifier(id) = *expr {
-            Ok(idid_to_string(id))
+        if let ir::Expression::Value(ref val) = *expr {
+            Ok(value_to_string(val))
         } else {
             Ok(format!("%{}", self.pp_expression(expr)?))
         }
@@ -184,8 +184,7 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
                 let sub = self.pp_expression_percent(sub)?;
                 format!("rvalue2lvalue({})", sub)
             }
-            ir::Expression::Literal(ref lit) => lit_to_string(lit),
-            ir::Expression::Identifier(id) => idid_to_string(id),
+            ir::Expression::Value(ref value) => value_to_string(value),
             ir::Expression::Assign { ref lhs, ref rhs } => {
                 let lhs = self.pp_expression_percent(lhs)?;
                 let rhs = self.pp_expression_percent(rhs)?;
@@ -223,6 +222,7 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
                 ref function,
                 ref args,
             } => {
+                let function = self.pp_expression_percent(function)?;
                 let args = args.iter()
                     .map(|arg| self.pp_expression_percent(arg))
                     .collect::<Result<Vec<_>, _>>()?;
@@ -274,7 +274,7 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
             ty::TypeValue::Pointer(sub) => format!("*{}", self.ty_to_string(sub)),
             ty::TypeValue::Struct(ref s) => format!("struct {}", s.name),
             ty::TypeValue::Array(sub, size) => format!("[{}; {}]", self.ty_to_string(sub), size),
-            ty::TypeValue::Function(ref func_ty) => {
+            ty::TypeValue::FunctionPtr(ref func_ty) => {
                 let params: Vec<_> = func_ty
                     .parameters_ty
                     .iter()
@@ -291,6 +291,14 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
     }
 }
 
+fn value_to_string(value: &ir::Value) -> String {
+    match *value {
+        ir::Value::Literal(ref lit) => lit_to_string(lit),
+        ir::Value::Local(id) => idid_to_string(id),
+        ir::Value::Global(ref global) => format!("@{}", global),
+    }
+}
+
 fn lit_to_string(lit: &ir::Literal) -> String {
     match *lit {
         ir::Literal::IntLiteral(i) => i.to_string(),
@@ -301,5 +309,5 @@ fn lit_to_string(lit: &ir::Literal) -> String {
 }
 
 fn idid_to_string(ir::IdentifierId(id): ir::IdentifierId) -> String {
-    format!("@{}", id)
+    format!("%{}", id)
 }

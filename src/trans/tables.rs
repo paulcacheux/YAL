@@ -203,6 +203,11 @@ impl TypeTable {
         let tv = ty::TypeValue::Array(sub_ty, size);
         CONTEXT.get_type(tv)
     }
+
+    pub fn function_of(&self, func_ty: ty::FunctionType) -> ty::Type {
+        let tv = ty::TypeValue::FunctionPtr(func_ty);
+        CONTEXT.get_type(tv)
+    }
 }
 
 fn has_cycles(struct_tv: &ty::StructTypeValue, ty: ty::Type) -> bool {

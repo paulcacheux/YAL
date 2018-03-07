@@ -21,8 +21,9 @@ pub struct TypedExpression {
 }
 
 pub fn build_assign_to_id(id: IdentifierId, rhs: ir::Expression) -> ir::Expression {
+    let value = ir::Value::Local(id);
     ir::Expression::Assign {
-        lhs: Box::new(ir::Expression::Identifier(id)),
+        lhs: Box::new(ir::Expression::Value(value)),
         rhs: Box::new(rhs),
     }
 }
@@ -49,7 +50,7 @@ pub fn build_assign_to_array_index(
     ir::Expression::Assign {
         lhs: Box::new(build_subscript(
             ptr,
-            ir::Expression::Literal(common::Literal::IntLiteral(index as _)),
+            ir::Expression::Value(ir::Value::Literal(common::Literal::IntLiteral(index as _))),
         )),
         rhs: Box::new(expr),
     }
@@ -182,16 +183,19 @@ pub fn check_return_paths_stmt(stmt: &ir::Statement) -> bool {
             ref body,
             ref else_clause,
         } => match *condition {
-            ir::Expression::Literal(common::Literal::BooleanLiteral(true)) => {
+            ir::Expression::Value(ir::Value::Literal(common::Literal::BooleanLiteral(true))) => {
                 check_return_paths(body)
             }
-            ir::Expression::Literal(common::Literal::BooleanLiteral(false)) => {
+            ir::Expression::Value(ir::Value::Literal(common::Literal::BooleanLiteral(false))) => {
                 check_return_paths(else_clause)
             }
             _ => check_return_paths(body) && check_return_paths(else_clause),
         },
         ir::Statement::For { ref condition, .. } => {
-            if let ir::Expression::Literal(common::Literal::BooleanLiteral(true)) = *condition {
+            if let ir::Expression::Value(ir::Value::Literal(common::Literal::BooleanLiteral(
+                true,
+            ))) = *condition
+            {
                 true
             } else {
                 false

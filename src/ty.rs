@@ -90,7 +90,7 @@ pub enum TypeValue {
     LValue(Type, bool), // assignable
     Pointer(Type),
     Array(Type, usize),
-    Function(FunctionType),
+    FunctionPtr(FunctionType),
 }
 
 #[derive(Debug, Clone)]

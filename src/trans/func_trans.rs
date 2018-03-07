@@ -231,18 +231,23 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                 let ty = lit.get_type(&self.tables.types);
                 Ok(utils::TypedExpression {
                     ty,
-                    expr: ir::Expression::Literal(lit),
+                    expr: ir::Expression::Value(ir::Value::Literal(lit)),
                 })
             }
             ast::Expression::Identifier(id) => {
-                if let Some(symbol) = self.tables.locals.lookup_local(&id) {
+                if let Some(symbol) = self.tables.locals.lookup_local(&id).cloned() {
                     let lvalue_ty = self.tables.types.lvalue_of(symbol.ty, true);
                     Ok(utils::TypedExpression {
                         ty: lvalue_ty,
-                        expr: ir::Expression::Identifier(symbol.id),
+                        expr: ir::Expression::Value(ir::Value::Local(symbol.id)),
+                    })
+                } else if let Some(func_ty) = self.tables.globals.lookup_function(&id).cloned() {
+                    Ok(utils::TypedExpression {
+                        ty: self.tables.types.function_of(func_ty),
+                        expr: ir::Expression::Value(ir::Value::Global(id)),
                     })
                 } else {
-                    error!(TranslationError::UndefinedLocal(id), expr_span)
+                    error!(TranslationError::UndefinedVariable(id), expr_span)
                 }
             }
             ast::Expression::Parenthesis(sub) => self.translate_expression(*sub),
@@ -356,53 +361,58 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
             }
             ast::Expression::Subscript { array, index } => self.translate_subscript(*array, *index),
             ast::Expression::FunctionCall { function, args } => {
-                if let Some(func_ty) = self.tables.globals.lookup_function(&function).cloned() {
-                    let mut args_translated = Vec::with_capacity(args.len());
-                    if !func_ty.is_vararg && func_ty.parameters_ty.len() != args.len() {
-                        return error!(
-                            TranslationError::FunctionCallArityMismatch(
-                                func_ty.parameters_ty.len(),
-                                args.len(),
-                            ),
-                            expr_span
-                        );
-                    }
+                let function = self.translate_expression(*function)?;
+                let function = utils::lvalue_to_rvalue(function);
 
-                    if func_ty.is_vararg && func_ty.parameters_ty.len() > args.len() {
-                        return error!(
-                            TranslationError::FunctionCallArityMismatch(
-                                func_ty.parameters_ty.len(),
-                                args.len()
-                            ),
-                            expr_span
-                        );
-                    }
-
-                    for (index, arg) in args.into_iter().enumerate() {
-                        let arg_span = arg.span;
-                        let mut arg = self.translate_expression(arg)?;
-                        arg = utils::lvalue_to_rvalue(arg);
-                        if index < func_ty.parameters_ty.len() {
-                            arg = utils::check_eq_types_auto_cast(
-                                arg,
-                                func_ty.parameters_ty[index],
-                                arg_span,
-                            )?;
-                        }
-                        args_translated.push(arg.expr);
-                    }
-
-                    let ret_ty = func_ty.return_ty;
-                    Ok(utils::TypedExpression {
-                        ty: ret_ty,
-                        expr: ir::Expression::FunctionCall {
-                            function,
-                            args: args_translated,
-                        },
-                    })
+                let func_ty = if let ty::TypeValue::FunctionPtr(ref func_ty) = *function.ty {
+                    func_ty.clone()
                 } else {
-                    error!(TranslationError::FunctionUndefined(function), expr_span)
+                    return error!(TranslationError::NotAFunctionCall, expr_span);
+                };
+
+                let mut args_translated = Vec::with_capacity(args.len());
+                if !func_ty.is_vararg && func_ty.parameters_ty.len() != args.len() {
+                    return error!(
+                        TranslationError::FunctionCallArityMismatch(
+                            func_ty.parameters_ty.len(),
+                            args.len(),
+                        ),
+                        expr_span
+                    );
                 }
+
+                if func_ty.is_vararg && func_ty.parameters_ty.len() > args.len() {
+                    return error!(
+                        TranslationError::FunctionCallArityMismatch(
+                            func_ty.parameters_ty.len(),
+                            args.len()
+                        ),
+                        expr_span
+                    );
+                }
+
+                for (index, arg) in args.into_iter().enumerate() {
+                    let arg_span = arg.span;
+                    let mut arg = self.translate_expression(arg)?;
+                    arg = utils::lvalue_to_rvalue(arg);
+                    if index < func_ty.parameters_ty.len() {
+                        arg = utils::check_eq_types_auto_cast(
+                            arg,
+                            func_ty.parameters_ty[index],
+                            arg_span,
+                        )?;
+                    }
+                    args_translated.push(arg.expr);
+                }
+
+                let ret_ty = func_ty.return_ty;
+                Ok(utils::TypedExpression {
+                    ty: ret_ty,
+                    expr: ir::Expression::FunctionCall {
+                        function: Box::new(function.expr),
+                        args: args_translated,
+                    },
+                })
             }
             ast::Expression::ArrayLiteral { values } => self.translate_array_literal(values),
             ast::Expression::ArrayFillLiteral { value, size } => {
@@ -429,7 +439,9 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                     }
                     Some(ty::FieldInfo::ArrayLen(size)) => Ok(utils::TypedExpression {
                         ty: self.tables.types.get_int_ty(),
-                        expr: ir::Expression::Literal(common::Literal::IntLiteral(size as _)),
+                        expr: ir::Expression::Value(ir::Value::Literal(
+                            common::Literal::IntLiteral(size as _),
+                        )),
                     }),
                     None => error!(TranslationError::UndefinedField(field), expr_span),
                 }
@@ -441,7 +453,9 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                     ty: void_ptr_ty,
                     expr: ir::Expression::Cast {
                         kind: ir::CastKind::IntToPtr(void_ptr_ty),
-                        sub: Box::new(ir::Expression::Literal(common::Literal::IntLiteral(0))),
+                        sub: Box::new(ir::Expression::Value(ir::Value::Literal(
+                            common::Literal::IntLiteral(0),
+                        ))),
                     },
                 })
             }
@@ -468,7 +482,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
 
         let res_id = self.register_temp_local(ty);
         let lvalue_ty = self.tables.types.lvalue_of(ty, false);
-        let res_id_expr = ir::Expression::Identifier(res_id);
+        let res_id_expr = ir::Expression::Value(ir::Value::Local(res_id));
         let mut stmts = Vec::new();
 
         let mut checker = utils::StructLitChecker::new(struct_tv, expr_span);
@@ -523,7 +537,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
 
         let res_id = self.register_temp_local(array_ty);
         let lvalue_ty = self.tables.types.lvalue_of(array_ty, false);
-        let res_id_expr = ir::Expression::Identifier(res_id);
+        let res_id_expr = ir::Expression::Value(ir::Value::Local(res_id));
         let ptr_expr = ir::Expression::BitCast {
             dest_ty: ptr_ty,
             sub: Box::new(res_id_expr.clone()),
@@ -553,8 +567,10 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
         let value = self.translate_expression(value)?;
         let value = utils::lvalue_to_rvalue(value);
 
-        let zero_literal = ir::Expression::Literal(common::Literal::IntLiteral(0));
-        let size_literal = ir::Expression::Literal(common::Literal::IntLiteral(size as _));
+        let zero_literal =
+            ir::Expression::Value(ir::Value::Literal(common::Literal::IntLiteral(0)));
+        let size_literal =
+            ir::Expression::Value(ir::Value::Literal(common::Literal::IntLiteral(size as _)));
 
         let sub_ty = value.ty;
         let array_ty = self.tables.types.array_of(sub_ty, size);
@@ -562,7 +578,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
 
         let res_id = self.register_temp_local(array_ty);
         let lvalue_ty = self.tables.types.lvalue_of(array_ty, false);
-        let res_id_expr = ir::Expression::Identifier(res_id);
+        let res_id_expr = ir::Expression::Value(ir::Value::Local(res_id));
         let ptr_expr = ir::Expression::BitCast {
             dest_ty: ptr_ty,
             sub: Box::new(res_id_expr.clone()),
@@ -570,7 +586,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
 
         let int_ty = self.tables.types.get_int_ty();
         let index_id = self.register_temp_local(int_ty);
-        let index_id_expr = ir::Expression::Identifier(index_id);
+        let index_id_expr = ir::Expression::Value(ir::Value::Local(index_id));
         let index_id_rvalue = ir::Expression::LValueToRValue(Box::new(index_id_expr.clone()));
 
         let init = utils::build_assign_to_id(index_id, zero_literal);
@@ -662,7 +678,9 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
 
         let (init, cond) = match lazyop {
             ast::LazyOperatorKind::LogicalOr => {
-                let init = ir::Expression::Literal(common::Literal::BooleanLiteral(true));
+                let init = ir::Expression::Value(ir::Value::Literal(
+                    common::Literal::BooleanLiteral(true),
+                ));
 
                 let cond = ir::Expression::UnaryOperator {
                     unop: ir::UnaryOperatorKind::BooleanNot,
@@ -672,7 +690,9 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                 (init, cond)
             }
             ast::LazyOperatorKind::LogicalAnd => {
-                let init = ir::Expression::Literal(common::Literal::BooleanLiteral(false));
+                let init = ir::Expression::Value(ir::Value::Literal(
+                    common::Literal::BooleanLiteral(false),
+                ));
                 (init, lhs.expr)
             }
         };
@@ -681,7 +701,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
         let lvalue_bool = self.tables.types.lvalue_of(bool_ty, true);
         let res_id_expr = utils::TypedExpression {
             ty: lvalue_bool,
-            expr: ir::Expression::Identifier(res_id),
+            expr: ir::Expression::Value(ir::Value::Local(res_id)),
         };
 
         let stmts = vec![

@@ -180,7 +180,10 @@ fn translate_type(
             let sub = translate_type(typectxt, *sub_ty, false)?;
             Ok(typectxt.array_of(sub, size))
         }
-        _ => unimplemented!(),
+        ast::Type::Function(func_ty) => {
+            let func_ty = translate_function_type(typectxt, *func_ty)?;
+            Ok(typectxt.function_of(func_ty))
+        }
     }
 }
 

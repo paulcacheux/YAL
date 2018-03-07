@@ -154,7 +154,7 @@ pub enum Expression {
         index: Box<Spanned<Expression>>,
     },
     FunctionCall {
-        function: String,
+        function: Box<Spanned<Expression>>,
         args: Vec<Spanned<Expression>>,
     },
     ArrayLiteral {

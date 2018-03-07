@@ -623,8 +623,11 @@ impl<'si, 'input> Parser<'si, 'input> {
         let args = self.parse_comma_sep(&Token::RightParenthesis, Parser::parse_expression, true)?;
         let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
         let span = Span::merge(start_span, end_span);
+
+        let function_name = Spanned::new(ast::Expression::Identifier(name), start_span);
+
         let expr = ast::Expression::FunctionCall {
-            function: name,
+            function: Box::new(function_name),
             args,
         };
         Ok(Spanned::new(expr, span))

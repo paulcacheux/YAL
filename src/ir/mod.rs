@@ -80,8 +80,7 @@ pub enum Expression {
     Block(Box<BlockExpression>),
     LValueToRValue(Box<Expression>),
     RValueToLValue(Box<Expression>),
-    Literal(Literal),
-    Identifier(IdentifierId),
+    Value(Value),
     Assign {
         lhs: Box<Expression>,
         rhs: Box<Expression>,
@@ -108,7 +107,7 @@ pub enum Expression {
         sub: Box<Expression>,
     },
     FunctionCall {
-        function: String,
+        function: Box<Expression>,
         args: Vec<Expression>,
     },
     FieldAccess {
@@ -121,6 +120,13 @@ pub enum Expression {
 pub struct BlockExpression {
     pub stmts: BlockStatement,
     pub final_expr: Expression,
+}
+
+#[derive(Debug, Clone)]
+pub enum Value {
+    Literal(Literal),
+    Local(IdentifierId),
+    Global(String),
 }
 
 #[derive(Debug, Clone, Copy)]

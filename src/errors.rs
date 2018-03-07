@@ -36,7 +36,7 @@ pub enum TranslationError {
     UnexpectedType(ty::Type, ty::Type), // expected, given
     NonStructType(String),
     StructCycle(String),
-    UndefinedLocal(String),
+    UndefinedVariable(String),
     UndefinedType(String),
     NonLValueAssign,
     FieldAreadySet(String),
@@ -48,7 +48,7 @@ pub enum TranslationError {
     LValueUnOpUndefined(ast::LValueUnaryOperatorKind, ty::Type),
     CastUndefined(ty::Type, ty::Type),
     FunctionCallArityMismatch(usize, usize),
-    FunctionUndefined(String),
+    NotAFunctionCall,
     LValueUnopNonLValue,
     BreakContinueOutOfLoop,
     MainWrongType,
@@ -167,8 +167,8 @@ impl fmt::Display for TranslationError {
                 "The struct '{}' is cyclic (of infinite size), maybe use a pointer",
                 name
             ),
-            TranslationError::UndefinedLocal(ref local) => {
-                write!(f, "The local '{}' is undefined here", local)
+            TranslationError::UndefinedVariable(ref variable) => {
+                write!(f, "The variable '{}' is undefined here", variable)
             }
             TranslationError::UndefinedType(ref ty) => {
                 write!(f, "The type '{}' is undefined here", ty)
@@ -215,9 +215,7 @@ impl fmt::Display for TranslationError {
                 "Mismatching arities in function call between {} and {}",
                 a, b
             ),
-            TranslationError::FunctionUndefined(ref func) => {
-                write!(f, "The function '{}' is undefined", func)
-            }
+            TranslationError::NotAFunctionCall => write!(f, "This expression is not callable"),
             TranslationError::LValueUnopNonLValue => {
                 write!(f, "LValue unary operator on a value that can't be assigned")
             }
