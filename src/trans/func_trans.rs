@@ -676,51 +676,29 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
             );
         }
 
-        let (init, cond) = match lazyop {
+        let (true_expr, false_expr) = match lazyop {
             ast::LazyOperatorKind::LogicalOr => {
-                let init = ir::Expression::Value(ir::Value::Literal(
+                let true_expr = ir::Expression::Value(ir::Value::Literal(
                     common::Literal::BooleanLiteral(true),
                 ));
-
-                let cond = ir::Expression::UnaryOperator {
-                    unop: ir::UnaryOperatorKind::BooleanNot,
-                    sub: Box::new(lhs.expr),
-                };
-
-                (init, cond)
+                let false_expr = rhs.expr;
+                (true_expr, false_expr)
             }
             ast::LazyOperatorKind::LogicalAnd => {
-                let init = ir::Expression::Value(ir::Value::Literal(
+                let true_expr = rhs.expr;
+                let false_expr = ir::Expression::Value(ir::Value::Literal(
                     common::Literal::BooleanLiteral(false),
                 ));
-                (init, lhs.expr)
+                (true_expr, false_expr)
             }
         };
 
-        let res_id = self.register_temp_local(bool_ty);
-        let lvalue_bool = self.tables.types.lvalue_of(bool_ty, true);
-        let res_id_expr = utils::TypedExpression {
-            ty: lvalue_bool,
-            expr: ir::Expression::Value(ir::Value::Local(res_id)),
+        let expr = ir::Expression::Ternary {
+            condition: Box::new(lhs.expr),
+            true_expr: Box::new(true_expr),
+            false_expr: Box::new(false_expr),
         };
 
-        let stmts = vec![
-            ir::Statement::Expression(utils::build_assign_to_id(res_id, init)),
-            ir::Statement::If {
-                condition: cond,
-                body: vec![
-                    ir::Statement::Expression(utils::build_assign_to_id(res_id, rhs.expr)),
-                ],
-                else_clause: vec![],
-            },
-        ];
-
-        Ok(utils::TypedExpression {
-            ty: bool_ty,
-            expr: ir::Expression::Block(Box::new(ir::BlockExpression {
-                stmts,
-                final_expr: utils::lvalue_to_rvalue(res_id_expr).expr,
-            })),
-        })
+        Ok(utils::TypedExpression { ty: bool_ty, expr })
     }
 }

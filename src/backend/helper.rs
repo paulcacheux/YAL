@@ -127,6 +127,10 @@ impl IRBuilder {
         }
     }
 
+    pub fn get_insert_block(&self) -> LLVMBasicBlockRef {
+        unsafe { LLVMGetInsertBlock(self.builder) }
+    }
+
     pub fn build_unreachable(&self) {
         unsafe {
             LLVMBuildUnreachable(self.builder);
@@ -336,5 +340,33 @@ impl IRBuilder {
         name: &[u8],
     ) -> LLVMValueRef {
         unsafe { LLVMBuildIntToPtr(self.builder, value, dest_ty, c_str(name)) }
+    }
+
+    pub fn build_phi(
+        &self,
+        values_blocks: Vec<(LLVMValueRef, LLVMBasicBlockRef)>,
+        name: &[u8],
+    ) -> LLVMValueRef {
+        assert!(!values_blocks.is_empty());
+
+        let ty = unsafe { LLVMTypeOf(values_blocks[0].0) };
+
+        let mut values = Vec::with_capacity(values_blocks.len());
+        let mut blocks = Vec::with_capacity(values_blocks.len());
+        for (v, b) in values_blocks {
+            values.push(v);
+            blocks.push(b);
+        }
+
+        unsafe {
+            let phi = LLVMBuildPhi(self.builder, ty, c_str(name));
+            LLVMAddIncoming(
+                phi,
+                values.as_mut_ptr(),
+                blocks.as_mut_ptr(),
+                values.len() as _,
+            );
+            phi
+        }
     }
 }

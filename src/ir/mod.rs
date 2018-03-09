@@ -114,6 +114,11 @@ pub enum Expression {
         sub: Box<Expression>,
         index: usize,
     },
+    Ternary {
+        condition: Box<Expression>,
+        true_expr: Box<Expression>,
+        false_expr: Box<Expression>,
+    },
 }
 
 #[derive(Debug, Clone)]

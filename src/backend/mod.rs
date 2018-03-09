@@ -329,6 +329,11 @@ impl<'s, 't> Backend<'s, 't> {
                 self.codegen_funccall(*function, args)
             }
             ir::Expression::FieldAccess { sub, index } => self.codegen_field_access(*sub, index),
+            ir::Expression::Ternary {
+                condition,
+                true_expr,
+                false_expr,
+            } => self.codegen_ternary(*condition, *true_expr, *false_expr),
             _ => unimplemented!(),
         }
     }
@@ -575,6 +580,40 @@ impl<'s, 't> Backend<'s, 't> {
     fn codegen_field_access(&mut self, indexed: ir::Expression, index: usize) -> LLVMValueRef {
         let indexed = self.codegen_expression(indexed);
         self.builder.build_struct_gep(indexed, index, b"\0")
+    }
+
+    fn codegen_ternary(
+        &mut self,
+        condition: ir::Expression,
+        true_expr: ir::Expression,
+        false_expr: ir::Expression,
+    ) -> LLVMValueRef {
+        let condition = self.codegen_expression(condition);
+
+        let true_bb = self.context
+            .append_bb_to_func(self.current_func, b"true_bb\0");
+        let false_bb = self.context
+            .append_bb_to_func(self.current_func, b"false_bb\0");
+        let final_bb = self.context
+            .append_bb_to_func(self.current_func, b"end_bb\0");
+
+        self.builder.build_cond_br(condition, true_bb, false_bb);
+
+        self.builder.position_at_end(true_bb);
+        let true_expr = self.codegen_expression(true_expr);
+        let true_from = self.builder.get_insert_block();
+        self.builder.build_br(final_bb);
+
+        self.builder.position_at_end(false_bb);
+        let false_expr = self.codegen_expression(false_expr);
+        let false_from = self.builder.get_insert_block();
+        self.builder.build_br(final_bb);
+
+        self.builder.position_at_end(final_bb);
+        self.builder.build_phi(
+            vec![(true_expr, true_from), (false_expr, false_from)],
+            b"\0",
+        )
     }
 
     fn into_exec_module(self) -> ExecutionModule {

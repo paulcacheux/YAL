@@ -233,6 +233,7 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
                 let sub = self.pp_expression_percent(sub)?;
                 format!("get_field #{} of {}", index, sub)
             }
+            ir::Expression::Ternary { .. } => unimplemented!(),
         };
 
         let id = self.new_expr();
