@@ -414,6 +414,7 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                     },
                 })
             }
+            ast::Expression::TupleLiteral { values } => self.translate_tuple_literal(values),
             ast::Expression::ArrayLiteral { values } => self.translate_array_literal(values),
             ast::Expression::ArrayFillLiteral { value, size } => {
                 self.translate_array_fill_literal(*value, size)
@@ -501,6 +502,45 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
             )));
         }
         checker.final_check()?;
+
+        Ok(utils::TypedExpression {
+            ty: lvalue_ty,
+            expr: ir::Expression::Block(Box::new(ir::BlockExpression {
+                stmts,
+                final_expr: res_id_expr,
+            })),
+        })
+    }
+
+    pub(super) fn translate_tuple_literal(
+        &mut self,
+        values: Vec<Spanned<ast::Expression>>,
+    ) -> TranslationResult<utils::TypedExpression> {
+        let mut types = Vec::with_capacity(values.len());
+        let mut trans_values = Vec::with_capacity(values.len());
+
+        for value in values {
+            let value = self.translate_expression(value)?;
+            let value = utils::lvalue_to_rvalue(value);
+            types.push(value.ty);
+            trans_values.push(value.expr);
+        }
+
+        let tuple_ty = self.tables.types.tuple_of(types);
+        let lvalue_ty = self.tables.types.lvalue_of(tuple_ty, false);
+
+        let res_id = self.register_temp_local(tuple_ty);
+        let res_id_expr = ir::Expression::Value(ir::Value::Local(res_id));
+
+        let mut stmts = Vec::new();
+
+        for (index, value) in trans_values.into_iter().enumerate() {
+            stmts.push(ir::Statement::Expression(utils::build_assign_to_field(
+                res_id_expr.clone(),
+                index,
+                value,
+            )))
+        }
 
         Ok(utils::TypedExpression {
             ty: lvalue_ty,

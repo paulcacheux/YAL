@@ -157,6 +157,9 @@ pub enum Expression {
         function: Box<Spanned<Expression>>,
         args: Vec<Spanned<Expression>>,
     },
+    TupleLiteral {
+        values: Vec<Spanned<Expression>>,
+    },
     ArrayLiteral {
         values: Vec<Spanned<Expression>>,
     },
