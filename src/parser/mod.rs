@@ -435,7 +435,7 @@ impl<'si, 'input> Parser<'si, 'input> {
     }
 
     fn parse_cast_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
-        let mut sub = self.parse_mid_expression()?;
+        let mut sub = self.parse_unop_expression()?;
         while let Token::AsKeyword = self.lexer.peek_token()?.inner {
             self.lexer.next_token()?;
             let ty = self.parse_type()?;
@@ -449,6 +449,53 @@ impl<'si, 'input> Parser<'si, 'input> {
             );
         }
         Ok(sub)
+    }
+
+    fn parse_unop_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
+        let span = self.lexer.peek_token()?.span;
+        match self.lexer.peek_token()?.inner {
+            Token::Minus => {
+                self.lexer.next_token()?;
+                let sub = self.parse_unop_expression()?;
+                let span = Span::merge(span, sub.span);
+                let expr = ast::Expression::UnaryOperator {
+                    unop: ast::UnaryOperatorKind::Minus,
+                    sub: Box::new(sub),
+                };
+                Ok(Spanned::new(expr, span))
+            }
+            Token::Bang => {
+                self.lexer.next_token()?;
+                let sub = self.parse_unop_expression()?;
+                let span = Span::merge(span, sub.span);
+                let expr = ast::Expression::UnaryOperator {
+                    unop: ast::UnaryOperatorKind::LogicalNot,
+                    sub: Box::new(sub),
+                };
+                Ok(Spanned::new(expr, span))
+            }
+            Token::Amp => {
+                self.lexer.next_token()?;
+                let sub = self.parse_unop_expression()?;
+                let span = Span::merge(span, sub.span);
+                let expr = ast::Expression::LValueUnaryOperator {
+                    lvalue_unop: ast::LValueUnaryOperatorKind::AddressOf,
+                    sub: Box::new(sub),
+                };
+                Ok(Spanned::new(expr, span))
+            }
+            Token::Star => {
+                self.lexer.next_token()?;
+                let sub = self.parse_unop_expression()?;
+                let span = Span::merge(span, sub.span);
+                let expr = ast::Expression::UnaryOperator {
+                    unop: ast::UnaryOperatorKind::PtrDeref,
+                    sub: Box::new(sub),
+                };
+                Ok(Spanned::new(expr, span))
+            }
+            _ => self.parse_mid_expression(),
+        }
     }
 
     fn parse_mid_expression(&mut self) -> ParsingResult<Spanned<ast::Expression>> {
@@ -484,6 +531,24 @@ impl<'si, 'input> Parser<'si, 'input> {
                         array: Box::new(sub),
                         index: Box::new(index_expr),
                     };
+                    sub = Spanned::new(expr, span);
+                    continue;
+                }
+                Token::LeftParenthesis => {
+                    self.lexer.next_token()?;
+                    let args = self.parse_comma_sep(
+                        &Token::RightParenthesis,
+                        Parser::parse_expression,
+                        true,
+                    )?;
+                    let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
+                    let span = Span::merge(sub.span, end_span);
+
+                    let expr = ast::Expression::FunctionCall {
+                        function: Box::new(sub),
+                        args,
+                    };
+
                     sub = Spanned::new(expr, span);
                     continue;
                 }
@@ -529,42 +594,6 @@ impl<'si, 'input> Parser<'si, 'input> {
                 Ok(Spanned::new(expr, span))
             }
             Token::NullptrKeyword => Ok(Spanned::new(ast::Expression::Nullptr, span)),
-            Token::Minus => {
-                let sub = self.parse_mid_expression()?;
-                let span = Span::merge(span, sub.span);
-                let expr = ast::Expression::UnaryOperator {
-                    unop: ast::UnaryOperatorKind::Minus,
-                    sub: Box::new(sub),
-                };
-                Ok(Spanned::new(expr, span))
-            }
-            Token::Bang => {
-                let sub = self.parse_mid_expression()?;
-                let span = Span::merge(span, sub.span);
-                let expr = ast::Expression::UnaryOperator {
-                    unop: ast::UnaryOperatorKind::LogicalNot,
-                    sub: Box::new(sub),
-                };
-                Ok(Spanned::new(expr, span))
-            }
-            Token::Amp => {
-                let sub = self.parse_mid_expression()?;
-                let span = Span::merge(span, sub.span);
-                let expr = ast::Expression::LValueUnaryOperator {
-                    lvalue_unop: ast::LValueUnaryOperatorKind::AddressOf,
-                    sub: Box::new(sub),
-                };
-                Ok(Spanned::new(expr, span))
-            }
-            Token::Star => {
-                let sub = self.parse_mid_expression()?;
-                let span = Span::merge(span, sub.span);
-                let expr = ast::Expression::UnaryOperator {
-                    unop: ast::UnaryOperatorKind::PtrDeref,
-                    sub: Box::new(sub),
-                };
-                Ok(Spanned::new(expr, span))
-            }
             Token::LeftParenthesis => {
                 let sub_expr = self.parse_expression()?;
                 let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
@@ -613,7 +642,6 @@ impl<'si, 'input> Parser<'si, 'input> {
             Token::Identifier(id) => {
                 let name = id.to_string();
                 match self.lexer.peek_token()?.inner {
-                    Token::LeftParenthesis => self.parse_function_call(name, span),
                     Token::LeftBracket => self.parse_struct_literal(name, span),
                     _ => {
                         let expr = ast::Expression::Identifier(name);
@@ -625,25 +653,6 @@ impl<'si, 'input> Parser<'si, 'input> {
                 return_unexpected!(span, "literal", "(", "-", "!", "identifier");
             }
         }
-    }
-
-    fn parse_function_call(
-        &mut self,
-        name: String,
-        start_span: Span,
-    ) -> ParsingResult<Spanned<ast::Expression>> {
-        expect!(self.lexer; Token::LeftParenthesis, "(");
-        let args = self.parse_comma_sep(&Token::RightParenthesis, Parser::parse_expression, true)?;
-        let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
-        let span = Span::merge(start_span, end_span);
-
-        let function_name = Spanned::new(ast::Expression::Identifier(name), start_span);
-
-        let expr = ast::Expression::FunctionCall {
-            function: Box::new(function_name),
-            args,
-        };
-        Ok(Spanned::new(expr, span))
     }
 
     fn parse_struct_literal(
