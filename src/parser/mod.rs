@@ -108,6 +108,19 @@ impl<'si, 'input> Parser<'si, 'input> {
                 };
                 Ok(Spanned::new(ast::Type::Function(Box::new(func_ty)), span))
             }
+            Token::LeftParenthesis => {
+                let begin_span = self.lexer.next_token()?.span;
+                let types =
+                    self.parse_comma_sep(&Token::RightParenthesis, Parser::parse_type, true)?;
+                let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
+                let span = Span::merge(begin_span, end_span);
+                let ty = if types.is_empty() {
+                    ast::Type::Identifier("void".to_string())
+                } else {
+                    ast::Type::Tuple(types)
+                };
+                Ok(Spanned::new(ty, span))
+            }
             _ => {
                 let (id, span) =
                     accept!(self.lexer; Token::Identifier(id) => id.to_owned(), "identifier");

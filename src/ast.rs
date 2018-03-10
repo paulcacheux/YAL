@@ -216,6 +216,7 @@ pub enum Type {
     Pointer(Box<Spanned<Type>>),
     Array(Box<Spanned<Type>>, usize),
     Function(Box<FunctionType>),
+    Tuple(Vec<Spanned<Type>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

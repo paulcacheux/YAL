@@ -427,7 +427,8 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                 let (expr, sub_ty) = utils::rvalue_to_lvalue(&self.tables.types, expr);
 
                 match sub_ty.has_field(&field) {
-                    Some(ty::FieldInfo::StructField(index, ty)) => {
+                    Some(ty::FieldInfo::StructField(index, ty))
+                    | Some(ty::FieldInfo::TupleField(index, ty)) => {
                         let lvalue_ty = self.tables.types.lvalue_of(ty, true);
                         Ok(utils::TypedExpression {
                             ty: lvalue_ty,

@@ -184,6 +184,13 @@ fn translate_type(
             let func_ty = translate_function_type(typectxt, *func_ty)?;
             Ok(typectxt.function_of(func_ty))
         }
+        ast::Type::Tuple(types) => {
+            let types = types
+                .into_iter()
+                .map(|ty| translate_type(typectxt, ty, false))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(typectxt.tuple_of(types))
+        }
     }
 }
 

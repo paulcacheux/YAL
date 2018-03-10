@@ -87,6 +87,7 @@ pub enum TypeValue {
     String,
     Void,
     Struct(StructType),
+    Tuple(Vec<Type>),
     LValue(Type, bool), // assignable
     Pointer(Type),
     Array(Type, usize),
@@ -96,6 +97,7 @@ pub enum TypeValue {
 #[derive(Debug, Clone)]
 pub enum FieldInfo {
     StructField(usize, Type),
+    TupleField(usize, Type),
     ArrayLen(usize),
 }
 

@@ -274,6 +274,14 @@ impl<'w, W: Write + 'w> PrettyPrinter<'w, W> {
             }
             ty::TypeValue::Pointer(sub) => format!("*{}", self.ty_to_string(sub)),
             ty::TypeValue::Struct(ref s) => format!("struct {}", s.name),
+            ty::TypeValue::Tuple(ref types) => format!(
+                "({})",
+                types
+                    .iter()
+                    .map(|&ty| self.ty_to_string(ty))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             ty::TypeValue::Array(sub, size) => format!("[{}; {}]", self.ty_to_string(sub), size),
             ty::TypeValue::FunctionPtr(ref func_ty) => {
                 let params: Vec<_> = func_ty
