@@ -115,7 +115,7 @@ impl<'s, 't> Backend<'s, 't> {
             }
             ty::TypeValue::Tuple(ref types) => {
                 let types = types.iter().map(|&ty| self.codegen_type(ty)).collect();
-                utils::struct_ty(types, false)
+                self.context.struct_ty(types, false)
             }
             ty::TypeValue::Array(sub, size) => utils::array_ty(self.codegen_type(sub), size),
             ty::TypeValue::FunctionPtr(ref func_ty) => {

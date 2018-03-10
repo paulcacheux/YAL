@@ -21,3 +21,19 @@ impl Literal {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum Field {
+    Named(String),
+    Index(usize),
+}
+
+use std::fmt;
+impl fmt::Display for Field {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Field::Named(ref s) => s.fmt(f),
+            Field::Index(i) => write!(f, "{}", i),
+        }
+    }
+}

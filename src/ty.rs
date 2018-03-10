@@ -1,6 +1,7 @@
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 use std::fmt;
+use common::Field;
 
 macro_rules! wrapper {
     (@eq_impl @direct_eq $name:ident) => {
@@ -102,22 +103,33 @@ pub enum FieldInfo {
 }
 
 impl TypeValue {
-    pub fn has_field(&self, field_name: &str) -> Option<FieldInfo> {
+    pub fn has_field(&self, field: &Field) -> Option<FieldInfo> {
         match *self {
             TypeValue::Struct(st) => {
-                for (index, &(ref name, ty)) in st.fields.iter().enumerate() {
-                    if name == field_name {
-                        return Some(FieldInfo::StructField(index, ty));
+                if let Field::Named(ref field_name) = *field {
+                    for (index, &(ref name, ty)) in st.fields.iter().enumerate() {
+                        if name == field_name {
+                            return Some(FieldInfo::StructField(index, ty));
+                        }
                     }
                 }
                 None
             }
             TypeValue::Array(_, size) => {
-                if field_name == "len" {
-                    Some(FieldInfo::ArrayLen(size))
-                } else {
-                    None
+                if let Field::Named(ref field_name) = *field {
+                    if field_name == "len" {
+                        return Some(FieldInfo::ArrayLen(size));
+                    }
                 }
+                None
+            }
+            TypeValue::Tuple(ref types) => {
+                if let Field::Index(index) = *field {
+                    if index < types.len() {
+                        return Some(FieldInfo::TupleField(index, types[index]));
+                    }
+                }
+                None
             }
             _ => None,
         }

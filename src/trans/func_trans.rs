@@ -444,7 +444,10 @@ impl<'ctxt> FunctionBuilder<'ctxt> {
                             common::Literal::IntLiteral(size as _),
                         )),
                     }),
-                    None => error!(TranslationError::UndefinedField(field), expr_span),
+                    None => error!(
+                        TranslationError::UndefinedField(field.to_string()),
+                        expr_span
+                    ),
                 }
             }
             ast::Expression::Nullptr => {

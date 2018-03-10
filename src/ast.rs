@@ -1,5 +1,5 @@
 use codemap::{Span, Spanned};
-use common::Literal;
+use common::{Field, Literal};
 
 #[derive(Debug, Clone)]
 pub struct Program {
@@ -170,7 +170,7 @@ pub enum Expression {
     },
     FieldAccess {
         expr: Box<Spanned<Expression>>,
-        field: String,
+        field: Field,
     },
     Nullptr,
 }

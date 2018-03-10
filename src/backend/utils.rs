@@ -29,10 +29,6 @@ pub fn function_ty(
     }
 }
 
-pub fn struct_ty(mut elements: Vec<LLVMTypeRef>, packed: bool) -> LLVMTypeRef {
-    unsafe { LLVMStructType(elements.as_mut_ptr(), elements.len() as _, packed as _) }
-}
-
 pub fn get_func_param(func: LLVMValueRef, index: usize) -> LLVMValueRef {
     unsafe { LLVMGetParam(func, index as _) }
 }

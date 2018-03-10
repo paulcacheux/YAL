@@ -554,8 +554,20 @@ impl<'si, 'input> Parser<'si, 'input> {
                 }
                 Token::Dot => {
                     self.lexer.next_token()?;
-                    let (field, end_span) =
-                        accept!(self.lexer; Token::Identifier(id) => id.to_string(), "identifier");
+                    let (field, end_span) = match self.lexer.next_token()? {
+                        Spanned {
+                            span,
+                            inner: Token::Identifier(id),
+                        } => (common::Field::Named(id.to_string()), span),
+                        Spanned {
+                            span,
+                            inner: Token::IntegerLiteral(i),
+                        } => (common::Field::Index(i as _), span),
+                        Spanned { span, .. } => {
+                            return_unexpected!(span, "identifier", "int literal")
+                        }
+                    };
+
                     let span = Span::merge(sub.span, end_span);
                     let expr = ast::Expression::FieldAccess {
                         expr: Box::new(sub),
@@ -650,7 +662,7 @@ impl<'si, 'input> Parser<'si, 'input> {
                 }
             }
             _ => {
-                return_unexpected!(span, "literal", "(", "-", "!", "identifier");
+                return_unexpected!(span, "literal", "(", "[", "identifier");
             }
         }
     }

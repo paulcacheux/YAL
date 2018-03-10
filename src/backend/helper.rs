@@ -43,6 +43,17 @@ impl Context {
         unsafe { LLVMDoubleTypeInContext(self.context) }
     }
 
+    pub fn struct_ty(&self, mut elements: Vec<LLVMTypeRef>, packed: bool) -> LLVMTypeRef {
+        unsafe {
+            LLVMStructTypeInContext(
+                self.context,
+                elements.as_mut_ptr(),
+                elements.len() as _,
+                packed as _,
+            )
+        }
+    }
+
     pub fn create_struct_named(&self, name: &[u8]) -> LLVMTypeRef {
         unsafe { LLVMStructCreateNamed(self.context, c_str(name)) }
     }
