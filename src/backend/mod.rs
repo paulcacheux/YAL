@@ -318,6 +318,7 @@ impl<'s, 't> Backend<'s, 't> {
         match expr {
             ir::Expression::Block(block) => self.codegen_expr_block(*block),
             ir::Expression::LValueToRValue(sub) => self.codegen_l2r_expr(*sub),
+            ir::Expression::RValueToLValue(sub) => self.codegen_r2l_expr(*sub),
             ir::Expression::Value(value) => self.codegen_value(value),
             ir::Expression::Assign { lhs, rhs } => self.codegen_assign(*lhs, *rhs),
             ir::Expression::BinaryOperator { binop, lhs, rhs } => {
@@ -338,7 +339,6 @@ impl<'s, 't> Backend<'s, 't> {
                 true_expr,
                 false_expr,
             } => self.codegen_ternary(*condition, *true_expr, *false_expr),
-            _ => unimplemented!(),
         }
     }
 
@@ -364,6 +364,14 @@ impl<'s, 't> Backend<'s, 't> {
     fn codegen_l2r_expr(&mut self, expr: ir::Expression) -> LLVMValueRef {
         let expr = self.codegen_expression(expr);
         self.builder.build_load(expr, b"\0")
+    }
+
+    fn codegen_r2l_expr(&mut self, expr: ir::Expression) -> LLVMValueRef {
+        let expr = self.codegen_expression(expr);
+        let ty = utils::type_of(expr);
+        let ptr = self.builder.build_alloca(ty, b"\0");
+        self.builder.build_store(expr, ptr);
+        ptr
     }
 
     fn codegen_literal(&mut self, literal: common::Literal) -> LLVMValueRef {
