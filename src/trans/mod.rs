@@ -160,6 +160,13 @@ fn translate_type(
     void: bool,
 ) -> TranslationResult<ty::Type> {
     match ty.inner {
+        ast::Type::Void => {
+            if void {
+                Ok(typectxt.get_void_ty())
+            } else {
+                error!(TranslationError::UnexpectedVoid, ty.span)
+            }
+        }
         ast::Type::Identifier(id) => {
             let ty_span = ty.span;
             if let Some(ty) = typectxt.lookup_type(&id) {

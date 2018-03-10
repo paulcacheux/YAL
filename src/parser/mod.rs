@@ -115,7 +115,7 @@ impl<'si, 'input> Parser<'si, 'input> {
                 let end_span = expect!(self.lexer; Token::RightParenthesis, ")");
                 let span = Span::merge(begin_span, end_span);
                 let ty = if types.is_empty() {
-                    ast::Type::Identifier("void".to_string())
+                    ast::Type::Void
                 } else {
                     ast::Type::Tuple(types)
                 };
@@ -174,7 +174,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             self.lexer.next_token()?;
             self.parse_type()?
         } else {
-            Spanned::new(ast::Type::Identifier("void".to_string()), Span::dummy())
+            Spanned::new(ast::Type::Void, Span::dummy())
         };
 
         let end_span = expect!(self.lexer; Token::SemiColon, ";");
@@ -227,7 +227,7 @@ impl<'si, 'input> Parser<'si, 'input> {
             end_span = ty.span;
             ty
         } else {
-            Spanned::new(ast::Type::Identifier("void".to_string()), Span::dummy())
+            Spanned::new(ast::Type::Void, Span::dummy())
         };
 
         let span = Span::merge(begin_span, end_span);
